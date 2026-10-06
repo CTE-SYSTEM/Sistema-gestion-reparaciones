@@ -45,6 +45,9 @@ services:
     image: cte-backend:dev
     container_name: backend_cte
     command: npm run dev
+    env_file:
+      - path: ./backend/.env
+        required: false
     depends_on:
       db:
         condition: service_healthy

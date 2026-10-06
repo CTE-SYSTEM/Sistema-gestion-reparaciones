@@ -120,6 +120,8 @@ const RepuestoForm = ({ onSubmit, onCancel, initialData = null, categorias = [],
     electronico: '',
     costo_individual: '',
     ganancia_cordobas: '',
+    stock_minimo: '',
+    ubicacion_fisica: '',
   });
 
   useEffect(() => {
@@ -132,6 +134,8 @@ const RepuestoForm = ({ onSubmit, onCancel, initialData = null, categorias = [],
         electronico: initialData.categoria?.electronico || '',
         costo_individual: initialData.costo_individual || '',
         ganancia_cordobas: initialData.ganancia_cordobas || '',
+        stock_minimo: String(initialData.stock_minimo ?? 0),
+        ubicacion_fisica: initialData.ubicacion_fisica || '',
       });
       return;
     }
@@ -144,6 +148,8 @@ const RepuestoForm = ({ onSubmit, onCancel, initialData = null, categorias = [],
       electronico: '',
       costo_individual: '',
       ganancia_cordobas: '',
+      stock_minimo: '',
+      ubicacion_fisica: '',
     });
   }, [initialData]);
 
@@ -236,6 +242,8 @@ const RepuestoForm = ({ onSubmit, onCancel, initialData = null, categorias = [],
       descripcion: normalizeText(formData.descripcion),
       costo_individual: parseFloat(formData.costo_individual || 0),
       ganancia_cordobas: parseFloat(formData.ganancia_cordobas || 0),
+      stock_minimo: formData.stock_minimo === '' ? undefined : Number(formData.stock_minimo),
+      ubicacion_fisica: normalizeText(formData.ubicacion_fisica),
     });
   };
 
@@ -366,6 +374,15 @@ const RepuestoForm = ({ onSubmit, onCancel, initialData = null, categorias = [],
             rows={2}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 shadow-sm outline-none text-sm"
           />
+        </div>
+        <div className="md:col-span-2 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm font-medium text-gray-700">Stock mínimo
+            <input name="stock_minimo" type="number" min="0" step="1" value={formData.stock_minimo} onChange={handleChange} className="mt-1 w-full rounded-lg border border-gray-300 p-2" />
+            <span className="mt-1 block text-xs font-normal text-gray-500">Vacío al crear: usar regla del administrador.</span>
+          </label>
+          <label className="text-sm font-medium text-gray-700">Ubicación física
+            <input name="ubicacion_fisica" value={formData.ubicacion_fisica} onChange={handleChange} placeholder="Ej: estante A, caja 2" className="mt-1 w-full rounded-lg border border-gray-300 p-2" />
+          </label>
         </div>
       </div>
 
@@ -506,6 +523,9 @@ const Repuestos = () => {
         <span className="text-[10px] text-indigo-500 font-bold uppercase">{row.categoria?.electronico}</span>
       </div>
     ) },
+    { header: 'Stock mínimo', render: (row) => row.stock_minimo ?? 0 },
+    { header: 'Stock actual', render: (row) => <span className={`rounded px-2 py-1 text-xs font-bold ${Number(row.stock_actual || 0) <= Number(row.stock_minimo || 0) ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{row.stock_actual ?? 0}{Number(row.stock_actual || 0) <= Number(row.stock_minimo || 0) ? ' · Reponer' : ''}</span> },
+    { header: 'Ubicación', render: (row) => row.ubicacion_fisica || '-' },
     { header: 'Costo', render: (row) => <span className="font-mono text-gray-600">C$ {Number(row.costo_individual || 0).toFixed(2)}</span> },
     { header: 'Ganancia', render: (row) => (
       <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-black">

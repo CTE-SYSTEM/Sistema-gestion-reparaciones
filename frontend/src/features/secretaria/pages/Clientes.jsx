@@ -5,6 +5,7 @@ import { Plus, Search, Edit, ArrowRight, HelpCircle } from 'lucide-react';
 import { GuidedTour, tourHighlightClass } from '../components/shared/GuidedTour';
 import { createCliente, getClientes, updateCliente } from '../services/clientesService';
 import { useInfiniteSecretariaList } from '../hooks/useInfiniteSecretariaList';
+import { handleFormNavigationKeyDown } from '../components/shared/formKeyboardNavigation';
 
 const emptyCliente = {
   nombre: '',
@@ -12,19 +13,6 @@ const emptyCliente = {
   direccion: '',
   correo: '',
   contacto_secundario: '',
-};
-
-// Generar correo genérico a partir del nombre
-const generateGenericEmail = (nombre = '') => {
-  const cleanName = nombre
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Remueve acentos
-    .replace(/[^a-z0-9\s]/g, '') // Solo letras y números
-    .replace(/\s+/g, '.'); // Reemplaza espacios por puntos
-
-  return cleanName ? `${cleanName}@correo.com` : '';
 };
 
 // Función de validación de correo electrónico
@@ -93,7 +81,6 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
   });
 
   const [emailError, setEmailError] = useState('');
-  const [isGenericEmail, setIsGenericEmail] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -103,7 +90,6 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
       correo: initialData?.correo || '',
       contacto_secundario: initialData?.contacto_secundario || '',
     });
-    setIsGenericEmail(false);
     setEmailError(initialData?.correo && !validateEmail(initialData.correo) ? 'Formato de correo no válido' : '');
   }, [initialData]);
 
@@ -120,34 +106,22 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
     }
 
     if (name === 'correo') {
-      setIsGenericEmail(false); // El usuario está escribiendo manualmente
       setEmailError(value && !validateEmail(value) ? 'Formato de correo no válido' : '');
     }
 
     setFormData((prev) => ({ ...prev, [name]: nextValue }));
   };
 
-  // Al salir del campo Nombre: Genera un correo sugerido si está vacío el correo
-  const handleNombreBlur = () => {
-    if (!formData.correo && formData.nombre) {
-      const suggestedEmail = generateGenericEmail(formData.nombre);
-      setFormData((prev) => ({ ...prev, correo: suggestedEmail }));
-      setIsGenericEmail(true);
-      setEmailError('');
-    }
-  };
-
-  // Al enfocar el campo Correo: Si es un correo genérico/sugerido, se limpia automáticamente
-  const handleCorreoFocus = () => {
-    if (isGenericEmail) {
-      setFormData((prev) => ({ ...prev, correo: '' }));
-      setIsGenericEmail(false);
-      setEmailError('');
-    }
-  };
-
   return (
-    <form className="space-y-5">
+    <form
+      className="space-y-5"
+      autoComplete="off"
+      onKeyDown={handleFormNavigationKeyDown}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(formData, event.nativeEvent.submitter?.value || 'save');
+      }}
+    >
       <div
         data-tour-target="entries"
         className={`grid grid-cols-1 md:grid-cols-2 gap-5 ${tourHighlightClass(activeTourTarget === 'entries')}`}
@@ -157,7 +131,8 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
           name="nombre" 
           value={formData.nombre} 
           onChange={handleChange} 
-          onBlur={handleNombreBlur}
+          helpText="Ej.: María López"
+          autoComplete="off"
           required 
         />
         <Field 
@@ -166,6 +141,7 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
           value={formData.telefono} 
           onChange={handleChange} 
           inputMode="numeric" 
+          helpText="Ej.: 8888 1234"
           maxLength={9} 
         />
         <Field 
@@ -174,7 +150,7 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
           type="email" 
           value={formData.correo} 
           onChange={handleChange} 
-          onFocus={handleCorreoFocus}
+          helpText="Ej.: nombre@ejemplo.com"
           error={emailError} 
         />
         <Field 
@@ -183,13 +159,14 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
           value={formData.contacto_secundario} 
           onChange={handleChange} 
           inputMode="tel" 
-          placeholder="+1-212-555-0198" 
+          helpText="Ej.: +1 212 555 0198"
         />
         <Field 
           label="Dirección" 
           name="direccion" 
           value={formData.direccion} 
           onChange={handleChange} 
+          helpText="Ej.: Barrio Centro, una cuadra al norte de la escuela"
           className="md:col-span-2" 
         />
       </div>
@@ -199,27 +176,28 @@ const ClienteForm = ({ onSubmit, onCancel, initialData = null, activeTourTarget 
         isEditing={Boolean(initialData)} 
         activeTourTarget={activeTourTarget}
         isFormInvalid={!!emailError}
-        onSave={() => onSubmit(formData, 'save')}
-        onNext={() => onSubmit(formData, 'next')}
       />
+      <p className="text-xs text-gray-500">Enter avanza; ↑/↓ mueve entre campos de texto o entre sugerencias. Alt+flechas navega desde cualquier campo.</p>
     </form>
   );
 };
 
-const Field = ({ label, className = '', error, ...props }) => (
+const Field = ({ label, className = '', error, helpText, ...props }) => (
   <div className={className}>
     <label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}</label>
     <input
       {...props}
+      aria-describedby={helpText ? `${props.name}-help` : undefined}
       className={`w-full px-4 py-2.5 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
         error ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50/30' : 'border-gray-300'
       }`}
     />
+    {helpText && <p id={`${props.name}-help`} className="mt-1 text-xs text-slate-500 text-left">{helpText}</p>}
     {error && <p className="text-red-500 text-xs mt-1.5 font-semibold">{error}</p>}
   </div>
 );
 
-const FormActions = ({ onCancel, isEditing, activeTourTarget, onSave, onNext, isFormInvalid }) => (
+const FormActions = ({ onCancel, isEditing, activeTourTarget, isFormInvalid }) => (
   <div
     data-tour-target="actions"
     className={`flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-100 ${tourHighlightClass(activeTourTarget === 'actions')}`}
@@ -233,8 +211,8 @@ const FormActions = ({ onCancel, isEditing, activeTourTarget, onSave, onNext, is
     </button>
     
     <button 
-      type="button" 
-      onClick={onSave}
+      type="submit"
+      value="save"
       disabled={isFormInvalid}
       className={`px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all ${
         isFormInvalid ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-700 shadow-xs'
@@ -245,8 +223,8 @@ const FormActions = ({ onCancel, isEditing, activeTourTarget, onSave, onNext, is
 
     {!isEditing && (
       <button 
-        type="button" 
-        onClick={onNext}
+        type="submit"
+        value="next"
         disabled={isFormInvalid}
         className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all ${
           isFormInvalid ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-700 shadow-xs'

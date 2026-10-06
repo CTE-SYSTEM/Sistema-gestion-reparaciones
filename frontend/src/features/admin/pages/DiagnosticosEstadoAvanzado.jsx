@@ -2,20 +2,22 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Table from '../../../components/Table';
 import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
 import { diagnosticosAdminService, tecnicosAdminService } from '../services';
+import { formatoPresupuesto } from '../../../utils/monedaPresupuesto';
 
 const reportColumns = [
   { header: 'Estado', accessor: 'estado' },
   { header: 'Aprobacion', accessor: 'aprobacion' },
   { header: 'Cantidad', accessor: 'cantidad' },
+  { header: 'Moneda', accessor: 'moneda' },
   {
     header: 'Presupuesto total',
     accessor: 'presupuesto_total',
-    render: (row) => (row.presupuesto_total ? `C$ ${Number(row.presupuesto_total).toFixed(2)}` : 'C$ 0.00'),
+    render: (row) => formatoPresupuesto(row.presupuesto_total, row.moneda),
   },
   {
     header: 'Promedio',
     accessor: 'presupuesto_promedio',
-    render: (row) => (row.presupuesto_promedio ? `C$ ${Number(row.presupuesto_promedio).toFixed(2)}` : 'C$ 0.00'),
+    render: (row) => formatoPresupuesto(row.presupuesto_promedio, row.moneda),
   },
 ];
 
@@ -27,7 +29,7 @@ const diagnosticoColumnsBase = [
   { header: 'Estado', accessor: 'estado_del_diagnostico' },
   { header: 'Aprobacion', accessor: 'Estado_aprobacion' },
   { header: 'Prioridad', accessor: 'prioridad' },
-  { header: 'Presupuesto', accessor: 'presupuesto' },
+  { header: 'Presupuesto', accessor: 'presupuesto', summarize: false },
 ];
 
 const DIAGNOSTICO_ESTADOS = ['PENDIENTE', 'INGRESADO', 'EN_REVISION', 'DIAGNOSTICADO', 'COMPLETADO', 'APROBADO', 'RECHAZADO'];
@@ -43,7 +45,8 @@ const formatDiagnostico = (diagnostico) => ({
   estado_del_diagnostico: diagnostico.estado_del_diagnostico || 'PENDIENTE',
   Estado_aprobacion: diagnostico.Estado_aprobacion || 'Pendiente',
   prioridad: diagnostico.prioridad || 'Normal',
-  presupuesto: diagnostico.presupuesto_estimado ? `C$ ${Number(diagnostico.presupuesto_estimado).toFixed(2)}` : 'C$ 0.00',
+  presupuesto: formatoPresupuesto(diagnostico.presupuesto_estimado, diagnostico.moneda_presupuesto),
+  moneda_presupuesto: diagnostico.moneda_presupuesto || 'NIO',
   presupuesto_estimado: diagnostico.presupuesto_estimado ? Number(diagnostico.presupuesto_estimado) : '',
   falla_reportada: diagnostico.falla_reportada || '',
   diagnostico_real: diagnostico.diagnostico_real || '',
@@ -166,6 +169,7 @@ export default function DiagnosticosEstadoAvanzado() {
         falla_reportada: editingDiagnostico.falla_reportada,
         diagnostico_real: editingDiagnostico.diagnostico_real,
         presupuesto_estimado: editingDiagnostico.presupuesto_estimado,
+        moneda_presupuesto: editingDiagnostico.moneda_presupuesto,
         prioridad: editingDiagnostico.prioridad,
         estado_del_diagnostico: editingDiagnostico.estado_del_diagnostico,
         Estado_aprobacion: editingDiagnostico.Estado_aprobacion,
@@ -298,6 +302,12 @@ export default function DiagnosticosEstadoAvanzado() {
               <label className="block">
                 <span className="text-xs font-bold text-slate-500 uppercase">Presupuesto estimado</span>
                 <input type="number" min="0" step="0.01" value={editingDiagnostico.presupuesto_estimado || ''} onChange={(e) => setEditingDiagnostico((prev) => ({ ...prev, presupuesto_estimado: e.target.value }))} className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-slate-500 uppercase">Moneda del presupuesto</span>
+                <select value={editingDiagnostico.moneda_presupuesto} onChange={(e) => setEditingDiagnostico((prev) => ({ ...prev, moneda_presupuesto: e.target.value }))} className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none">
+                  <option value="NIO">Córdobas · C$ (NIO)</option><option value="USD">Dólares · US$ (USD)</option>
+                </select>
               </label>
 
               <div className="md:col-span-2 flex justify-end gap-2 pt-2">

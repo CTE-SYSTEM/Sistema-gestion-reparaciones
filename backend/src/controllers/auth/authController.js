@@ -34,8 +34,9 @@ export const login = async (req, res) => {
     }
 
     // 4. Generar Token JWT
+    const [session] = await prisma.$queryRaw`SELECT sesion_version FROM "Usuarios" WHERE id_usuario = ${usuario.id_usuario}`;
     const token = jwt.sign(
-      { id: usuario.id_usuario, username: usuario.nombre_usuario, rol: usuario.rol },
+      { id: usuario.id_usuario, username: usuario.nombre_usuario, rol: usuario.rol, sesion_version: session.sesion_version },
       env.jwtSecret,
       { expiresIn: '8h' }
     );

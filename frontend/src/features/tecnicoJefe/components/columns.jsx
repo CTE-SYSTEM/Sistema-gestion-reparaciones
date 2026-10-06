@@ -183,7 +183,7 @@ export const buildRepuestosColumns = ({ savingId, onDecisionRepuesto, onViewDeta
     header: 'Tecnico que solicita',
     accessor: 'tecnico',
     render: (row) => {
-      const tecnico = row.orden?.tecnico || row.orden?.diagnostico?.tecnico;
+      const tecnico = row.tecnico_solicitante || row.orden?.tecnico || row.orden?.diagnostico?.tecnico;
       return (
         <div className="flex flex-col">
           <span className="font-bold text-slate-800 uppercase text-xs">{tecnico?.nombre || 'Sin tecnico'}</span>

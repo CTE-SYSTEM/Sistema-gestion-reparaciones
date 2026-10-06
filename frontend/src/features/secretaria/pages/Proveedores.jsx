@@ -27,6 +27,8 @@ const ProveedorForm = ({ onSubmit, onCancel, initialData = null, activeTourTarge
     correo: initialData?.correo || '',
     web: initialData?.web || '',
     notas: initialData?.notas || '',
+    nombre_contacto: initialData?.nombre_contacto || '',
+    horario_atencion: initialData?.horario_atencion || '',
   });
   const [formError, setFormError] = useState('');
 
@@ -38,6 +40,8 @@ const ProveedorForm = ({ onSubmit, onCancel, initialData = null, activeTourTarge
       correo: initialData?.correo || '',
       web: initialData?.web || '',
       notas: initialData?.notas || '',
+      nombre_contacto: initialData?.nombre_contacto || '',
+      horario_atencion: initialData?.horario_atencion || '',
     });
     setFormError('');
   }, [initialData]);
@@ -56,6 +60,8 @@ const ProveedorForm = ({ onSubmit, onCancel, initialData = null, activeTourTarge
       correo: normalizeText(formData.correo),
       web: normalizeText(formData.web),
       notas: normalizeText(formData.notas),
+      nombre_contacto: normalizeText(formData.nombre_contacto),
+      horario_atencion: normalizeText(formData.horario_atencion),
     };
 
     if (!payload.nombre) {
@@ -78,6 +84,8 @@ const ProveedorForm = ({ onSubmit, onCancel, initialData = null, activeTourTarge
         <Field label="Telefono" name="telefono" value={formData.telefono} onChange={handleChange} maxLength={30} />
         <Field label="Correo" name="correo" type="email" value={formData.correo} onChange={handleChange} maxLength={120} />
         <Field label="Web" name="web" value={formData.web} onChange={handleChange} placeholder="proveedor.com" maxLength={160} />
+        <Field label="Persona de contacto" name="nombre_contacto" value={formData.nombre_contacto} onChange={handleChange} maxLength={100} />
+        <Field label="Horario de atención" name="horario_atencion" value={formData.horario_atencion} onChange={handleChange} maxLength={120} />
       </div>
 
       <div data-tour-target="details" className={tourHighlightClass(activeTourTarget === 'details')}>
@@ -194,6 +202,8 @@ const Proveedores = () => {
   const columnas = [
     { header: 'ID', accessor: 'id_proveedor' },
     { header: 'Nombre', accessor: 'nombre' },
+    { header: 'Contacto', accessor: 'nombre_contacto' },
+    { header: 'Horario', accessor: 'horario_atencion' },
     { header: 'Telefono', accessor: 'telefono', render: (row) => row.telefono || '-' },
     { header: 'Correo', accessor: 'correo', render: (row) => row.correo || '-' },
     {

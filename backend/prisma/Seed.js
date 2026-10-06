@@ -4,21 +4,21 @@ const prisma = new PrismaClient();
 const passwordHash = '$2b$10$/7IaHp89gi.hRq5HyXQFfu90wgJtVAqjCG.c45nBctOBT6YFZmf9K';
 
 const usuariosSeed = [
-  { nombre_usuario: 'admin_pro', correo_electronico: 'admin@cte.com', rol: 'Administrador' },
-  { nombre_usuario: 'secretaria_ana', correo_electronico: 'secretaria@cte.com', rol: 'Secretaria' },
-  { nombre_usuario: 'jefe_tecnico', correo_electronico: 'jefe@cte.com', rol: 'TecnicoJefe' },
-  { nombre_usuario: 'tecnico_juan', correo_electronico: 'juan.perez@cte.com', rol: 'Tecnico' },
-  { nombre_usuario: 'marcos_fix', correo_electronico: 'marcos.fix@cte.com', rol: 'Tecnico' },
-  { nombre_usuario: 'elena_tech', correo_electronico: 'elena.tech@cte.com', rol: 'Tecnico' },
-  { nombre_usuario: 'roberto_vga', correo_electronico: 'roberto.vga@cte.com', rol: 'Tecnico' },
+  { nombre_usuario: 'admin_pro', correo_electronico: 'admin@sgr.example', rol: 'Administrador' },
+  { nombre_usuario: 'secretaria_ana', correo_electronico: 'secretaria@sgr.example', rol: 'Secretaria' },
+  { nombre_usuario: 'jefe_tecnico', correo_electronico: 'jefe@sgr.example', rol: 'TecnicoJefe' },
+  { nombre_usuario: 'tecnico_juan', correo_electronico: 'juan.perez@sgr.example', rol: 'Tecnico' },
+  { nombre_usuario: 'marcos_fix', correo_electronico: 'marcos.fix@sgr.example', rol: 'Tecnico' },
+  { nombre_usuario: 'elena_tech', correo_electronico: 'elena.tech@sgr.example', rol: 'Tecnico' },
+  { nombre_usuario: 'roberto_vga', correo_electronico: 'roberto.vga@sgr.example', rol: 'Tecnico' },
 ];
 
 const tecnicosSeed = [
   { usuario: 'marcos_fix', nombre: 'Marcos Galindo', especialidad: 'Microelectrónica y Reballing', horario: 'L-V 09:00-18:00', contacto: '+505 8888-1111' },
   { usuario: 'elena_tech', nombre: 'Elena Rodríguez', especialidad: 'Reparación de Laptops High-End', horario: 'L-V 08:00-17:00', contacto: 'elena.rodriguez@email.com' },
   { usuario: 'roberto_vga', nombre: 'Roberto Sosa', especialidad: 'Consolas y Periféricos', horario: 'Sábados 08:00-14:00', contacto: 'Ext. 104' },
-  { usuario: 'tecnico_juan', nombre: 'Juan Pérez', especialidad: 'Reparación General y Móviles', horario: 'L-V 08:00-17:00', contacto: 'tecnico@cte.com' },
-  { usuario: 'jefe_tecnico', nombre: 'Ing. Ricardo Méndez', especialidad: 'Jefe de Taller y Diagnóstico', horario: 'L-S 08:00-17:00', contacto: 'jefe@cte.com' },
+  { usuario: 'tecnico_juan', nombre: 'Juan Pérez', especialidad: 'Reparación General y Móviles', horario: 'L-V 08:00-17:00', contacto: 'tecnico@sgr.example' },
+  { usuario: 'jefe_tecnico', nombre: 'Ing. Ricardo Méndez', especialidad: 'Jefe de Taller y Diagnóstico', horario: 'L-S 08:00-17:00', contacto: 'jefe@sgr.example' },
 ];
 
 const clientesSeed = [

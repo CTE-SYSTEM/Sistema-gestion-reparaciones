@@ -18,6 +18,13 @@ import './App.css';
 const Login = lazy(() => import('./pages/Auth/Login'));
 
 const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
+const Administracion = lazy(() => import('./features/admin/pages/Administracion'));
+const MiCuenta = lazy(() => import('./features/admin/pages/MiCuenta'));
+const ConfiguracionNegocio = lazy(() => import('./features/admin/pages/ConfiguracionNegocio'));
+const ReglasNegocio = lazy(() => import('./features/admin/pages/ReglasNegocio'));
+const Auditoria = lazy(() => import('./features/admin/pages/Auditoria'));
+const Respaldos = lazy(() => import('./features/admin/pages/Respaldos'));
+const Reportes = lazy(() => import('./features/admin/pages/Reportes'));
 const UsuariosAvanzado = lazy(() => import('./features/admin/pages/UsuariosAvanzado'));
 const EquiposAvanzado = lazy(() => import('./features/admin/pages/EquiposAvanzado'));
 const OrdenesAvanzado = lazy(() => import('./features/admin/pages/OrdenesAvanzado'));
@@ -122,12 +129,12 @@ function RouteFallback() {
   );
 }
 
-function Page({ children }) {
+function Page({ children, fullWidth = false }) {
   const responsive = useResponsiveLayout();
 
   return (
     <Suspense fallback={<RouteFallback />}>
-      <div className={`${responsive.pageClassName} app-page`}>{children}</div>
+      <div className={`${fullWidth ? 'w-full' : responsive.pageClassName} app-page`}>{children}</div>
     </Suspense>
   );
 }
@@ -151,6 +158,13 @@ const router = createBrowserRouter(
             // Admin
             { index: true, element: <RequireAuth><Page><AdminDashboard /></Page></RequireAuth> },
             { path: 'admin', element: <RequireAuth><Page><AdminDashboard /></Page></RequireAuth> },
+            { path: 'admin/administracion', element: <RequireAuth><Page><Administracion /></Page></RequireAuth> },
+            { path: 'admin/mi-cuenta', element: <RequireAuth><Page><MiCuenta /></Page></RequireAuth> },
+            { path: 'admin/configuracion', element: <RequireAuth><Page><ConfiguracionNegocio /></Page></RequireAuth> },
+            { path: 'admin/reglas', element: <RequireAuth><Page><ReglasNegocio /></Page></RequireAuth> },
+            { path: 'admin/auditoria', element: <RequireAuth><Page><Auditoria /></Page></RequireAuth> },
+            { path: 'admin/respaldos', element: <RequireAuth><Page><Respaldos /></Page></RequireAuth> },
+            { path: 'admin/reportes', element: <RequireAuth><Page><Reportes /></Page></RequireAuth> },
             { path: 'admin/usuarios', element: <RequireAuth><Page><UsuariosAvanzado /></Page></RequireAuth> },
             { path: 'admin/equipos', element: <RequireAuth><Page><EquiposAvanzado /></Page></RequireAuth> },
             { path: 'admin/ordenes', element: <RequireAuth><Page><OrdenesAvanzado /></Page></RequireAuth> },
@@ -177,6 +191,7 @@ const router = createBrowserRouter(
             { path: 'secretaria/repuestos', element: <RequireAuth><Page><RepuestosSecretaria /></Page></RequireAuth> },
             { path: 'secretaria/tipos-repuesto', element: <RequireAuth><Page><TiposRepuestoSecretaria /></Page></RequireAuth> },
             { path: 'secretaria/compras', element: <RequireAuth><Page><ComprasSecretaria /></Page></RequireAuth> },
+            { path: 'secretaria/fotos', element: <RequireAuth><Navigate to="/secretaria/compras" replace /></RequireAuth> },
             { path: 'secretaria/facturacion', element: <RequireAuth><Page><FacturacionSecretaria /></Page></RequireAuth> },
             { path: 'secretaria/nueva-orden', element: <RequireAuth><Page><NuevaOrden /></Page></RequireAuth> },
             { path: 'secretaria/diagnostico', element: <RequireAuth><Page><Diagnostico /></Page></RequireAuth> },
@@ -192,7 +207,7 @@ const router = createBrowserRouter(
         },
         {
           path: 'tecnico-jefe',
-          element: <RequireAuth><Page><JefeDashboard /></Page></RequireAuth>
+          element: <RequireAuth><Page fullWidth><JefeDashboard /></Page></RequireAuth>
         },
       ],
       future: { v7_startTransition: true, v7_relativeSplatPath: true }
@@ -212,7 +227,12 @@ function App() {
 
 function RequireAuth({ children }) {
   const { user } = useContext(AuthContext);
+  const { pathname } = useLocation();
   if (!user) return <Navigate to="/login" replace />;
+  if ((pathname === '/' || pathname.startsWith('/admin')) && !['Administrador', 'admin_pro', 'Admin'].includes(user.rol)) {
+    const home = { Secretaria: '/secretaria', TecnicoJefe: '/tecnico-jefe', Tecnico: '/tecnico' }[user.rol] || '/login';
+    return <Navigate to={home} replace />;
+  }
   return children;
 }
 

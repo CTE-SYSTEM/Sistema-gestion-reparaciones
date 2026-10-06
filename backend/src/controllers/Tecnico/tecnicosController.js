@@ -1,13 +1,15 @@
 import { notifyJefeTecnico, notifyRole } from '../../services/notifications.js';
 import {
   actualizarEstadoOrden as actualizarEstadoOrdenService,
+  corregirCierreOrden,
   completarDiagnostico,
+  iniciarDiagnostico,
   createTecnico as createTecnicoService,
   findTecnicos,
-  getDatabaseMessage,
   getMisDiagnosticos as getMisDiagnosticosService,
   getMisOrdenes as getMisOrdenesService,
   solicitarRepuesto as solicitarRepuestoService,
+  buscarCatalogo, detalleTecnico, guardarBorrador, misSolicitudes, registrarAvance, resumenTecnico,
 } from '../../services/Tecnico/tecnicoService.js';
 
 const sendControllerError = (res, error, fallbackMessage = 'Error interno del servidor') => {
@@ -15,15 +17,12 @@ const sendControllerError = (res, error, fallbackMessage = 'Error interno del se
     return res.status(error.statusCode).json({ error: error.message });
   }
   if (error.code === 'P2010') {
-    return res.status(409).json({ error: getDatabaseMessage(error) });
+    return res.status(409).json({ error: 'El trabajo cambió o incumple una regla. Actualice el expediente antes de continuar.' });
   }
   if (error.code === 'P2025') {
     return res.status(404).json({ error: 'Registro no encontrado' });
   }
-  if (error.message?.includes('no es valido')) {
-    return res.status(400).json({ error: error.message });
-  }
-  return res.status(500).json({ error: fallbackMessage, details: error.message });
+  return res.status(500).json({ error: fallbackMessage });
 };
 
 export const getTecnicos = async (req, res) => {
@@ -48,7 +47,8 @@ export const createTecnico = async (req, res) => {
 
 export const getMisDiagnosticos = async (req, res) => {
   try {
-    const result = await getMisDiagnosticosService(req.params.username);
+    if (req.params.username !== req.user.username) return res.status(403).json({ error: 'Solo puede consultar sus propios trabajos' });
+    const result = await getMisDiagnosticosService(req.params.username, req.query);
     res.json(result);
   } catch (error) {
     console.error('Error al obtener diagnosticos del tecnico:', error);
@@ -58,7 +58,8 @@ export const getMisDiagnosticos = async (req, res) => {
 
 export const getMisOrdenes = async (req, res) => {
   try {
-    const result = await getMisOrdenesService(req.params.username);
+    if (req.params.username !== req.user.username) return res.status(403).json({ error: 'Solo puede consultar sus propias órdenes' });
+    const result = await getMisOrdenesService(req.params.username, req.query);
     res.json(result);
   } catch (error) {
     console.error('Error al obtener ordenes del tecnico:', error);
@@ -68,17 +69,9 @@ export const getMisOrdenes = async (req, res) => {
 
 export const actualizarDiagnosticoAsignado = async (req, res) => {
   try {
-    const diagnostico = await completarDiagnostico(req.params.id, req.body);
+    const diagnostico = await completarDiagnostico(req.params.id, req.body, req.user);
 
-    notifyJefeTecnico({
-      type: 'diagnostico_completado',
-      title: 'Diagnostico completado',
-      message: `Diagnostico #${req.params.id} quedo listo para revision/aprobacion`,
-      severity: 'success',
-      entity: { kind: 'diagnostico', id: Number(req.params.id) },
-    });
-
-    notifyRole('Secretaria', {
+    await notifyRole('Secretaria', {
       type: 'diagnostico_completado',
       title: 'Diagnóstico listo para nueva orden',
       message: `El diagnóstico #${req.params.id} ya está listo para crear una orden`,
@@ -93,18 +86,27 @@ export const actualizarDiagnosticoAsignado = async (req, res) => {
   }
 };
 
+export const iniciarDiagnosticoAsignado = async (req, res) => {
+  try { res.json({ data: await iniciarDiagnostico(req.params.id, req.user) }); }
+  catch (error) { sendControllerError(res, error); }
+};
+
 export const actualizarEstadoOrden = async (req, res) => {
   try {
-    const orden = await actualizarEstadoOrdenService(req.params.id, req.body);
+    const orden = await actualizarEstadoOrdenService(req.params.id, req.body, req.user);
     const estadoNuevo = String(orden.estado || '').toUpperCase();
     const estadoCierre = estadoNuevo === 'FINALIZADO';
     const estadoIrreparable = estadoNuevo === 'IRREPARABLE';
+    if (estadoCierre) await notifyRole('Secretaria', {
+      type: 'orden_finalizada', title: 'Orden lista para facturar', message: `La orden #${orden.id_orden} quedó finalizada.`,
+      severity: 'success', entity: { kind: 'orden', id: orden.id_orden },
+    });
 
-    notifyJefeTecnico({
-      type: estadoCierre ? 'orden_cerrada' : estadoIrreparable ? 'orden_irreparable_pendiente' : 'orden_estado',
-      title: estadoCierre ? 'Orden cerrada' : estadoIrreparable ? 'Irreparable pendiente de revision' : 'Cambio de estado',
-      message: `Orden #${orden.id_orden} cambio a ${orden.estado}`,
-      severity: estadoIrreparable ? 'warning' : 'info',
+    if (estadoIrreparable) await notifyJefeTecnico({
+      type: 'orden_irreparable_pendiente',
+      title: 'Irreparable pendiente de revisión',
+      message: `La orden #${orden.id_orden} requiere una decisión sobre la irreparabilidad.`,
+      severity: 'warning',
       entity: { kind: 'orden', id: orden.id_orden },
     });
 
@@ -115,16 +117,26 @@ export const actualizarEstadoOrden = async (req, res) => {
   }
 };
 
+export const corregirCierre = async (req, res) => {
+  try {
+    const orden = await corregirCierreOrden(req.params.id, req.body, req.user);
+    await notifyRole('Secretaria', { type: 'orden_cierre_corregido', title: 'Corrección del cierre técnico',
+      message: `El técnico ${req.body.tipo === 'REABRIR' ? 'reabrió la reparación' : req.body.tipo === 'ACLARAR' ? 'registró una aclaración' : 'corrigió el informe'} de la orden #${orden.id_orden}.`,
+      entity: { kind: 'orden', id: orden.id_orden } });
+    res.json({ data: orden });
+  } catch (error) { sendControllerError(res, error); }
+};
+
 export const solicitarRepuesto = async (req, res) => {
   try {
-    const solicitud = await solicitarRepuestoService(req.params.id, req.body, req.user?.username);
+    const solicitud = await solicitarRepuestoService(req.params.id, req.body, req.user?.username, req.user);
 
-    notifyJefeTecnico({
+    await notifyJefeTecnico({
       type: 'repuesto_solicitado',
       title: 'Solicitud de repuesto',
-      message: `Nueva solicitud de pieza para orden #${req.params.id} de ${solicitud?.orden?.tecnico?.nombre || solicitud?.orden?.diagnostico?.tecnico?.nombre || 'tecnico'}`,
+      message: `Nueva solicitud de pieza para orden #${req.params.id}`,
       severity: 'warning',
-      entity: { kind: 'orden', id: Number(req.params.id) },
+      entity: { kind: 'repuesto', id: solicitud.id_detalle_repuesto, orden_id: Number(req.params.id) },
     });
 
     res.status(201).json({ data: solicitud, message: 'Solicitud de pieza enviada al jefe tecnico' });
@@ -133,3 +145,17 @@ export const solicitarRepuesto = async (req, res) => {
     sendControllerError(res, error);
   }
 };
+
+const responder = (operation, wrapped = true) => async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    const result = await operation(req);
+    return res.json(wrapped ? { data: result } : result);
+  } catch (error) { return sendControllerError(res, error); }
+};
+export const getResumenTecnico = responder((req) => resumenTecnico(req.user, req.query));
+export const getSolicitudesTecnico = responder((req) => misSolicitudes(req.user, req.query), false);
+export const getCatalogoTecnico = responder((req) => buscarCatalogo(req.query), false);
+export const getDetalleTecnico = (kind) => responder((req) => detalleTecnico(kind, req.params.id, req.user));
+export const postAvanceTecnico = (kind) => responder((req) => registrarAvance(kind, req.params.id, req.body, req.user));
+export const putBorradorTecnico = responder((req) => guardarBorrador(req.params.id, req.body, req.user));

@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import Table from '../../../components/Table';
 import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
 import { garantiasAdminService } from '../services';
+import { administracionService } from '../services/administracionService';
 
 const transformGarantias = (garantias) =>
   garantias.map((g) => {
@@ -20,7 +21,7 @@ const transformGarantias = (garantias) =>
       condiciones: g.condiciones || '-',
       estado: isExpired ? 'Vencida' : 'Vigente',
       isExpired,
-      duracion_actual: g.duracion_meses ?? 12,
+      duracion_actual: g.duracion_meses ?? 3,
     };
   });
 
@@ -45,7 +46,15 @@ export default function GarantiasAvanzado() {
   const [error, setError] = useState('');
   const [facturaId, setFacturaId] = useState('');
   const [condiciones, setCondiciones] = useState('');
-  const [duracionMeses, setDuracionMeses] = useState('12');
+  const [duracionMeses, setDuracionMeses] = useState('3');
+  const [defaults, setDefaults] = useState({ garantia_meses: 3, garantia_condiciones: '' });
+  useEffect(() => {
+    let active = true;
+    administracionService.getConfiguracion().then(({ data }) => {
+      if (active) { const business = data.data.valores.negocio; setDefaults(business); setDuracionMeses(String(business.garantia_meses)); setCondiciones(business.garantia_condiciones); }
+    }).catch(() => { if (active) setError('No se pudieron cargar los valores de garantía del negocio.'); });
+    return () => { active = false; };
+  }, []);
   const [equipoSearch, setEquipoSearch] = useState('');
   const [sectionSearch, setSectionSearch] = useState('');
   const [activeSection, setActiveSection] = useState('todos');
@@ -216,7 +225,7 @@ export default function GarantiasAvanzado() {
     try {
       if (equipo.garantia) {
         const res = await garantiasAdminService.renovarGarantia(equipo.garantia.id_garantia, {
-          duracion_meses: Number(duracionMeses) || Number(equipo.garantia.duracion_actual) || 12,
+          duracion_meses: Number(duracionMeses) || Number(equipo.garantia.duracion_actual) || defaults.garantia_meses,
           condiciones: condiciones || equipo.garantia.condiciones,
         });
         setActionMessage(res.data?.message || 'Garantía revalidada correctamente.');
@@ -224,7 +233,7 @@ export default function GarantiasAvanzado() {
         const res = await garantiasAdminService.createGarantia({
           factura_id: Number(equipo.facturaAsignable.id_factura),
           condiciones,
-          duracion_meses: Number(duracionMeses) || 12,
+          duracion_meses: Number(duracionMeses) || defaults.garantia_meses,
         });
         setCreateMessage(res.data?.message || 'Garantía asignada correctamente.');
       } else {
@@ -232,8 +241,8 @@ export default function GarantiasAvanzado() {
         return;
       }
 
-      setCondiciones('');
-      setDuracionMeses('12');
+      setCondiciones(defaults.garantia_condiciones);
+      setDuracionMeses(String(defaults.garantia_meses));
       setSelectedEquipoId('');
       await fetchGarantias();
     } catch (err) {
@@ -263,8 +272,8 @@ export default function GarantiasAvanzado() {
 
       setCreateMessage(res.data?.message || 'Garantía creada correctamente.');
       setFacturaId('');
-      setCondiciones('');
-      setDuracionMeses('12');
+      setCondiciones(defaults.garantia_condiciones);
+      setDuracionMeses(String(defaults.garantia_meses));
       fetchGarantias();
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo registrar la nueva garantía.');
@@ -279,7 +288,7 @@ export default function GarantiasAvanzado() {
 
     try {
       const res = await garantiasAdminService.renovarGarantia(id, {
-        duracion_meses: Number(duracion) || 12,
+        duracion_meses: Number(duracion) || defaults.garantia_meses,
       });
       setActionMessage(res.data?.message || 'Garantía revalidada correctamente.');
       fetchGarantias();

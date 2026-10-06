@@ -1,184 +1,116 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../../app/prismaClient.js';
+import { withAuditUser } from '../../utils/auditContext.js';
+import { ADMIN_ROLES, ASSIGNABLE_ROLES, isAdminRole, fail, validateNewPassword } from '../../utils/adminPolicy.js';
+import { positiveId } from '../../utils/adminFilters.js';
+import { getBusinessSettings, recordAdminAction } from '../../services/adminSettingsService.js';
+import { adminError } from './administracionController.js';
+import { disconnectUserSessions } from '../../services/notifications.js';
 
-const ROLES_ASIGNABLES = ['Secretaria', 'TecnicoJefe', 'Tecnico'];
-const ROLES_ADMIN_PASSWORD = ['admin_pro', 'Administrador', 'Admin'];
-
-const withoutPassword = (usuario) => {
-  if (!usuario) return usuario;
-  const { contrasena_hash, ...publico } = usuario;
-  return publico;
+const publicUser = ({ contrasena_hash, sesion_version, ...user }) => user;
+const profile = (body) => {
+  const data = {};
+  if (body.nombre_usuario !== undefined) {
+    if (typeof body.nombre_usuario !== 'string' || !body.nombre_usuario.trim() || body.nombre_usuario.length > 100) fail(400, 'Nombre de usuario inválido.');
+    data.nombre_usuario = body.nombre_usuario.trim();
+  }
+  if (body.correo_electronico !== undefined) {
+    if (body.correo_electronico != null && (typeof body.correo_electronico !== 'string' || body.correo_electronico.length > 254 || (body.correo_electronico.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.correo_electronico.trim())))) fail(400, 'Correo inválido.');
+    data.correo_electronico = body.correo_electronico?.trim() || null;
+  }
+  if (body.activo !== undefined) {
+    if (typeof body.activo !== 'boolean') fail(400, 'Estado de cuenta inválido.');
+    data.activo = body.activo;
+  }
+  return data;
 };
-
+const guardAccess = async (tx, actor, current, data) => {
+  const nextRole = data.rol ?? current.rol, nextActive = data.activo ?? current.activo;
+  if (actor.id === current.id_usuario && (!nextActive || nextRole !== current.rol)) fail(409, 'No puede desactivar ni cambiar el rol de su propia cuenta.');
+  if (current.activo && isAdminRole(current.rol) && (!nextActive || !isAdminRole(nextRole))) {
+    const count = await tx.usuarios.count({ where: { activo: true, rol: { in: ADMIN_ROLES } } });
+    if (count <= 1) fail(409, 'Debe conservar al menos un administrador activo.');
+  }
+};
 export const getUsuarios = async (req, res) => {
   try {
-    const usuarios = await prisma.usuarios.findMany({
-      select: {
-        id_usuario: true,
-        nombre_usuario: true,
-        correo_electronico: true,
-        rol: true,
-        activo: true,
-        fecha_creacion: true,
-        tecnico: true,
-      },
-      orderBy: { id_usuario: 'asc' },
-    });
-    res.json({ data: usuarios });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener usuarios', details: error.message });
-  }
+    const users = await prisma.usuarios.findMany({ select: {
+      id_usuario: true, nombre_usuario: true, correo_electronico: true, rol: true,
+      activo: true, fecha_creacion: true, tecnico: true,
+    }, orderBy: { id_usuario: 'asc' } });
+    res.json({ data: users, password_minimo: (await getBusinessSettings()).reglas.password_minimo });
+  } catch (error) { adminError(res, error, 'No se pudieron cargar los usuarios.'); }
 };
-
 export const createUsuario = async (req, res) => {
   try {
-    const { nombre_usuario, correo_electronico, rol, password, contrasena_hash, activo, especialidad, horario, contacto } = req.body;
-    const username = String(nombre_usuario || '').trim();
-    if (!username || !rol || (!password && !contrasena_hash)) {
-      return res.status(400).json({ error: 'Faltan datos obligatorios' });
-    }
-
-    if (!ROLES_ASIGNABLES.includes(rol)) {
-      return res.status(400).json({ error: 'No se permite asignar el rol Administrador ni admin_pro desde esta pantalla' });
-    }
-
-    const hash = password ? await bcrypt.hash(password, 10) : contrasena_hash;
-
-    const result = await prisma.$transaction(async (tx) => {
-      const usuario = await tx.usuarios.create({
-        data: {
-          nombre_usuario: username,
-          correo_electronico: correo_electronico?.trim() || null,
-          rol,
-          contrasena_hash: hash,
-          activo: activo !== undefined ? Boolean(activo) : true,
-        },
-      });
+    const data = profile(req.body);
+    if (!data.nombre_usuario) fail(400, 'El nombre de usuario es obligatorio.');
+    if (!ASSIGNABLE_ROLES.includes(req.body.rol)) fail(400, 'Seleccione Secretaría, Técnico o Jefe técnico.');
+    const minimum = (await getBusinessSettings()).reglas.password_minimo;
+    const hash = await bcrypt.hash(validateNewPassword(req.body.password, minimum), 10);
+    const result = await withAuditUser(req.user, async (tx) => {
+      const user = await tx.usuarios.create({ data: { ...data, rol: req.body.rol, contrasena_hash: hash } });
       let tecnico = null;
-      if (rol === 'Tecnico') {
-        tecnico = await tx.tecnicos.create({
-          data: {
-            usuario_id: usuario.id_usuario,
-            nombre: username,
-            especialidad: especialidad?.trim() || null,
-            horario: horario?.trim() || null,
-            contacto: contacto?.trim() || correo_electronico?.trim() || null,
-            activo: true,
-          },
-        });
-      }
-      return { usuario: withoutPassword(usuario), tecnico };
+      if (user.rol === 'Tecnico') tecnico = await tx.tecnicos.create({ data: {
+        usuario_id: user.id_usuario, nombre: user.nombre_usuario, activo: user.activo,
+        especialidad: req.body.especialidad?.trim() || null, horario: req.body.horario?.trim() || null,
+        contacto: req.body.contacto?.trim() || user.correo_electronico,
+      } });
+      return { data: publicUser(user), usuario: publicUser(user), tecnico };
     });
-
     res.status(201).json(result);
-  } catch (error) {
-    if (error.code === 'P2002' && error.meta?.target?.includes('nombre_usuario')) {
-      return res.status(409).json({ error: 'El nombre de usuario ya existe' });
-    }
-    res.status(500).json({ error: 'Error al crear usuario', details: error.message });
-  }
+  } catch (error) { adminError(res, error, 'No se pudo crear la cuenta.'); }
 };
-
 export const updateUsuario = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { nombre_usuario, correo_electronico, rol, activo } = req.body;
-
-    if (rol !== undefined && !ROLES_ASIGNABLES.includes(rol)) {
-      return res.status(400).json({ error: 'No se permite asignar el rol Administrador ni admin_pro desde esta pantalla' });
-    }
-
-    const usuarioId = Number(id);
-    if (!Number.isInteger(usuarioId) || usuarioId <= 0) return res.status(400).json({ error: 'ID de usuario inválido' });
-    if (nombre_usuario !== undefined && !String(nombre_usuario).trim()) {
-      return res.status(400).json({ error: 'El nombre de usuario no puede estar vacío' });
-    }
-    const usuarioActual = await prisma.usuarios.findUnique({ where: { id_usuario: usuarioId } });
-    if (!usuarioActual) return res.status(404).json({ error: 'Usuario no encontrado' });
-    const usuario = await prisma.$transaction(async (tx) => {
-      const actualizado = await tx.usuarios.update({
-        where: { id_usuario: usuarioId },
-        data: {
-          nombre_usuario: nombre_usuario === undefined || nombre_usuario === null ? usuarioActual.nombre_usuario : String(nombre_usuario).trim(),
-          correo_electronico: correo_electronico === undefined ? usuarioActual.correo_electronico : correo_electronico?.trim() || null,
-          rol: rol === undefined || rol === null ? usuarioActual.rol : rol,
-          activo: activo === undefined ? usuarioActual.activo : Boolean(activo),
-        },
-      });
-
-      if (actualizado.rol === 'Tecnico') {
-        await tx.tecnicos.upsert({
-          where: { usuario_id: usuarioId },
-          update: { nombre: actualizado.nombre_usuario, activo: actualizado.activo },
-          create: { usuario_id: usuarioId, nombre: actualizado.nombre_usuario, activo: actualizado.activo },
-        });
+    const id = positiveId(req.params.id, 'Usuario', false), data = profile(req.body);
+    let accessChanged = false;
+    const user = await withAuditUser(req.user, async (tx) => {
+      // Serializa cambios de acceso para proteger al último administrador frente a solicitudes simultáneas.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(734821)::text AS lock`;
+      const current = await tx.usuarios.findUnique({ where: { id_usuario: id } });
+      if (!current) fail(404, 'Usuario no encontrado.');
+      if (req.body.rol !== undefined) {
+        if (req.body.rol !== current.rol && !ASSIGNABLE_ROLES.includes(req.body.rol)) fail(400, 'No se permite elevar una cuenta a administrador desde Usuarios.');
+        data.rol = req.body.rol;
       }
-      return actualizado;
+      await guardAccess(tx, req.user, current, data);
+      const updated = await tx.usuarios.update({ where: { id_usuario: id }, data });
+      if (updated.rol === 'Tecnico') {
+        await tx.tecnicos.upsert({ where: { usuario_id: id },
+          update: { nombre: updated.nombre_usuario, activo: updated.activo },
+          create: { usuario_id: id, nombre: updated.nombre_usuario, activo: updated.activo } });
+      } else if (current.rol === 'Tecnico') {
+        await tx.tecnicos.updateMany({ where: { usuario_id: id }, data: { activo: false } });
+      }
+      if (updated.rol !== current.rol || updated.activo !== current.activo || updated.nombre_usuario !== current.nombre_usuario) {
+        accessChanged = true;
+        await tx.$executeRaw`UPDATE "Usuarios" SET sesion_version = sesion_version + 1 WHERE id_usuario = ${id}`;
+      }
+      return updated;
     });
-    res.json({ data: withoutPassword(usuario) });
-  } catch (error) {
-    if (error.code === 'P2002') return res.status(409).json({ error: 'El nombre de usuario ya existe' });
-    res.status(500).json({ error: 'Error al actualizar usuario', details: error.message });
-  }
+    if (accessChanged) disconnectUserSessions(id);
+    res.json({ data: publicUser(user) });
+  } catch (error) { adminError(res, error, 'No se pudo actualizar la cuenta.'); }
 };
-
 export const updateUsuarioPassword = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { password, admin_password } = req.body;
-
-    if (!ROLES_ADMIN_PASSWORD.includes(req.user?.rol)) {
-      return res.status(403).json({ error: 'No tienes permiso para cambiar contrasenas de usuarios' });
-    }
-
-    if (!admin_password) {
-      return res.status(400).json({ error: 'La contrasena del administrador es obligatoria' });
-    }
-
-    const admin = await prisma.usuarios.findUnique({
-      where: { id_usuario: Number(req.user.id) },
-      select: { contrasena_hash: true },
+    const id = positiveId(req.params.id, 'Usuario', false);
+    if (id === req.user.id) fail(400, 'Cambie su contraseña desde Mi cuenta.');
+    const minimum = (await getBusinessSettings()).reglas.password_minimo;
+    const password = validateNewPassword(req.body.password, minimum);
+    await withAuditUser(req.user, async (tx) => {
+      const actor = await tx.usuarios.findUnique({ where: { id_usuario: req.user.id } });
+      if (typeof req.body.admin_password !== 'string' || !await bcrypt.compare(req.body.admin_password, actor.contrasena_hash)) fail(403, 'La contraseña del administrador no es correcta.');
+      await tx.usuarios.update({ where: { id_usuario: id }, data: { contrasena_hash: await bcrypt.hash(password, 10) } });
+      await tx.$executeRaw`UPDATE "Usuarios" SET sesion_version = sesion_version + 1 WHERE id_usuario = ${id}`;
+      await recordAdminAction(req.user, 'Usuarios', 'CAMBIO_PASSWORD', null, { id_usuario: id }, 'Cambio administrativo de contraseña; sesiones invalidadas.', tx);
     });
-
-    const adminPasswordValid = admin?.contrasena_hash
-      ? await bcrypt.compare(String(admin_password), admin.contrasena_hash)
-      : false;
-
-    if (!adminPasswordValid) {
-      return res.status(403).json({ error: 'La contrasena del administrador no es valida' });
-    }
-
-    if (!password || String(password).trim().length < 6) {
-      return res.status(400).json({ error: 'La nueva contrasena debe tener al menos 6 caracteres' });
-    }
-
-    const usuarioId = Number(id);
-    if (!Number.isInteger(usuarioId) || usuarioId <= 0) return res.status(400).json({ error: 'ID de usuario inválido' });
-    const result = await prisma.usuarios.updateMany({
-      where: { id_usuario: usuarioId },
-      data: { contrasena_hash: await bcrypt.hash(String(password), 10) },
-    });
-    if (!result.count) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    res.json({ message: 'Contrasena actualizada correctamente' });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al cambiar contrasena', details: error.message });
-  }
+    disconnectUserSessions(id);
+    res.json({ message: 'Contraseña actualizada y sesiones anteriores cerradas.' });
+  } catch (error) { adminError(res, error, 'No se pudo cambiar la contraseña.'); }
 };
-
 export const deleteUsuario = async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID de usuario inválido' });
-    const usuario = await prisma.usuarios.update({
-      where: { id_usuario: id },
-      data: { activo: false },
-    });
-    res.json({ data: withoutPassword(usuario) });
-  } catch (error) {
-    if (error.code === 'P2025') return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.status(500).json({ error: 'Error al desactivar usuario', details: error.message });
-  }
+  req.body = { activo: false };
+  return updateUsuario(req, res);
 };
-
-// 6. Monitoreo general

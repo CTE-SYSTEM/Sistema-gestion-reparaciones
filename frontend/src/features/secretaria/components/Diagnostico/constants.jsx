@@ -9,6 +9,14 @@ export const initialFormState = {
   deja_cargador: false,
   enciende: false,
   usa_corriente_ac: false,
+  estado_cargador: 'NO_VERIFICADO',
+  estado_accesorios: 'NO_VERIFICADOS',
+  estado_fisico: 'NO_VERIFICADO',
+  estado_encendido: 'NO_PROBADO',
+  estado_alimentacion: 'NO_PROBADA',
+  estado_acceso: 'NO_VERIFICADO',
+  detalle_accesorios: '',
+  observaciones_recepcion: '',
 };
 
 export const tourSteps = [
@@ -30,7 +38,7 @@ export const tourSteps = [
   {
     target: 'priority',
     title: '4. Prioridad y accesorios',
-    text: 'Marca la prioridad de atencion y los datos de recepcion: cargador, si enciende y si usa corriente AC.',
+    text: 'Seleccione la prioridad y revise solo los datos aplicables al tipo de equipo. Monitores, impresoras y UPS no solicitan cargador; los cables o adaptadores se describen en accesorios. Los nombres de los equipos registrados se conservan.',
   },
   {
     target: 'failure',

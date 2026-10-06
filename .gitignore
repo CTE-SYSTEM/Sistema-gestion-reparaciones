@@ -9,6 +9,7 @@ dev.db
 postgres_data*/
 postgres_data_backup_*/
 postgres_data_badinit_*/
+/output/
 
 # Carpetas de compilación
 dist/

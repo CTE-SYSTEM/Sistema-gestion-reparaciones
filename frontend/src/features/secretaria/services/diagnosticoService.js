@@ -31,3 +31,7 @@ export const updateDiagnostico = (id, diagnosticoData) => {
 
 export const updateEstadoDiagnostico = (id, nuevoEstado) =>
   api.patch(`/secretaria/diagnostico/${id}/estado`, { estado: nuevoEstado });
+export const actualizarContacto = (id, data) => api.patch(`/secretaria/diagnostico/${id}/contacto`, data);
+export const registrarRetiro = (id, data) => api.patch(`/secretaria/diagnostico/${id}/retiro`, data);
+export const getHistorialDiagnostico = (id) => api.get(`/secretaria/diagnostico/${id}/historial`, { cache: false });
+export const descargarDocumentoDiagnostico = (id) => api.get(`/secretaria/diagnostico/${id}/documento`, { responseType: 'blob' });

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BadgeCheck,
   ClipboardList,
@@ -14,6 +14,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { getFlujoAtencion } from '../services/flujoAtencionService';
+import { useInfiniteSecretariaList } from '../features/secretaria/hooks/useInfiniteSecretariaList';
 
 const filtros = [
   { id: 'todos', label: 'Todos' },
@@ -67,35 +68,38 @@ const StatusPill = ({ item }) => (
 );
 
 const FlujoAtencion = () => {
-  const [items, setItems] = useState([]);
-  const [meta, setMeta] = useState({ resumen: {} });
   const [filtro, setFiltro] = useState('todos');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const loadMoreRef = useRef(null);
   
   // NUEVO: Estado para abrir/cerrar el desplegable de filtros
   const [isOpenFiltro, setIsOpenFiltro] = useState(false);
 
   useEffect(() => {
-    const timeout = window.setTimeout(async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await getFlujoAtencion({ filtro, search });
-        setItems(response.data?.data || []);
-        setMeta(response.data?.meta || { resumen: {} });
-      } catch (err) {
-        setError(err.response?.data?.error || 'No se pudo cargar el flujo de atención.');
-      } finally {
-        setLoading(false);
-      }
-    }, 250);
-
+    const timeout = window.setTimeout(() => setSearch(searchInput), 150);
     return () => window.clearTimeout(timeout);
-  }, [filtro, search]);
-
-  const resumen = useMemo(() => meta.resumen || {}, [meta]);
+  }, [searchInput]);
+  const flujoQuery = useInfiniteSecretariaList({
+    queryKey: ['secretaria', 'flujo-atencion'],
+    queryFn: getFlujoAtencion,
+    search,
+    extraParams: { filtro },
+  });
+  const items = flujoQuery.rows;
+  const meta = flujoQuery.data?.pages?.[0]?.meta || {};
+  const resumen = meta.resumen || {};
+  const loading = flujoQuery.isPending;
+  const error = flujoQuery.error?.response?.data?.error || (flujoQuery.error ? 'No se pudo cargar el flujo de atención.' : '');
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !flujoQuery.hasNextPage || flujoQuery.isFetchingNextPage) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) flujoQuery.fetchNextPage();
+    }, { rootMargin: '400px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [flujoQuery.hasNextPage, flujoQuery.isFetchingNextPage, flujoQuery.fetchNextPage]);
 
   // Obtener la etiqueta del filtro seleccionado actualmente
   const filtroActivoLabel = useMemo(() => {
@@ -123,8 +127,8 @@ const FlujoAtencion = () => {
           <label className="relative block w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 shadow-sm"
               placeholder="Buscar cliente, equipo..."
             />
@@ -273,6 +277,11 @@ const FlujoAtencion = () => {
                 )}
               </article>
             ))
+          )}
+          {(flujoQuery.hasNextPage || flujoQuery.isFetchingNextPage) && (
+            <div ref={loadMoreRef} className="py-3 text-center text-xs text-slate-500">
+              {flujoQuery.isFetchingNextPage ? 'Cargando más equipos…' : `Mostrando ${items.length} de ${meta.total ?? resumen.todos ?? items.length}. Desplázate para ver más.`}
+            </div>
           )}
         </section>
       )}

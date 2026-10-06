@@ -142,7 +142,7 @@ const Table = ({
       </table>
       {onLoadMore && (isLoadingMore || hasMore) && (
         <div className="border-t border-gray-100 px-4 py-2 text-center text-xs font-medium text-gray-400">
-          {isLoadingMore ? 'Cargando más registros...' : 'Desplázate para cargar 20 registros más'}
+          {isLoadingMore ? 'Cargando más registros...' : 'Desplázate para cargar más registros'}
         </div>
       )}
     </div>

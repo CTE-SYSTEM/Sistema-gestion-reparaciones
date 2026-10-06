@@ -8,8 +8,23 @@ const normalizeText = (value) => {
   return normalized || null;
 };
 
-const clienteSearchWhere = (search) => {
+const clienteSearchWhere = (search, searchMode = '') => {
   if (!search) return {};
+
+  if (searchMode === 'prefix') {
+    if (/^\d+$/.test(search)) {
+      const id = Number(search);
+      return {
+        OR: [
+          ...(Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? [{ id_cliente: id }] : []),
+          { telefono: { contains: search } },
+          { contacto_secundario: { contains: search } },
+        ],
+      };
+    }
+
+    return { nombre: { startsWith: search, mode: 'insensitive' } };
+  }
 
   return {
     OR: [
@@ -26,11 +41,12 @@ export const getClientes = async (req, res) => {
   try {
     const { page, pageSize, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim();
-    const where = { activo: true, ...clienteSearchWhere(search) };
+    const searchMode = req.query.searchMode === 'prefix' ? 'prefix' : '';
+    const where = { activo: true, ...clienteSearchWhere(search, searchMode) };
     const [clientes, countRows] = await Promise.all([
       prisma.clientes.findMany({
         where,
-        orderBy: { id_cliente: 'desc' },
+        orderBy: searchMode === 'prefix' && search ? { nombre: 'asc' } : { id_cliente: 'desc' },
         skip: offset,
         take: pageSize,
       }),

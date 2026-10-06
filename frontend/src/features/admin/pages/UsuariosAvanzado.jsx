@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import Table from '../../../components/Table';
 import { AuthContext } from '../../../context/AuthContext';
 import { Plus, X } from 'lucide-react';
@@ -10,6 +11,8 @@ const PASSWORD_ADMIN_ROLES = ['admin_pro', 'Administrador', 'Admin'];
 
 export default function UsuariosAvanzado() {
   const { user } = useContext(AuthContext);
+  const [passwordMinimum, setPasswordMinimum] = useState(8);
+  const isOwnAccount = (row) => row.id_usuario === user?.id || row.nombre_usuario === user?.username;
   
   // Estados de datos y carga
   const [usuarios, setUsuarios] = useState([]);
@@ -55,6 +58,7 @@ export default function UsuariosAvanzado() {
     try {
       const response = await usuariosService.getUsuarios();
       const data = response.data?.data || [];
+      setPasswordMinimum(response.data?.password_minimo || 8);
       
       const formatted = data.map((u) => ({
         id_usuario: u.id_usuario,
@@ -107,8 +111,8 @@ export default function UsuariosAvanzado() {
       });
       const passwordNueva = String(selectedUsuario.password_nueva || '').trim();
       if (passwordNueva) {
-        if (passwordNueva.length < 6) {
-          setEditMessage('El perfil se guardó, pero la contraseña debe tener al menos 6 caracteres.');
+        if (passwordNueva.length < passwordMinimum) {
+          setEditMessage(`El perfil se guardó, pero la contraseña debe tener al menos ${passwordMinimum} caracteres.`);
           return;
         }
 
@@ -137,8 +141,8 @@ export default function UsuariosAvanzado() {
     event.preventDefault();
     if (!passwordUsuario) return;
 
-    if (!newPassword.trim() || newPassword.trim().length < 6) {
-      setPasswordMessage('La nueva contraseña debe tener al menos 6 caracteres.');
+    if (!newPassword.trim() || newPassword.length < passwordMinimum) {
+      setPasswordMessage(`La nueva contraseña debe tener al menos ${passwordMinimum} caracteres.`);
       return;
     }
 
@@ -151,7 +155,7 @@ export default function UsuariosAvanzado() {
     setPasswordMessage('');
     try {
       const response = await usuariosService.updatePassword(passwordUsuario.id_usuario, {
-        password: newPassword.trim(),
+        password: newPassword,
         admin_password: adminPassword,
       });
       setPasswordMessage(response.data?.message || 'Contraseña actualizada correctamente.');
@@ -234,6 +238,8 @@ export default function UsuariosAvanzado() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            disabled={isOwnAccount(row)}
+            title={isOwnAccount(row) ? 'Su cuenta debe permanecer activa.' : undefined}
             onClick={() => handleToggleUsuarioActivo(row.id_usuario, row.activo)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
               row.activo === 'Sí' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'
@@ -243,12 +249,13 @@ export default function UsuariosAvanzado() {
           </button>
           <button
             type="button"
+            disabled={isOwnAccount(row)}
             onClick={() => { setSelectedUsuario(row); setEditMessage(''); setPasswordUsuario(null); }}
             className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-white transition hover:bg-slate-900"
           >
             Editar
           </button>
-          {canResetPassword && (
+          {canResetPassword && !isOwnAccount(row) && (
             <button
               type="button"
               onClick={() => { setPasswordUsuario(row); setPasswordMessage(''); setNewPassword(''); setSelectedUsuario(null); }}
@@ -260,7 +267,7 @@ export default function UsuariosAvanzado() {
         </div>
       ),
     },
-  ], [canResetPassword]);
+  ], [canResetPassword, user?.id, user?.username]);
 
   // --- Filtrado Frontend ---
   const filteredUsuarios = useMemo(() => {
@@ -604,7 +611,9 @@ export default function UsuariosAvanzado() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50"
-                  placeholder="Mínimo 6 caracteres"
+                  minLength={passwordMinimum}
+                  autoComplete="new-password"
+                  placeholder={`Mínimo ${passwordMinimum} caracteres`}
                 />
               </div>
 

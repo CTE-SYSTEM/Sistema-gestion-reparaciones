@@ -1,4 +1,5 @@
 import prisma from '../../app/prismaClient.js';
+import { monedaPresupuesto } from '../../utils/monedaPresupuesto.js';
 import { DIAGNOSTICO_ESTADOS, PRIORIDADES, assertInList, parseNonNegativeMoney, parsePositiveId } from '../../utils/domainValidation.js';
 
 const APROBACIONES_DIAGNOSTICO = ['Pendiente', 'Aprobado', 'Rechazado'];
@@ -114,7 +115,7 @@ export const downloadDiagnosticosReporteAdmin = async (req, res) => {
       orderBy: { fecha_hora: 'desc' },
     });
 
-    const headers = ['ID', 'Fecha', 'Cliente', 'Telefono', 'Equipo', 'Tecnico', 'Estado', 'Aprobacion', 'Prioridad', 'Presupuesto', 'Falla', 'Diagnostico'];
+    const headers = ['ID', 'Fecha', 'Cliente', 'Telefono', 'Equipo', 'Tecnico', 'Estado', 'Aprobacion', 'Prioridad', 'Presupuesto', 'Moneda', 'Falla', 'Diagnostico'];
     const rows = diagnosticos.map((item) => [
       item.id_diagnostico,
       item.fecha_hora ? item.fecha_hora.toISOString() : '',
@@ -126,6 +127,7 @@ export const downloadDiagnosticosReporteAdmin = async (req, res) => {
       item.Estado_aprobacion,
       item.prioridad || '-',
       item.presupuesto_estimado ?? 0,
+      item.moneda_presupuesto,
       item.falla_reportada || '-',
       item.diagnostico_real || '-',
     ]);
@@ -160,6 +162,7 @@ export const updateDiagnosticoAdmin = async (req, res) => {
       falla_reportada,
       diagnostico_real,
       presupuesto_estimado,
+      moneda_presupuesto,
       prioridad,
       estado_del_diagnostico,
       Estado_aprobacion,
@@ -187,6 +190,7 @@ export const updateDiagnosticoAdmin = async (req, res) => {
         ? null
         : parseNonNegativeMoney(presupuesto_estimado, 'El presupuesto estimado');
     }
+    if (moneda_presupuesto !== undefined) data.moneda_presupuesto = monedaPresupuesto(moneda_presupuesto);
     if (prioridad !== undefined) {
       data.prioridad = prioridad === null || prioridad === ''
         ? 'Normal'

@@ -22,10 +22,13 @@ import facturasRoutes from '../routes/modules/secretaria/facturas.js';
 import garantiasRoutes from '../routes/modules/secretaria/garantias.js';
 import diagnosticoRoutes from '../routes/modules/secretaria/Diagnostico.js';
 import secretariaDashboardRoutes from '../routes/modules/secretaria/Dashboard.js';
+import archivosServicioRoutes from '../routes/modules/secretaria/ArchivosServicio.js';
 import diagnosticoRoutesJefe from '../routes/modules/JefeTecnico/Diagnostico.js';
+import supervisionRoutes from '../routes/modules/JefeTecnico/Supervision.js';
 import adminProRoutes from '../routes/modules/admin_pro/adminPro.js';
 import flujoAtencionRoutes from '../routes/modules/flujoAtencion.js';
 import healthRoutes from '../routes/health.js';
+import notificacionesRoutes from '../routes/modules/notificaciones.js';
 
 const app = express();
 
@@ -53,6 +56,7 @@ app.use('/health', healthRoutes);
 app.use('/api/health', healthRoutes);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/tecnicos', tecnicosRoutes);
 app.use('/api/equipos', equiposRoutes);
@@ -64,14 +68,16 @@ app.use('/api/compras', comprasRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/garantias', garantiasRoutes);
 app.use('/api/secretaria/dashboard', secretariaDashboardRoutes);
+app.use('/api/archivos-servicio', archivosServicioRoutes);
 app.use('/api/secretaria/diagnostico', diagnosticoRoutes);
 app.use('/api/diagnosticos', diagnosticoRoutesJefe);
+app.use('/api/jefe-tecnico', supervisionRoutes);
 app.use('/api/admin_pro', adminProRoutes);
 app.use('/api/flujo-atencion', flujoAtencionRoutes);
 
 app.get('/', (req, res) => {
   res.json({
-    name: 'CTE Backend',
+    name: 'SGR Backend',
     status: 'running',
     health: '/health',
     api: '/api',

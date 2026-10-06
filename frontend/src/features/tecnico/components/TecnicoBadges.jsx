@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const estadosDiagnosticoCompletado = ['COMPLETADO', 'DIAGNOSTICADO', 'APROBADO', 'RECHAZADO'];
-export const estadosOrdenCerrada = ['FINALIZADO', 'IRREPARABLE', 'ENTREGADO'];
+export const estadosOrdenCerrada = ['FINALIZADO', 'IRREPARABLE', 'ENTREGADO', 'CANCELADO'];
 
 export const PrioridadBadge = ({ prioridad }) => {
   const key = String(prioridad || '').toUpperCase();
@@ -24,6 +24,7 @@ export const EstadoBadge = ({ estado }) => {
   const key = String(estado || '').toUpperCase();
   const styles = {
     PENDIENTE: 'bg-gray-100 text-gray-700 border-gray-200',
+    ASIGNADO: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     EN_REVISION: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     EN_REPARACION: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     ESPERANDO_REPUESTO: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -31,6 +32,7 @@ export const EstadoBadge = ({ estado }) => {
     FINALIZADO: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     ENTREGADO: 'bg-slate-100 text-slate-800 border-slate-200',
     IRREPARABLE: 'bg-red-100 text-red-800 border-red-200',
+    REVISION_JEFE: 'bg-amber-100 text-amber-800 border-amber-200',
     COMPLETADO: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     DIAGNOSTICADO: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     APROBADO: 'bg-green-100 text-green-800 border-green-200',
@@ -39,7 +41,7 @@ export const EstadoBadge = ({ estado }) => {
 
   return (
     <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${styles[key] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-      {key || 'PENDIENTE'}
+      {key === 'REVISION_JEFE' ? 'Revisión del jefe' : key || 'PENDIENTE'}
     </span>
   );
 };

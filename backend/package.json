@@ -1,31 +1,39 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "Sistema de Gestión para Centro Técnico Electrónico (CTE)",
+  "description": "API para la gestión de talleres de reparación",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "test:api": "node --test tests/api/*.test.js",
+    "test:secretaria": "node --test tests/secretaria/reglas.test.js tests/unit/fotoStorage.test.js",
+    "test:secretaria:integracion": "node tests/secretaria/run-integration.js",
+    "test:jefe:integracion": "node tests/secretaria/run-integration.js jefeTecnico",
+    "test:tecnico:integracion": "node tests/secretaria/run-integration.js tecnico",
+    "test:admin": "node --test tests/administracion/reglas.test.js",
+    "test:admin:integracion": "node tests/secretaria/run-integration.js administracion",
     "db:generate": "prisma generate",
-    "db:sync": "prisma db push --accept-data-loss",
+    "db:sync": "prisma db push",
     "db:seed": "prisma db seed",
     "studio": "prisma studio --port 5555",
-    "db:functions": "psql -v ON_ERROR_STOP=1 \"$SQL_DATABASE_URL\" -f scripts/load_functions.sql",
+    "db:functions": "node -r dotenv/config scripts/apply-local-functions.js",
     "db:auditoria": "psql -v ON_ERROR_STOP=1 \"$SQL_DATABASE_URL\" -f scripts/modules/Auditoria.sql",
     "db:auditoria:ver": "psql -v ON_ERROR_STOP=1 \"$SQL_DATABASE_URL\" -f scripts/auditoria_consultas.sql",
     "db:auditoria:snapshot": "psql -v ON_ERROR_STOP=1 \"$SQL_DATABASE_URL\" -c \"SELECT auditoria_capturar_estado_actual('Snapshot manual') AS registros_auditados;\"",
-    "db:deploy": "prisma generate && prisma db push --accept-data-loss && npm run db:functions",
+    "db:deploy": "prisma generate && prisma db push && npm run db:functions",
     "db:functions:container": "psql -v ON_ERROR_STOP=1 \"$SQL_DATABASE_URL\" -f scripts/load_functions.sql",
     "db:check:users": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT id_usuario, nombre_usuario, rol, activo FROM \\\"Usuarios\\\" ORDER BY id_usuario;\"",
     "db:check:clientes": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT * FROM \\\"Clientes\\\";\"",
-    "db:check:tecnicos": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT * FROM \\\"Tecnicos\\\";\""
+    "db:check:tecnicos": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT * FROM \\\"Tecnicos\\\";\"",
+    "test:notificaciones:integracion": "node tests/secretaria/run-integration.js notificaciones"
   },
   "prisma": {
     "seed": "node prisma/Seed.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
@@ -36,6 +44,7 @@
     "morgan": "^1.10.1",
     "pdfkit": "^0.13.0",
     "pg": "^8.21.0",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
@@ -49,6 +58,6 @@
     "backend",
     "electronic-service"
   ],
-  "author": "CTE Dev Team",
+  "author": "SGR Dev Team",
   "license": "ISC"
 }

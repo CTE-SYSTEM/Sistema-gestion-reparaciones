@@ -7,6 +7,7 @@ import { GuidedTour, tourHighlightClass } from '../components/shared/GuidedTour'
 import { getClientes } from '../services/clientesService';
 import { createEquipo, getEquipos, updateEquipo } from '../services/equiposService';
 import { useInfiniteSecretariaList } from '../hooks/useInfiniteSecretariaList';
+import { handleFormNavigationKeyDown } from '../components/shared/formKeyboardNavigation';
 
 const BASE_TIPOS_EQUIPO = ['Laptop', 'Celular', 'Impresora', 'Monitor', 'Tablet', 'Pc Escritorio', 'Consola'];
 
@@ -64,13 +65,14 @@ const tourSteps = [
 const sortClientesByName = (clientes = []) =>
   [...clientes].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
 
-const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equipos = [], preSelectedClient = null, tiposSugeridos = [], activeTourTarget = '' }) => {
+const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equipos = [], preSelectedClient = null, onClientQueryChange, tiposSugeridos = [], activeTourTarget = '' }) => {
   const [formData, setFormData] = useState({
     cliente_id: initialData?.cliente_id || preSelectedClient?.id || '',
     tipo: initialData?.tipo || '',
     marca: initialData?.marca || '',
     modelo: initialData?.modelo || '',
     numero_serie: initialData?.numero_serie || '',
+    observaciones_generales: initialData?.observaciones_generales || '',
   });
   const [formError, setFormError] = useState('');
 
@@ -81,11 +83,18 @@ const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equ
       marca: initialData?.marca || '',
       modelo: initialData?.modelo || '',
       numero_serie: initialData?.numero_serie || '',
+      observaciones_generales: initialData?.observaciones_generales || '',
     });
     setFormError('');
   }, [initialData, preSelectedClient?.id]);
 
-  const clienteInfo = clientes.find(c => String(c.id_cliente) === String(formData.cliente_id));
+  const clientesDisponibles = [...clientes];
+  for (const cliente of [initialData?.cliente, preSelectedClient]) {
+    if (cliente?.id_cliente && !clientesDisponibles.some((item) => String(item.id_cliente) === String(cliente.id_cliente))) {
+      clientesDisponibles.push(cliente);
+    }
+  }
+  const clienteInfo = clientesDisponibles.find(c => String(c.id_cliente) === String(formData.cliente_id));
   const marcasSugeridas = getMarcasSugeridas(equipos, formData.tipo);
   const modelosSugeridos = getModelosSugeridos(equipos, formData.tipo, formData.marca);
   const handleChange = (e) => {
@@ -117,7 +126,7 @@ const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equ
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} onKeyDown={handleFormNavigationKeyDown} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
         {/* Selector de Cliente */}
         <div
@@ -129,11 +138,14 @@ const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equ
             name="cliente_id"
             value={formData.cliente_id}
             onChange={handleChange}
-            options={clientes}
+            options={clientesDisponibles}
+            matchMode="prefix"
+            onQueryChange={onClientQueryChange}
             getOptionValue={(cliente) => cliente.id_cliente}
             getOptionLabel={(cliente) => cliente.nombre || `Cliente #${cliente.id_cliente}`}
             getOptionDescription={(cliente) => `ID: ${cliente.id_cliente}${cliente.telefono ? ` | ${cliente.telefono}` : ''}`}
-            placeholder="Buscar cliente por nombre, ID o telefono..."
+            placeholder=""
+            helpText="Ej.: nombre, ID o teléfono del cliente"
             emptyMessage="No hay clientes con ese criterio"
             required
           />
@@ -162,11 +174,16 @@ const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equ
           <TipoField value={formData.tipo} onChange={handleChange} tiposSugeridos={tiposSugeridos} />
           <MarcaField value={formData.marca} onChange={handleChange} marcasSugeridas={marcasSugeridas} disabled={!formData.tipo} />
           <ModeloField value={formData.modelo} onChange={handleChange} modelosSugeridos={modelosSugeridos} disabled={!formData.tipo} />
-          <Field label="Número de Serie" name="numero_serie" value={formData.numero_serie} onChange={handleChange} placeholder="S/N" maxLength={80} />
+          <Field label="Número de Serie" name="numero_serie" value={formData.numero_serie} onChange={handleChange} helpText="Ej.: SN12345678" maxLength={80} />
+          <label className="md:col-span-2 block text-sm text-gray-700">Observaciones generales del equipo
+            <textarea name="observaciones_generales" value={formData.observaciones_generales} onChange={handleChange} aria-describedby="observaciones_generales-help" rows={2} className="mt-1 w-full rounded-lg border border-gray-300 p-2" />
+            <span id="observaciones_generales-help" className="mt-1 block text-xs text-slate-500">Ej.: Carcasa con rayones en la tapa</span>
+          </label>
         </div>
       </div>
 
       {formError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
+      <p className="text-xs text-gray-500">Enter avanza; ↑/↓ mueve entre campos de texto o sugerencias. Alt+flechas navega desde cualquier campo. En las observaciones, Ctrl+Enter avanza y Enter agrega una línea.</p>
 
       <div
         data-tour-target="actions"
@@ -188,10 +205,11 @@ const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equ
   );
 };
 
-const Field = ({ label, className = '', ...props }) => (
+const Field = ({ label, className = '', helpText, ...props }) => (
   <div className={className}>
     <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-    <input {...props} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+    <input {...props} aria-describedby={helpText ? `${props.name}-help` : undefined} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+    {helpText && <p id={`${props.name}-help`} className="mt-1 text-xs text-slate-500 text-left">{helpText}</p>}
   </div>
 );
 
@@ -203,7 +221,8 @@ const TipoField = ({ value, onChange, tiposSugeridos }) => (
       value={value}
       onChange={onChange}
       options={tiposSugeridos.map((tipo) => ({ value: tipo, label: tipo }))}
-      placeholder="Ej: Laptop"
+      placeholder=""
+      helpText="Ej.: Laptop, Consola o Monitor"
       emptyMessage="Escriba un nuevo tipo de equipo"
       allowCustom
       required
@@ -219,7 +238,8 @@ const MarcaField = ({ value, onChange, marcasSugeridas, disabled }) => (
       value={value}
       onChange={onChange}
       options={marcasSugeridas.map((marca) => ({ value: marca, label: marca }))}
-      placeholder={disabled ? 'Seleccione un tipo primero' : 'Ej: HP'}
+      placeholder=""
+      helpText={disabled ? 'Seleccione un tipo primero. Ej.: HP, Sony o Samsung' : 'Ej.: HP, Sony o Samsung'}
       emptyMessage="Escriba una nueva marca para este tipo"
       allowCustom
       disabled={disabled}
@@ -237,7 +257,8 @@ const ModeloField = ({ value, onChange, modelosSugeridos, disabled }) => (
       value={value}
       onChange={onChange}
       options={modelosSugeridos.map((modelo) => ({ value: modelo, label: modelo }))}
-      placeholder={disabled ? 'Seleccione un tipo primero' : 'Ej: Victus 15'}
+      placeholder=""
+      helpText={disabled ? 'Seleccione un tipo primero. Ej.: IdeaPad 3 o PlayStation 5' : 'Ej.: IdeaPad 3 o PlayStation 5'}
       emptyMessage="Escriba un nuevo modelo para este tipo"
       allowCustom
       disabled={disabled}
@@ -252,6 +273,7 @@ const Equipos = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [clientes, setClientes] = useState([]);
+  const [clienteSearch, setClienteSearch] = useState('');
   const [showForm, setShowForm] = useState(!!location.state?.clienteId);
   const [editingEquipo, setEditingEquipo] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
@@ -269,15 +291,17 @@ const Equipos = () => {
 
   const preSelectedClient = location.state?.clienteId ? {
     id: location.state.clienteId,
+    id_cliente: location.state.clienteId,
     nombre: location.state.nombreCliente
   } : null;
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // El formulario usa un catálogo acotado; la tabla continúa paginada de 20 en 20.
-      const cRes = await getClientes({ page: 1, pageSize: 100 });
-      setClientes(sortClientesByName(cRes.data.data || []));
+      const cRes = await getClientes({ page: 1, pageSize: 20 });
+      setClientes((prev) => sortClientesByName([
+        ...new Map([...prev, ...(cRes.data.data || [])].map((cliente) => [cliente.id_cliente, cliente])).values(),
+      ]));
     } catch (err) {
       setError('Error al cargar clientes');
     }
@@ -285,6 +309,30 @@ const Equipos = () => {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    const search = clienteSearch.trim();
+    if (!search) return undefined;
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await getClientes({ page: 1, pageSize: 20, search, searchMode: 'prefix' });
+        if (!active) return;
+        setClientes((prev) => sortClientesByName([
+          ...new Map([...prev, ...(response.data.data || [])].map((cliente) => [cliente.id_cliente, cliente])).values(),
+        ]));
+        setError(null);
+      } catch {
+        if (active) setError('No se pudo buscar clientes. Intente de nuevo.');
+      }
+    }, 180);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [clienteSearch]);
 
   const activeTourTarget = showHelp ? tourSteps[tourStep].target : '';
 
@@ -367,6 +415,7 @@ const Equipos = () => {
     { header: 'Marca', accessor: 'marca' },
     { header: 'Modelo', accessor: 'modelo' },
     { header: 'No. Serie', accessor: 'numero_serie' },
+    { header: 'Observaciones', accessor: 'observaciones_generales' },
     {
       header: 'Acciones',
       accessor: 'acciones',
@@ -437,6 +486,7 @@ const Equipos = () => {
           onCancel={() => { setShowForm(false); setEditingEquipo(null); }} 
           initialData={editingEquipo} 
           clientes={clientes}
+          onClientQueryChange={setClienteSearch}
           equipos={equipos}
           preSelectedClient={preSelectedClient}
           tiposSugeridos={tiposSugeridos}

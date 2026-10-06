@@ -18,20 +18,37 @@ RETURNS TABLE (data JSONB) AS $$
 DECLARE
   v_periodo TEXT := lower(COALESCE(p_periodo, 'all'));
   v_inicio TIMESTAMP;
+  v_fin TIMESTAMP;
+  v_inicio_local TIMESTAMP;
+  v_fin_local TIMESTAMP;
 BEGIN
   IF v_periodo = 'week' THEN
-    v_inicio := now() - INTERVAL '7 days';
+    v_inicio_local := date_trunc('week', now() AT TIME ZONE 'America/Managua');
+    v_fin_local := v_inicio_local + INTERVAL '1 week';
   ELSIF v_periodo = 'month' THEN
-    v_inicio := date_trunc('month', now());
+    v_inicio_local := date_trunc('month', now() AT TIME ZONE 'America/Managua');
+    v_fin_local := v_inicio_local + INTERVAL '1 month';
   ELSIF v_periodo = 'year' THEN
-    v_inicio := date_trunc('year', now());
+    v_inicio_local := date_trunc('year', now() AT TIME ZONE 'America/Managua');
+    v_fin_local := v_inicio_local + INTERVAL '1 year';
   ELSE
     v_periodo := 'all';
-    v_inicio := NULL;
+  END IF;
+  IF v_inicio_local IS NOT NULL THEN
+    v_inicio := (v_inicio_local AT TIME ZONE 'America/Managua') AT TIME ZONE 'UTC';
+    v_fin := (v_fin_local AT TIME ZONE 'America/Managua') AT TIME ZONE 'UTC';
   END IF;
 
   RETURN QUERY
-  WITH ordenes_filtradas AS (
+  WITH altas_periodo AS (
+    SELECT tabla, COUNT(*)::int AS total
+    FROM "Auditoria_Movimientos"
+    WHERE operacion = 'INSERT'
+      AND v_inicio IS NOT NULL
+      AND fecha_movimiento >= v_inicio AND fecha_movimiento < v_fin
+      AND tabla IN ('Clientes', 'Equipos', 'Proveedores', 'Repuestos', 'Categorias_Repuestos')
+    GROUP BY tabla
+  ), ordenes_filtradas AS (
     SELECT
       o.*,
       jsonb_build_object(
@@ -55,7 +72,7 @@ BEGIN
     JOIN "Equipos" e ON e.id_equipo = d.equipo_id
     JOIN "Clientes" c ON c.id_cliente = e.cliente_id
     LEFT JOIN "Tecnicos" t ON t.id_tecnico = o.tecnico_id
-    WHERE v_inicio IS NULL OR o.fecha_ingreso >= v_inicio
+    WHERE v_inicio IS NULL OR (o.fecha_ingreso >= v_inicio AND o.fecha_ingreso < v_fin)
   ),
   recent_orders AS (
     SELECT COALESCE(jsonb_agg(ofi.data ORDER BY ofi.fecha_ingreso DESC NULLS LAST, ofi.id_orden DESC), '[]'::jsonb) AS items
@@ -69,21 +86,21 @@ BEGIN
   SELECT jsonb_build_object(
     'periodo', v_periodo,
     'stats', jsonb_build_object(
-      'clientes', (SELECT COUNT(*)::int FROM "Clientes" WHERE activo = true),
-      'equipos', (SELECT COUNT(*)::int FROM "Equipos"),
+      'clientes', CASE WHEN v_inicio IS NULL THEN (SELECT COUNT(*)::int FROM "Clientes" WHERE activo = true) ELSE COALESCE((SELECT total FROM altas_periodo WHERE tabla = 'Clientes'), 0) END,
+      'equipos', CASE WHEN v_inicio IS NULL THEN (SELECT COUNT(*)::int FROM "Equipos") ELSE COALESCE((SELECT total FROM altas_periodo WHERE tabla = 'Equipos'), 0) END,
       'ordenes', (SELECT COUNT(*)::int FROM ordenes_filtradas),
-      'proveedores', (SELECT COUNT(*)::int FROM "Proveedores" WHERE descontinuada = false),
-      'repuestos', (SELECT COUNT(*)::int FROM "Repuestos" WHERE descontinuada = false),
-      'tiposRepuesto', (SELECT COUNT(*)::int FROM "Categorias_Repuestos"),
+      'proveedores', CASE WHEN v_inicio IS NULL THEN (SELECT COUNT(*)::int FROM "Proveedores" WHERE descontinuada = false) ELSE COALESCE((SELECT total FROM altas_periodo WHERE tabla = 'Proveedores'), 0) END,
+      'repuestos', CASE WHEN v_inicio IS NULL THEN (SELECT COUNT(*)::int FROM "Repuestos" WHERE descontinuada = false) ELSE COALESCE((SELECT total FROM altas_periodo WHERE tabla = 'Repuestos'), 0) END,
+      'tiposRepuesto', CASE WHEN v_inicio IS NULL THEN (SELECT COUNT(*)::int FROM "Categorias_Repuestos") ELSE COALESCE((SELECT total FROM altas_periodo WHERE tabla = 'Categorias_Repuestos'), 0) END,
       'facturas', (
         SELECT COUNT(*)::int
         FROM "Facturas" f
-        WHERE v_inicio IS NULL OR f.fecha_emision >= v_inicio
+        WHERE v_inicio IS NULL OR (f.fecha_emision >= v_inicio AND f.fecha_emision < v_fin)
       ),
       'diagnosticos', (
         SELECT COUNT(*)::int
         FROM "Diagnosticos" d
-        WHERE v_inicio IS NULL OR d.fecha_hora >= v_inicio OR d.fecha_asignacion >= v_inicio
+        WHERE v_inicio IS NULL OR (d.fecha_hora >= v_inicio AND d.fecha_hora < v_fin)
       ),
       'equiposEnTaller', (
         SELECT COUNT(*)::int
@@ -98,7 +115,7 @@ BEGIN
       'ingresosPeriodo', (
         SELECT COALESCE(SUM(f.total), 0)
         FROM "Facturas" f
-        WHERE v_inicio IS NULL OR f.fecha_emision >= v_inicio
+        WHERE v_inicio IS NULL OR (f.fecha_emision >= v_inicio AND f.fecha_emision < v_fin)
       )
     ),
     'recentOrders', (SELECT items FROM recent_orders)

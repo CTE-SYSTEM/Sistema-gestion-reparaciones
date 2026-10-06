@@ -1,5 +1,6 @@
 import prisma from '../../app/prismaClient.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
+import { withAuditUser } from '../../utils/auditContext.js';
 
 const normalizeText = (value = '') => (value == null ? '' : String(value)).trim().replace(/\s+/g, ' ');
 const normalizeNullableText = (value = '') => normalizeText(value) || null;
@@ -19,6 +20,8 @@ const providerSearchWhere = (search) => (search
         { web: { contains: search, mode: 'insensitive' } },
         { direccion: { contains: search, mode: 'insensitive' } },
         { notas: { contains: search, mode: 'insensitive' } },
+        { nombre_contacto: { contains: search, mode: 'insensitive' } },
+        { horario_atencion: { contains: search, mode: 'insensitive' } },
       ],
     }
   : {});
@@ -30,6 +33,8 @@ const providerData = (body) => ({
   correo: normalizeNullableText(body.correo),
   web: normalizeUrl(body.web),
   notas: normalizeNullableText(body.notas),
+  nombre_contacto: normalizeNullableText(body.nombre_contacto),
+  horario_atencion: normalizeNullableText(body.horario_atencion),
 });
 
 const findDuplicate = (nombre, id = null) => prisma.proveedores.findFirst({
@@ -80,7 +85,7 @@ export const createProveedor = async (req, res) => {
     if (!validateEmail(data.correo)) return res.status(400).json({ error: 'El correo del proveedor no tiene un formato valido' });
     if (await findDuplicate(data.nombre)) return res.status(409).json({ error: 'Ya existe un proveedor activo con ese nombre' });
 
-    const proveedor = await prisma.proveedores.create({ data: { ...data, descontinuada: false } });
+    const proveedor = await withAuditUser(req.user, (tx) => tx.proveedores.create({ data: { ...data, descontinuada: false } }));
     res.status(201).json({ data: proveedor });
   } catch (error) {
     console.error('Error al crear proveedor:', error);
@@ -99,7 +104,7 @@ export const updateProveedor = async (req, res) => {
     if (!actual) return res.status(404).json({ error: 'Proveedor no encontrado' });
     if (await findDuplicate(data.nombre, id)) return res.status(409).json({ error: 'Ya existe otro proveedor activo con ese nombre' });
 
-    const proveedor = await prisma.proveedores.update({ where: { id_proveedor: id }, data });
+    const proveedor = await withAuditUser(req.user, (tx) => tx.proveedores.update({ where: { id_proveedor: id }, data }));
     res.json({ data: proveedor });
   } catch (error) {
     console.error('Error al actualizar proveedor:', error);
@@ -112,10 +117,10 @@ export const deleteProveedor = async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID de proveedor inválido' });
-    const result = await prisma.proveedores.updateMany({
+    const result = await withAuditUser(req.user, (tx) => tx.proveedores.updateMany({
       where: { id_proveedor: id, descontinuada: false },
       data: { descontinuada: true },
-    });
+    }));
     if (!result.count) return res.status(404).json({ error: 'Proveedor no encontrado' });
     res.status(204).send();
   } catch (error) {

@@ -3,7 +3,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_diagnosticos_estado') THEN
     ALTER TABLE "Diagnosticos"
       ADD CONSTRAINT chk_diagnosticos_estado
-      CHECK (estado_del_diagnostico IN ('PENDIENTE', 'INGRESADO', 'EN_REVISION', 'DIAGNOSTICADO', 'COMPLETADO', 'APROBADO', 'RECHAZADO'));
+      CHECK (estado_del_diagnostico IN ('PENDIENTE', 'INGRESADO', 'ASIGNADO', 'EN_REVISION', 'DIAGNOSTICADO', 'COMPLETADO', 'APROBADO', 'RECHAZADO'));
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_diagnosticos_prioridad') THEN
@@ -21,7 +21,7 @@ BEGIN
   ALTER TABLE "Ordenes" DROP CONSTRAINT IF EXISTS chk_ordenes_estado;
   ALTER TABLE "Ordenes"
     ADD CONSTRAINT chk_ordenes_estado
-    CHECK (estado IS NULL OR estado IN ('PENDIENTE', 'APROBADO', 'EN_REPARACION', 'ESPERANDO_PIEZA', 'FINALIZADO', 'IRREPARABLE', 'ENTREGADO'));
+    CHECK (estado IS NULL OR estado IN ('PENDIENTE', 'ASIGNADO', 'APROBADO', 'EN_REPARACION', 'ESPERANDO_PIEZA', 'FINALIZADO', 'IRREPARABLE', 'ENTREGADO', 'CANCELADO'));
 
   ALTER TABLE "Ordenes" DROP CONSTRAINT IF EXISTS chk_ordenes_resultado_final;
   ALTER TABLE "Ordenes"

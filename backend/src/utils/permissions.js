@@ -13,6 +13,12 @@ export const PERMISSIONS = {
   FLUJO_VER: 'flujo:ver',
   TECNICO_TRABAJO: 'tecnico:trabajo',
   JEFE_TECNICO_APROBAR: 'jefe-tecnico:aprobar',
+  JEFE_TECNICO_VER: 'jefe-tecnico:ver',
+  JEFE_TECNICO_ASIGNAR: 'jefe-tecnico:asignar',
+  JEFE_TECNICO_PRIORIDAD: 'jefe-tecnico:prioridad',
+  JEFE_TECNICO_EQUIPO: 'jefe-tecnico:equipo',
+  JEFE_TECNICO_INTERVENIR: 'jefe-tecnico:intervenir',
+  REPUESTOS_ENTREGAR: 'repuestos:entregar',
   ADMIN_USUARIOS: 'admin:usuarios',
   ADMIN_REPORTES: 'admin:reportes',
 };
@@ -35,10 +41,13 @@ const tecnicoPermissions = [
 ];
 
 const jefeTecnicoPermissions = [
-  PERMISSIONS.DIAGNOSTICOS_GESTIONAR,
-  PERMISSIONS.ORDENES_GESTIONAR,
-  PERMISSIONS.REPUESTOS_GESTIONAR,
   PERMISSIONS.FLUJO_VER,
+  PERMISSIONS.JEFE_TECNICO_VER,
+  PERMISSIONS.JEFE_TECNICO_ASIGNAR,
+  PERMISSIONS.JEFE_TECNICO_PRIORIDAD,
+  PERMISSIONS.JEFE_TECNICO_EQUIPO,
+  PERMISSIONS.JEFE_TECNICO_INTERVENIR,
+  PERMISSIONS.REPUESTOS_ENTREGAR,
   PERMISSIONS.JEFE_TECNICO_APROBAR,
 ];
 
@@ -51,6 +60,7 @@ const adminPermissions = [
 ];
 
 export const ROLE_PERMISSIONS = {
+  admin: adminPermissions,
   secretaria: secretariaPermissions,
   tecnico: tecnicoPermissions,
   tecnicojefe: jefeTecnicoPermissions,

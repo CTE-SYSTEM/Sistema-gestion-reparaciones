@@ -30,6 +30,8 @@ BEGIN
     WHEN 'Equipos' THEN RETURN jsonb_build_object('id_equipo', p_row->'id_equipo');
     WHEN 'Diagnosticos' THEN RETURN jsonb_build_object('id_diagnostico', p_row->'id_diagnostico');
     WHEN 'Ordenes' THEN RETURN jsonb_build_object('id_orden', p_row->'id_orden');
+    WHEN 'BitacoraTecnica' THEN RETURN jsonb_build_object('id_avance', p_row->'id_avance');
+    WHEN 'ArchivosServicio' THEN RETURN jsonb_build_object('id_archivo', p_row->'id_archivo');
     WHEN 'Categorias_Repuestos' THEN RETURN jsonb_build_object('id_tipo_repuesto', p_row->'id_tipo_repuesto');
     WHEN 'Repuestos' THEN RETURN jsonb_build_object('id_repuesto', p_row->'id_repuesto');
     WHEN 'Ordenes_Repuestos' THEN RETURN jsonb_build_object('id_detalle_repuesto', p_row->'id_detalle_repuesto');
@@ -59,6 +61,10 @@ BEGIN
 
   v_old := CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN to_jsonb(OLD) ELSE NULL END;
   v_new := CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN to_jsonb(NEW) ELSE NULL END;
+  IF TG_TABLE_NAME = 'Usuarios' THEN
+    v_old := v_old - 'contrasena_hash';
+    v_new := v_new - 'contrasena_hash';
+  END IF;
   v_pk := auditoria_pk_json(TG_TABLE_NAME, COALESCE(v_new, v_old));
 
   BEGIN
@@ -91,7 +97,7 @@ BEGIN
     'trigger',
     CASE
       WHEN TG_OP = 'DELETE' THEN 'Borrado fisico detectado; revisar si debia ser desactivacion logica.'
-      ELSE NULL
+      ELSE NULLIF(current_setting('app.observacion', true), '')
     END
   );
 
@@ -140,7 +146,7 @@ DECLARE
   v_count INT;
 BEGIN
   INSERT INTO "Auditoria_Movimientos" (tabla, operacion, registro_pk, datos_nuevos, origen, observacion)
-  SELECT 'Usuarios', 'CARGA_INICIAL', auditoria_pk_json('Usuarios', to_jsonb(t)), to_jsonb(t), 'snapshot', p_observacion FROM "Usuarios" t;
+  SELECT 'Usuarios', 'CARGA_INICIAL', auditoria_pk_json('Usuarios', to_jsonb(t)), to_jsonb(t) - 'contrasena_hash', 'snapshot', p_observacion FROM "Usuarios" t;
   GET DIAGNOSTICS v_count = ROW_COUNT; v_insertados := v_insertados + v_count;
 
   INSERT INTO "Auditoria_Movimientos" (tabla, operacion, registro_pk, datos_nuevos, origen, observacion)

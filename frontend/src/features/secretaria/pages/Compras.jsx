@@ -1,21 +1,24 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Table from '../../../components/Table';
-import { HelpCircle, Loader2, Plus, Search, X } from 'lucide-react';
+import { HelpCircle, Loader2, Plus, Search } from 'lucide-react';
 import { GuidedTour, tourHighlightClass } from '../components/shared/GuidedTour';
-import { createCompra, getCompras } from '../services/comprasService';
+import { createCompra, getCompras, subirFotoCompra } from '../services/comprasService';
+import FotosCompra from '../components/FotosCompra';
+import { useQueryClient } from '@tanstack/react-query';
 import { getProveedores } from '../services/proveedoresService';
 import { getRepuestos } from '../services/repuestosService';
 import { useInfiniteSecretariaList } from '../hooks/useInfiniteSecretariaList';
 
 const normalizeText = (value = '') => String(value).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
 const money = (value) => `C$ ${Number(value || 0).toFixed(2)}`;
+const purchaseDate = (value) => value ? new Date(value).toLocaleDateString('es-NI', { timeZone: 'UTC' }) : '-';
 
 const tourSteps = [
   { target: 'create', title: '1. Registrar compra', text: 'Nueva Compra abre el formulario para registrar entradas de repuestos.' },
   { target: 'form', title: '2. Datos principales', text: 'Seleccione proveedor y repuesto base. Si proveedor o costo cambian, la entrada se registra en otra variante.' },
   { target: 'numbers', title: '3. Cantidad y costo', text: 'La cantidad se registra como entrada de inventario; no decide si el repuesto es igual o diferente.' },
-  { target: 'search', title: '4. Buscar compras', text: 'Filtra por proveedor, repuesto o documento para revisar entradas previas.' },
-  { target: 'table', title: '5. Revisar historial', text: 'La tabla muestra fecha, cantidad, costo unitario y total para detectar errores de captura.' },
+  { target: 'search', title: '4. Buscar compras', text: 'Filtra por proveedor, repuesto, documento o fechas para revisar entradas previas.' },
+  { target: 'table', title: '5. Revisar historial', text: 'Abra una compra para revisar sus datos y las fotos del ticket en esta misma pantalla.' },
 ];
 
 
@@ -31,6 +34,7 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
     metodo_pago: '',
   });
   const [formError, setFormError] = useState('');
+  const [ticketFotos, setTicketFotos] = useState([]);
 
   const selectedRepuesto = repuestos.find((repuesto) => String(repuesto.id_repuesto) === String(formData.repuesto_id));
   const subtotal = Number(formData.cantidad || 0) * Number(formData.costo_unitario || 0);
@@ -82,6 +86,7 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
       documento: normalizeText(formData.documento),
       cantidad,
       costo_unitario: costo,
+      ticketFotos,
     });
   };
 
@@ -124,7 +129,9 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
             Variante actual: {selectedRepuesto.proveedor?.nombre || 'Sin proveedor'} | {money(selectedRepuesto.costo_individual)}
           </span>
         )}
+        {selectedRepuesto && <div className="mt-1 text-xs">Stock actual: {selectedRepuesto.stock_actual ?? 0} · Stock mínimo: {selectedRepuesto.stock_minimo ?? 0} · Ubicación: {selectedRepuesto.ubicacion_fisica || 'No registrada'} (se editan en Repuestos).</div>}
       </div>
+      <label className="block text-sm font-medium text-gray-700">Fotos del ticket o recibo<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { setTicketFotos(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /><span className="mt-1 block text-xs font-normal text-slate-500">Opcional. JPG, PNG o WebP, hasta 5 MB por foto. {ticketFotos.length ? `${ticketFotos.length} seleccionada(s).` : ''}</span></label>
 
       {formError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
 
@@ -153,18 +160,24 @@ const Select = ({ label, children, className = '', ...props }) => (
 );
 
 const Compras = () => {
+  const queryClient = useQueryClient();
   const [proveedores, setProveedores] = useState([]);
   const [repuestos, setRepuestos] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState('');
+  const [compraSeleccionada, setCompraSeleccionada] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const comprasQuery = useInfiniteSecretariaList({
     queryKey: ['secretaria', 'compras'],
     queryFn: getCompras,
     search: searchTerm,
+    extraParams: { fecha_desde: fechaDesde, fecha_hasta: fechaHasta },
   });
   const compras = comprasQuery.rows;
 
@@ -186,6 +199,13 @@ const Compras = () => {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!compraSeleccionada) return undefined;
+    const onKeyDown = (event) => { if (event.key === 'Escape') setCompraSeleccionada(null); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [compraSeleccionada]);
 
   const activeTourTarget = showHelp ? tourSteps[tourStep].target : '';
 
@@ -231,11 +251,15 @@ const Compras = () => {
       </div>
     ) },
     { header: 'Documento', accessor: 'documento', render: (row) => row.documento || '-' },
-    { header: 'Fecha', accessor: 'fecha_obtencion', render: (row) => row.fecha_obtencion ? new Date(row.fecha_obtencion).toLocaleDateString() : '-' },
+    { header: 'Fecha', accessor: 'fecha_obtencion', render: (row) => purchaseDate(row.fecha_obtencion) },
     { header: 'Cantidad', accessor: 'cantidad' },
+    { header: 'Stock actual', render: (row) => row.repuesto?.stock_actual ?? 0 },
+    { header: 'Stock mínimo', accessor: 'stock_minimo', render: (row) => row.repuesto?.stock_minimo ?? 0 },
+    { header: 'Ubicación', accessor: 'ubicacion_fisica', render: (row) => row.repuesto?.ubicacion_fisica || '-' },
     { header: 'Costo', accessor: 'costo_unitario', render: (row) => money(row.costo_unitario) },
     { header: 'Total', render: (row) => money(Number(row.cantidad || 0) * Number(row.costo_unitario || 0)) },
     { header: 'Pago', accessor: 'metodo_pago', render: (row) => row.metodo_pago || '-' },
+    { header: 'Comprobante', render: (row) => <button type="button" onClick={() => setCompraSeleccionada(row)} className="rounded border px-2 py-1 text-xs text-indigo-700">{row._count?.archivos ? `Revisar compra · ${row._count.archivos} foto(s)` : 'Revisar compra · agregar ticket'}</button> },
   ];
 
   const filteredCompras = compras;
@@ -243,10 +267,24 @@ const Compras = () => {
   const handleSubmit = async (data) => {
     setLoading(true);
     setError(null);
+    setNotice('');
     try {
-      await createCompra(data);
+      const { ticketFotos, ...compraData } = data;
+      const response = await createCompra(compraData);
+      const compraId = response.data?.data?.id_compra;
       setShowForm(false);
-      await Promise.all([loadData(), comprasQuery.refetch()]);
+      setSearchTerm('');
+      setFechaDesde('');
+      setFechaHasta('');
+      await loadData();
+      let guardadas = 0;
+      for (const file of ticketFotos) {
+        try { await subirFotoCompra(compraId, file); guardadas += 1; }
+        catch { setError(`Compra #${compraId} guardada, pero ${ticketFotos.length - guardadas} foto(s) del ticket quedaron pendientes. Puede agregarlas abajo.`); break; }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['secretaria', 'compras'] });
+      setCompraSeleccionada(response.data?.data || null);
+      if (!ticketFotos.length || guardadas === ticketFotos.length) setNotice(`Compra #${compraId} guardada${guardadas ? ` con ${guardadas} foto(s) del ticket` : ''}.`);
     } catch (err) {
       setError(err?.response?.data?.error || 'No se pudo procesar la compra');
     } finally {
@@ -300,6 +338,7 @@ const Compras = () => {
         <span>{error}</span>
       </div>
     )}
+    {notice && <p role="status" className="mb-5 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
 
     {/* Formulario Modal/Desplegable */}
     {showForm && (
@@ -316,8 +355,8 @@ const Compras = () => {
     )}
 
     {/* Buscador */}
-    <div data-tour-target="search" className={`mb-6 ${tourHighlightClass(activeTourTarget === 'search')}`}>
-      <div className="relative max-w-xl">
+    <div data-tour-target="search" className={`mb-6 flex flex-wrap items-end gap-3 ${tourHighlightClass(activeTourTarget === 'search')}`}>
+      <div className="relative min-w-64 max-w-xl flex-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
@@ -327,8 +366,11 @@ const Compras = () => {
           className="w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition-all"
         />
       </div>
+      <label className="text-xs font-medium text-slate-600">Desde<input aria-label="Compras desde" type="date" value={fechaDesde} max={fechaHasta || undefined} onChange={(event) => setFechaDesde(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2" /></label>
+      <label className="text-xs font-medium text-slate-600">Hasta<input aria-label="Compras hasta" type="date" value={fechaHasta} min={fechaDesde || undefined} onChange={(event) => setFechaHasta(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2" /></label>
+      {(searchTerm || fechaDesde || fechaHasta) && <button type="button" onClick={() => { setSearchTerm(''); setFechaDesde(''); setFechaHasta(''); }} className="rounded-lg border bg-white px-3 py-2 text-xs text-indigo-700">Limpiar filtros</button>}
     </div>
-
+    {comprasQuery.isError && <p role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">No se pudieron cargar las compras.</p>}
     {/* Tabla */}
     <div data-tour-target="table" className={`bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden ${tourHighlightClass(activeTourTarget === 'table')}`}>
       {loading || (comprasQuery.isLoading && !compras.length) ? (
@@ -346,6 +388,13 @@ const Compras = () => {
         />
       )}
     </div>
+    {compraSeleccionada && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setCompraSeleccionada(null); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="detalle-compra-titulo" className="max-h-[90dvh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-indigo-100 bg-white p-5 text-left shadow-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 id="detalle-compra-titulo" className="text-lg font-bold text-slate-800">Compra #{compraSeleccionada.id_compra}</h3><p className="text-sm text-slate-500">{purchaseDate(compraSeleccionada.fecha_obtencion)} · {compraSeleccionada.documento || 'Sin número de documento'}</p></div><button type="button" autoFocus onClick={() => setCompraSeleccionada(null)} className="rounded border px-3 py-1 text-sm text-slate-600">Cerrar</button></div>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs text-slate-500">Proveedor</dt><dd className="font-medium">{compraSeleccionada.proveedor?.nombre || '-'}</dd></div><div><dt className="text-xs text-slate-500">Repuesto</dt><dd className="font-medium">{compraSeleccionada.repuesto?.nombre || '-'}</dd></div><div><dt className="text-xs text-slate-500">Cantidad y costo</dt><dd className="font-medium">{compraSeleccionada.cantidad} × {money(compraSeleccionada.costo_unitario)}</dd></div><div><dt className="text-xs text-slate-500">Total y pago</dt><dd className="font-medium">{money(Number(compraSeleccionada.cantidad || 0) * Number(compraSeleccionada.costo_unitario || 0))} · {compraSeleccionada.metodo_pago || '-'}</dd></div></dl>
+        <FotosCompra key={compraSeleccionada.id_compra} id={compraSeleccionada.id_compra} onChanged={() => queryClient.invalidateQueries({ queryKey: ['secretaria', 'compras'] })} />
+      </section>
+    </div>}
   </div>
 );
 };

@@ -8,7 +8,7 @@ const OrdenesActivasPage = ({ search, loading, items, onSearch, onEstadoChange, 
     <SearchBox
       value={search}
       onChange={(value) => onSearch('ordenesActivas', value)}
-      placeholder="Buscar por orden, cliente, equipo..."
+      placeholder="Buscar por orden, equipo..."
     />
     <OrdenesGrid items={items} loading={loading} onEstadoChange={onEstadoChange} onSolicitarPieza={onSolicitarPieza} />
   </section>

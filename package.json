@@ -1,7 +1,7 @@
 {
-  "name": "cte-adm-bd",
+  "name": "sistema-gestion-reparaciones",
   "version": "1.0.0",
-  "description": "Proyecto Centro Técnico Electrónico - Administración y Base de Datos",
+  "description": "Sistema de gestión para talleres de reparación",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev:backend": "npm run dev --prefix backend",
@@ -9,6 +9,12 @@
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
     "db:setup": "npm run db:up && npx wait-on tcp:5432 && npm run db:sync --prefix backend && npm run db:generate --prefix backend && npm run db:functions --prefix backend && npm run db:seed --prefix backend",
     "build": "npm run build --prefix frontend",
+    "test:secretaria": "npm run test:secretaria --prefix backend && npm run test:secretaria --prefix frontend",
+    "test:secretaria:integracion": "docker compose exec -T backend npm run test:secretaria:integracion",
+    "test:jefe:integracion": "docker compose exec -T backend npm run test:jefe:integracion",
+    "test:tecnico:integracion": "docker compose exec -T backend npm run test:tecnico:integracion",
+    "test:admin": "npm run test:admin --prefix backend",
+    "test:admin:integracion": "docker compose exec -T backend npm run test:admin:integracion",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
     "docker:build": "docker compose build",
@@ -17,7 +23,9 @@
     "docker:init": "npm run docker:setup && npm run docker:up",
     "docker:logs": "docker compose logs -f",
     "docker:ps": "docker compose ps",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "test:notificaciones": "npm run test:notificaciones --prefix frontend",
+    "test:notificaciones:integracion": "docker compose exec -T backend npm run test:notificaciones:integracion"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

@@ -12,6 +12,7 @@ import {
 } from '../../../controllers/Secretaria/diagnosticoController.js';
 import authMiddleware, { requirePermission } from '../../../middlewares/authMiddleware.js';
 import { PERMISSIONS } from '../../../utils/permissions.js';
+import { descargarDocumentoDiagnostico, getHistorialDiagnostico, registrarContacto, registrarRetiroSinReparar } from '../../../controllers/Secretaria/flujoServicioController.js';
 
 // Rutas configuradas para /api/secretaria/diagnostico
 // --------------------------------------------------
@@ -22,6 +23,10 @@ router.post('/create', createDiagnostico);
 
 // GET /api/secretaria/diagnostico -> Para listar todos (SOLUCIONA EL 404)
 router.get('/', getDiagnosticos);
+router.get('/:id/documento', descargarDocumentoDiagnostico);
+router.get('/:id/historial', getHistorialDiagnostico);
+router.patch('/:id/contacto', registrarContacto);
+router.patch('/:id/retiro', registrarRetiroSinReparar);
 
 router.patch('/:id/estado', updateEstadoDiagnostico);
 

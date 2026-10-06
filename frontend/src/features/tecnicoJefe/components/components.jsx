@@ -194,6 +194,9 @@ export const DetailModal = ({ detalles, loadingDetalles, onClose }) => {
                   <DetailBox label="Cantidad solicitada" value={detalles.cantidad_usada || 1} highlight />
                   <DetailBox label="Inventario" value={detalles.repuesto_id ? `Repuesto #${detalles.repuesto_id}` : 'No registrada en inventario'} />
                   <DetailBox label="Estado aprobacion" value={detalles.estado_aprobacion} />
+                  <DetailBox label="Técnico solicitante" value={detalles.tecnico_solicitante?.nombre || detalles.orden?.tecnico?.nombre || 'No registrado'} />
+                  <DetailBox label="Usuario aprobador" value={detalles.usuario_aprobador?.nombre_usuario || 'Pendiente'} />
+                  {detalles.motivo_rechazo && <DetailBox label="Motivo de rechazo" value={detalles.motivo_rechazo} isFull />}
                 </div>
               )}
             </>
@@ -257,6 +260,7 @@ export const CorrectionModal = ({
             <FormSelect label="Estado de aprobacion" value={editForm.estado_aprobacion || 'APROBADO'} onChange={(value) => onFieldChange('estado_aprobacion', value)}>
               {REPUESTO_ESTADOS.map((estado) => <option key={estado} value={estado}>{estado}</option>)}
             </FormSelect>
+            {editForm.estado_aprobacion === 'DENEGADO' && <FormInput label="Motivo de rechazo" value={editForm.motivo_rechazo || ''} onChange={(value) => onFieldChange('motivo_rechazo', value)} />}
           </>
         )}
 

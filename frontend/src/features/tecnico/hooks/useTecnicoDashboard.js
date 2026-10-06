@@ -1,125 +1,41 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../services/api';
-import { estadosDiagnosticoCompletado, estadosOrdenCerrada } from '../components/TecnicoBadges';
-import { mapDiagnostico, mapOrden } from '../utils/tecnicoMappers';
+import { mapDiagnostico, mapOrden, mapSolicitud } from '../utils/tecnicoMappers';
 
-const isInList = (value, list) => list.includes(String(value || '').toUpperCase());
-
-const extractResponseData = (response) => {
-  if (!response?.data) return [];
-  if (Array.isArray(response.data)) return response.data;
-  if (Array.isArray(response.data.data)) return response.data.data;
-  if (Array.isArray(response.data.diagnosticos)) return response.data.diagnosticos;
-  if (Array.isArray(response.data.data?.data)) return response.data.data.data;
-  return [];
-};
-
-export const useTecnicoDashboard = (user) => {
-  const [diagnosticos, setDiagnosticos] = useState([]);
-  const [ordenes, setOrdenes] = useState([]);
-  const [repuestosCatalogo, setRepuestosCatalogo] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const loadTecnicoData = useCallback(async () => {
-    if (!user?.username) return;
-
-    setLoading(true);
-    setError('');
-    try {
-      const username = encodeURIComponent(user.username);
-      const [diagnosticosRes, ordenesRes, repuestosRes] = await Promise.all([
-        api.get(`/tecnicos/mis-diagnosticos/${username}`),
-        api.get(`/tecnicos/mis-ordenes/${username}`),
-        api.get('/repuestos', { params: { disponibles: 1 } }),
-      ]);
-
-      setDiagnosticos(extractResponseData(diagnosticosRes).map(mapDiagnostico));
-      setOrdenes(extractResponseData(ordenesRes).map(mapOrden));
-      setRepuestosCatalogo(extractResponseData(repuestosRes));
-    } catch (err) {
-      console.error('Error al cargar datos del tecnico:', err);
-      setError('No se pudo cargar el circuito del tecnico.');
-      setDiagnosticos([]);
-      setOrdenes([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.username]);
-
-  useEffect(() => {
-    loadTecnicoData();
-  }, [loadTecnicoData]);
-
-  const diagnosticosEnRevision = useMemo(
-    () => diagnosticos.filter((diag) => !isInList(diag.estado, estadosDiagnosticoCompletado)),
-    [diagnosticos],
-  );
-
-  const diagnosticosCompletados = useMemo(
-    () => diagnosticos.filter((diag) => isInList(diag.estado, estadosDiagnosticoCompletado)),
-    [diagnosticos],
-  );
-
-  const ordenesActivas = useMemo(
-    () => ordenes.filter((orden) => !isInList(orden.estado, estadosOrdenCerrada)),
-    [ordenes],
-  );
-
-  const ordenesCompletadas = useMemo(
-    () => ordenes.filter((orden) => isInList(orden.estado, estadosOrdenCerrada)),
-    [ordenes],
-  );
-
-  const solicitudesRepuestos = useMemo(
-    () => ordenes.flatMap((orden) => (orden.repuestos_usados || []).map((solicitud) => ({
-      id: solicitud.id_detalle_repuesto,
-      ordenId: orden.id,
-      repuesto: solicitud.repuesto?.nombre || solicitud.pieza_solicitada || 'Pieza pendiente de registrar',
-      cantidad: solicitud.cantidad_usada || 1,
-      estado: solicitud.estado_aprobacion,
-      pendienteInventario: !solicitud.repuesto_id,
-    }))),
-    [ordenes],
-  );
-
-  const cambiarEstadoOrden = async (ordenId, data) => {
-    await api.patch(`/tecnicos/ordenes/${ordenId}/estado`, data);
-    await loadTecnicoData();
-  };
-
-  const guardarDiagnostico = async (diagnosticoId, data) => {
-    await api.put(`/tecnicos/diagnosticos/${diagnosticoId}`, {
-      diagnostico_real: `${data.diagnostico}\n\nSolucion: ${data.solucion}`.trim(),
-      presupuesto_estimado: data.presupuesto || undefined,
-      estado_del_diagnostico: 'COMPLETADO',
-    });
-    await loadTecnicoData();
-  };
-
-  const solicitarRepuesto = async (ordenId, data) => {
-    await api.post(`/tecnicos/ordenes/${ordenId}/repuestos`, data);
-    await loadTecnicoData();
-  };
-
-  return {
-    data: {
-      diagnosticosEnRevision,
-      diagnosticosCompletados,
-      ordenes,
-      ordenesActivas,
-      ordenesCompletadas,
-      repuestosCatalogo,
-      solicitudesRepuestos,
+export const useTecnicoDashboard = (user, { activeTab, page, search, periodo, grupo, estado, prioridad }) => {
+  const client = useQueryClient();
+  const baseKey = ['tecnico', user?.username];
+  const enabled = Boolean(user?.username);
+  const params = { page, pageSize: 20, search, periodo, grupo, estado, prioridad };
+  const kind = activeTab.startsWith('diagnosticos') ? 'diagnostico' : 'orden';
+  const completed = activeTab.endsWith('completadas') || activeTab.endsWith('completados');
+  const summary = useQuery({ queryKey: [...baseKey, 'resumen', periodo], enabled,
+    queryFn: async ({ signal }) => (await api.get('/tecnicos/resumen', { params: { periodo }, signal })).data.data });
+  const list = useQuery({ queryKey: [...baseKey, 'lista', activeTab, params], enabled: enabled && activeTab !== 'resumen',
+    queryFn: async ({ signal }) => {
+      const endpoint = activeTab === 'repuestos' ? '/tecnicos/solicitudes'
+        : '/tecnicos/mis-' + (kind === 'diagnostico' ? 'diagnosticos' : 'ordenes') + '/' + encodeURIComponent(user.username);
+      const response = await api.get(endpoint, { params: { ...params, grupo: completed ? 'completados' : grupo || 'activos' }, signal });
+      const mapper = activeTab === 'repuestos' ? mapSolicitud : kind === 'diagnostico' ? mapDiagnostico : mapOrden;
+      return { items: (response.data.data || []).map(mapper), meta: response.data.meta };
     },
-    state: { loading, error },
+  });
+  const invalidate = () => client.invalidateQueries({ queryKey: baseKey });
+  const mutation = useMutation({ mutationFn: async ({ method, url, data }) => api[method](url, data), onSuccess: invalidate });
+  const mutate = (method, url, data) => mutation.mutateAsync({ method, url, data });
+  return { items: list.data?.items || [], meta: list.data?.meta || { page, total: 0, hasMore: false },
+    stats: summary.data || {}, loading: list.isFetching, summaryLoading: summary.isFetching,
+    error: list.error || summary.error || mutation.error, busy: mutation.isPending,
     actions: {
-      cambiarEstadoOrden,
-      guardarDiagnostico,
-      loadTecnicoData,
-      setError,
-      setOrdenes,
-      solicitarRepuesto,
+      reload: () => { if (activeTab !== 'resumen') list.refetch(); summary.refetch(); }, invalidate,
+      iniciarDiagnostico: (id) => mutate('patch', '/tecnicos/diagnosticos/' + id + '/iniciar'),
+      guardarDiagnostico: (id, data) => mutate('put', '/tecnicos/diagnosticos/' + id, {
+        diagnostico_real: data.diagnostico, solucion_propuesta: data.solucion, presupuesto_estimado: data.presupuesto,
+        moneda_presupuesto: data.moneda_presupuesto,
+      }),
+      guardarBorrador: (id, data) => mutate('put', '/tecnicos/diagnosticos/' + id + '/borrador', data),
+      cambiarEstadoOrden: (id, data) => mutate('patch', '/tecnicos/ordenes/' + id + '/estado', data),
+      solicitarRepuesto: (id, data) => mutate('post', '/tecnicos/ordenes/' + id + '/repuestos', data),
     },
   };
 };

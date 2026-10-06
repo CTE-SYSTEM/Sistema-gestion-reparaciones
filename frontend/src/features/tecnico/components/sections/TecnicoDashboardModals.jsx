@@ -11,6 +11,7 @@ export const TecnicoDashboardModals = ({
   onCloseCierre,
   onSolicitarRepuesto,
   onGuardarDiagnostico,
+  onGuardarBorrador,
   onCerrarOrden,
 }) => (
   <>
@@ -28,6 +29,7 @@ export const TecnicoDashboardModals = ({
         readOnly={modalDiagnostico.readOnly}
         onClose={onCloseDiagnostico}
         onSubmit={onGuardarDiagnostico}
+        onSaveDraft={onGuardarBorrador}
       />
     )}
     {modalCierre && (

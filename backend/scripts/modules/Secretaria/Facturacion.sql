@@ -23,23 +23,28 @@ SELECT
   jsonb_build_object(
     'id_factura', f.id_factura,
     'orden_id', f.orden_id,
+    'diagnostico_id', COALESCE(f.diagnostico_id, o.diagnostico_id),
     'fecha_emision', f.fecha_emision,
     'monto_repuestos', f.monto_repuestos,
     'mano_obra', f.mano_obra,
+    'monto_diagnostico', f.monto_diagnostico,
     'subtotal', f.subtotal,
     'impuestos', f.impuestos,
     'total', f.total,
     'metodo_pago', f.metodo_pago,
     'garantias', COALESCE(garantias.items, '[]'::jsonb),
-    'orden', to_jsonb(o.*) || jsonb_build_object(
+    'diagnostico', to_jsonb(d.*) || jsonb_build_object(
+      'equipo', to_jsonb(e.*) || jsonb_build_object('cliente', to_jsonb(c.*))
+    ),
+    'orden', CASE WHEN o.id_orden IS NULL THEN NULL ELSE to_jsonb(o.*) || jsonb_build_object(
       'diagnostico', to_jsonb(d.*) || jsonb_build_object(
         'equipo', to_jsonb(e.*) || jsonb_build_object('cliente', to_jsonb(c.*))
       )
-    )
+    ) END
   ) AS data
 FROM "Facturas" f
-JOIN "Ordenes" o ON o.id_orden = f.orden_id
-JOIN "Diagnosticos" d ON d.id_diagnostico = o.diagnostico_id
+LEFT JOIN "Ordenes" o ON o.id_orden = f.orden_id
+JOIN "Diagnosticos" d ON d.id_diagnostico = COALESCE(f.diagnostico_id, o.diagnostico_id)
 JOIN "Equipos" e ON e.id_equipo = d.equipo_id
 JOIN "Clientes" c ON c.id_cliente = e.cliente_id
 LEFT JOIN LATERAL (
@@ -149,8 +154,8 @@ LEFT JOIN LATERAL (
       2
     ) AS monto_repuestos,
     COUNT(*) FILTER (
-      WHERE upper(COALESCE(orp.estado_aprobacion, '')) <> 'APROBADO'
-        OR orp.repuesto_id IS NULL
+      WHERE upper(COALESCE(orp.estado_aprobacion, '')) NOT IN ('APROBADO', 'DENEGADO')
+        OR (orp.estado_aprobacion = 'APROBADO' AND orp.repuesto_id IS NULL)
     )::int AS pendientes_count
   FROM "Ordenes_Repuestos" orp
   LEFT JOIN "Repuestos" r ON r.id_repuesto = orp.repuesto_id

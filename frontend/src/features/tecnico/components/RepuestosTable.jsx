@@ -1,40 +1,10 @@
 import React from 'react';
-import { EstadoSolicitudBadge } from './TecnicoBadges';
-
-const RepuestosTable = ({ solicitudes, loading }) => (
-  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
-    <table className="min-w-full divide-y divide-slate-200">
-      <thead className="bg-slate-100">
-        <tr className="text-left text-[10px] font-black uppercase text-slate-500">
-          <th className="px-6 py-4">Orden</th>
-          <th className="px-6 py-4">Pieza</th>
-          <th className="px-6 py-4">Cantidad</th>
-          <th className="px-6 py-4">Inventario</th>
-          <th className="px-6 py-4 text-center">Estado</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {solicitudes.map((item) => (
-          <tr key={item.id} className="text-sm">
-            <td className="px-6 py-4 font-black text-indigo-700">#{item.ordenId}</td>
-            <td className="px-6 py-4 font-bold text-slate-900">{item.repuesto}</td>
-            <td className="px-6 py-4 font-bold text-slate-700">{item.cantidad}</td>
-            <td className="px-6 py-4">
-              <span className={`rounded px-2 py-1 text-[10px] font-black uppercase ${item.pendienteInventario ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                {item.pendienteInventario ? 'Por registrar' : 'Registrada'}
-              </span>
-            </td>
-            <td className="px-6 py-4 text-center"><EstadoSolicitudBadge estado={item.estado} /></td>
-          </tr>
-        ))}
-        {!loading && solicitudes.length === 0 && (
-          <tr>
-            <td colSpan="5" className="px-6 py-12 text-center text-slate-500 italic">No has solicitado piezas todavia.</td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-);
-
-export default RepuestosTable;
+const fecha = (v) => v ? new Date(v).toLocaleString('es-NI', { timeZone: 'America/Managua' }) : 'Pendiente';
+export default function RepuestosTable({ solicitudes, loading, onOpenOrden }) {
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white text-slate-900"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="p-4">Orden</th><th className="p-4">Pieza</th><th className="p-4">Cantidad</th><th className="p-4">Aprobación</th><th className="p-4">Entrega física</th></tr></thead><tbody className="divide-y">{solicitudes.map((p) => <tr key={p.id}>
+    <td className="p-4"><button className="text-indigo-700 underline" onClick={() => onOpenOrden?.(p.ordenId)}>#{p.ordenId}</button><p className="mt-1 text-xs">Solicitada: {fecha(p.fecha_solicitud)}</p></td>
+    <td className="p-4 font-semibold">{p.repuesto}{p.pendienteInventario && <p className="mt-1 text-xs text-amber-700">Por registrar en inventario</p>}</td><td className="p-4">{p.cantidad}</td>
+    <td className="p-4"><strong className={p.estado === 'DENEGADO' ? 'text-red-700' : p.estado === 'APROBADO' ? 'text-emerald-700' : 'text-amber-700'}>{p.estado === 'DENEGADO' ? 'Rechazada' : p.estado === 'APROBADO' ? 'Aprobada' : 'Pendiente'}</strong><p className="mt-1 text-xs">{fecha(p.fecha_aprobacion)}</p>{p.aprobador && <p className="text-xs">Revisó: {p.aprobador}</p>}{p.motivo && <p className="mt-1 text-xs text-red-700">{p.motivo}</p>}</td>
+    <td className="p-4"><strong>{p.estadoEntrega === 'ENTREGADO' ? 'Entregada' : p.estado === 'APROBADO' ? 'Pendiente de entrega' : 'Sin entrega'}</strong>{p.fecha_entrega && <p className="mt-1 text-xs">{fecha(p.fecha_entrega)}</p>}{p.entregador && <p className="text-xs">Entregó: {p.entregador}</p>}</td>
+  </tr>)}{!loading && !solicitudes.length && <tr><td colSpan={5} className="p-8 text-center text-slate-500">No hay solicitudes que coincidan con los filtros.</td></tr>}</tbody></table></div>;
+}

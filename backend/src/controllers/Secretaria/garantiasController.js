@@ -74,7 +74,7 @@ export const createGarantia = async (req, res) => {
 
     const factura = await prisma.facturas.findUnique({
       where: { id_factura: facturaId },
-      include: { garantias: true },
+      include: { garantias: true, orden: { select: { estado: true, resultado_final: true, irreparable_estado: true } } },
     });
 
     if (!factura) {
@@ -83,6 +83,9 @@ export const createGarantia = async (req, res) => {
 
     if (factura.garantias.length > 0) {
       return res.status(409).json({ error: 'Esta factura ya tiene una garantia registrada' });
+    }
+    if (!['FINALIZADO', 'ENTREGADO'].includes(factura.orden?.estado) || factura.orden?.resultado_final === 'IRREPARABLE' || factura.orden?.irreparable_estado === 'APROBADO') {
+      return res.status(409).json({ error: 'Solo una reparación realizada puede tener garantía' });
     }
 
     const fecha_inicio = new Date();

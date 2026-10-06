@@ -2,7 +2,7 @@ import { Edit3, Filter, Search, ShieldAlert } from 'lucide-react';
 import { EstadoBadge, PrioridadBadge } from './badges';
 import { tourHighlightClass } from './constants';
 
-const TableRow = ({ diagnostico, onEdit }) => {
+const TableRow = ({ diagnostico, onEdit, onPhotos, onHistory, onDetails }) => {
   const tieneTecnico = Boolean(diagnostico.tecnico_id || diagnostico.id_tecnico);
 
   return (
@@ -20,6 +20,9 @@ const TableRow = ({ diagnostico, onEdit }) => {
       <td className="px-4 py-3 text-center"><PrioridadBadge prioridad={diagnostico.prioridad || 'Normal'} /></td>
       <td className="px-4 py-3 text-center"><EstadoBadge estado={diagnostico.estado_del_diagnostico || diagnostico.estado} /></td>
       <td className="px-4 py-3 text-right">
+        <button type="button" onClick={() => onDetails(diagnostico)} className="mr-1 rounded border px-2 py-1 text-xs text-indigo-700">Recepción</button>
+        <button type="button" onClick={() => onPhotos(diagnostico.id_diagnostico)} className="mr-1 rounded border px-2 py-1 text-xs text-indigo-700">Fotos</button>
+        <button type="button" onClick={() => onHistory(diagnostico.id_diagnostico)} className="mr-1 rounded border px-2 py-1 text-xs text-indigo-700">Historial</button>
         {tieneTecnico ? (
           <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-xs font-semibold" title="Asignado a tecnico. No editable.">
             <ShieldAlert className="w-4 h-4" /> Asignado
@@ -45,6 +48,9 @@ export const DiagnosticosTable = ({
   filterTecnico,
   loading,
   onEdit,
+  onPhotos,
+  onHistory,
+  onDetails,
   onFilterChange,
   onSearchChange,
   searchTerm,
@@ -107,7 +113,7 @@ export const DiagnosticosTable = ({
           <tbody className="divide-y divide-gray-100">
             {diagnosticos.length > 0 ? (
               diagnosticos.map((diagnostico) => (
-                <TableRow key={diagnostico.id_diagnostico} diagnostico={diagnostico} onEdit={onEdit} />
+                <TableRow key={diagnostico.id_diagnostico} diagnostico={diagnostico} onEdit={onEdit} onPhotos={onPhotos} onHistory={onHistory} onDetails={onDetails} />
               ))
             ) : (
               <tr>
@@ -120,7 +126,7 @@ export const DiagnosticosTable = ({
         </table>
         {(isLoadingMore || hasMore) && (
           <div className="border-t border-gray-100 px-4 py-2 text-center text-xs font-medium text-gray-400">
-            {isLoadingMore ? 'Cargando más registros...' : 'Desplázate para cargar 20 registros más'}
+            {isLoadingMore ? 'Cargando más registros...' : 'Desplázate para cargar más registros'}
           </div>
         )}
       </div>

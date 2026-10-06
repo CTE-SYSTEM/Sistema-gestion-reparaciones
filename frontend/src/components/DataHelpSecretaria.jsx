@@ -71,6 +71,70 @@ const flujoAtencionHelp = {
 };
 
 export const helpByPath = {
+  '/admin/administracion': {
+    title: 'Administración del taller',
+    description: 'Centraliza la cuenta, los accesos y la configuración del negocio.',
+    steps: [
+      ['1. Elige un apartado', 'Abre cuenta, usuarios, negocio, reglas, respaldos o auditoría.'],
+      ['2. Revisa los valores', 'Consulta la configuración actual antes de editar.'],
+      ['3. Guarda con un motivo', 'Los ajustes del negocio y las reglas quedan registrados con su autor.'],
+    ],
+  },
+  '/admin/mi-cuenta': {
+    title: 'Mi cuenta',
+    description: 'Administra tu usuario, correo y contraseña.',
+    steps: [
+      ['1. Actualiza el perfil', 'Introduce tu contraseña actual para guardar usuario y correo.'],
+      ['2. Cambia la contraseña', 'Confirma la nueva contraseña y cumple el mínimo indicado.'],
+      ['3. Revisa las sesiones', 'Cambiar la contraseña o cerrar todas las sesiones requiere iniciar sesión otra vez.'],
+    ],
+  },
+  '/admin/configuracion': {
+    title: 'Datos del negocio',
+    description: 'Configura los datos del taller y los valores para nuevas garantías y repuestos.',
+    steps: [
+      ['1. Revisa el negocio', 'Completa nombre, contacto y dirección.'],
+      ['2. Ajusta los valores', 'Las nuevas garantías usan los meses y condiciones; los nuevos repuestos usan el margen inicial.'],
+      ['3. Explica el cambio', 'Escribe el motivo y guarda. Si otra persona guardó antes, recarga la configuración.'],
+    ],
+  },
+  '/admin/reglas': {
+    title: 'Reglas del negocio',
+    description: 'Ajusta avisos y plazos, y consulta los requisitos de cada módulo.',
+    steps: [
+      ['1. Configura avisos', 'Define días para garantías por vencer y órdenes atrasadas.'],
+      ['2. Revisa las contraseñas', 'El mínimo configurado se aplica a nuevas contraseñas.'],
+      ['3. Consulta los requisitos', 'Los estados, permisos y requisitos operativos explican cuándo se permite cada acción.'],
+    ],
+  },
+  '/admin/respaldos': {
+    title: 'Respaldos de la base de datos',
+    description: 'Crea, descarga y programa copias del taller.',
+    steps: [
+      ['1. Revisa el estado', 'Comprueba la última copia completa y la próxima ejecución.'],
+      ['2. Crea o descarga', 'Una copia parcial no sustituye una copia completa. Descarga los archivos que necesites.'],
+      ['3. Programa las copias', 'Elige frecuencia y hora de Nicaragua. El servidor debe estar activo.'],
+      ['4. Verifica los archivos', 'La comprobación revisa integridad y estructura. Las fotografías necesitan una copia independiente.'],
+    ],
+  },
+  '/admin/auditoria': {
+    title: 'Auditoría',
+    description: 'Consulta quién cambió los datos y cuándo ocurrió.',
+    steps: [
+      ['1. Filtra movimientos', 'Selecciona fechas, módulo, operación o autor.'],
+      ['2. Abre el detalle', 'Compara los datos anteriores y nuevos, y revisa el motivo cuando exista.'],
+      ['3. Revisa más resultados', 'Usa la paginación para recorrer los movimientos.'],
+    ],
+  },
+  '/admin/reportes': {
+    title: 'Centro de reportes',
+    description: 'Encuentra los 35 reportes agrupados por categoría.',
+    steps: [
+      ['1. Selecciona el reporte', 'Elige la categoría y después una opción del selector.'],
+      ['2. Aplica filtros', 'Selecciona fechas, estado o registros y pulsa Consultar reporte. Finanzas usa el año actual por defecto.'],
+      ['3. Descarga los resultados', 'Excel y PDF incluyen todos los registros del filtro aplicado.'],
+    ],
+  },
   '/admin': {
     title: 'Mini tutorial de administración',
     description:
@@ -497,7 +561,7 @@ export const helpByPath = {
   '/tecnico-jefe': {
     title: 'Mini tutorial del jefe técnico',
     description:
-      'Usa este panel para repartir trabajo, aprobar repuestos y corregir avances.',
+      'Administra asignaciones, disponibilidad, prioridades y solicitudes. Consulta el seguimiento y registra las excepciones con motivo.',
     steps: [
       [
         '1. Revisa pendientes',
@@ -505,15 +569,15 @@ export const helpByPath = {
       ],
       [
         '2. Asigna técnicos',
-        'En diagnósticos y órdenes selecciona técnico y guarda la asignación.',
+        'En Asignaciones distribuye trabajos entre técnicos disponibles. Cada técnico registra su inicio real.',
       ],
       [
         '3. Aprueba repuestos',
-        'Valida solicitudes de piezas antes de que pasen a facturación.',
+        'Aprueba o rechaza las solicitudes. La entrega física de las piezas aprobadas se confirma por separado.',
       ],
       [
-        '4. Corrige a tiempo',
-        'La pestaña de correcciones permite ajustar técnico, estado, prioridad o pieza.',
+        '4. Supervisa e interviene',
+        'Consulta Seguimiento y Alertas. Para reasignar o finalizar por excepción, registra el motivo en el trabajo correspondiente.',
       ],
     ],
   },

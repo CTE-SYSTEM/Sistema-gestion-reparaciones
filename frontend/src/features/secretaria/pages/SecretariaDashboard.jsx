@@ -33,6 +33,12 @@ const filters = [
   { id: 'month', label: 'Mes' },
   { id: 'year', label: 'Año' },
 ];
+const periodText = {
+  all: 'Totales actuales',
+  week: 'Creados esta semana',
+  month: 'Creados este mes',
+  year: 'Creados este año',
+};
 
 const tourSteps = [
   {
@@ -189,7 +195,7 @@ const SecretariaDashboard = () => {
           <div className="text-left">
             <h1 className="m-0 text-xl font-bold text-gray-900 tracking-tight">Secretaría</h1>
             <p className="text-xs text-gray-500 font-medium mt-0.5">
-              Gestión operativa - {filterType === 'all' ? 'Historial completo' : `Filtro: ${filterType.toUpperCase()}`}
+              Gestión operativa · {periodText[filterType]}
             </p>
           </div>
         </div>
@@ -278,7 +284,7 @@ const SecretariaDashboard = () => {
           <div className="text-left">
             <h2 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5 text-indigo-600" />
-              Últimas órdenes ({filterType})
+              Últimas órdenes · {filters.find((filter) => filter.id === filterType)?.label}
             </h2>
             <p className="text-xs text-gray-500 font-medium mt-0.5">
               Órdenes generadas en el sistema técnico.

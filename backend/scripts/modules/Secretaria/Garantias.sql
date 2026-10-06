@@ -2,7 +2,12 @@ CREATE OR REPLACE FUNCTION secretaria_emitir_garantia_factura()
 RETURNS TRIGGER AS $$
 DECLARE
   condiciones_garantia TEXT;
+  fecha_entrega_equipo TIMESTAMP;
+  estado_orden TEXT;
 BEGIN
+  IF NEW.orden_id IS NULL THEN RETURN NEW; END IF;
+  SELECT o.fecha_entrega, o.estado INTO fecha_entrega_equipo, estado_orden FROM "Ordenes" o WHERE o.id_orden = NEW.orden_id;
+  IF estado_orden IS DISTINCT FROM 'FINALIZADO' THEN RETURN NEW; END IF;
   condiciones_garantia :=
     'Garantia de 3 meses sujeta a la reparacion realizada y a los repuestos instalados por el centro tecnico. '
     || 'Cubre fallas directamente relacionadas con el trabajo facturado. '
@@ -19,8 +24,8 @@ BEGIN
     NEW.id_factura,
     condiciones_garantia,
     3,
-    COALESCE(NEW.fecha_emision, NOW()),
-    COALESCE(NEW.fecha_emision, NOW()) + INTERVAL '3 months'
+    fecha_entrega_equipo,
+    fecha_entrega_equipo + INTERVAL '3 months'
   )
   ON CONFLICT (factura_id) DO NOTHING;
 

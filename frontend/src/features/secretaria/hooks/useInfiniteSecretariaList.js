@@ -1,7 +1,7 @@
 import { useDeferredValue } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-export const SECRETARIA_PAGE_SIZE = 20;
+export const SECRETARIA_PAGE_SIZE = 50;
 
 export const useInfiniteSecretariaList = ({
   queryKey,
@@ -9,14 +9,15 @@ export const useInfiniteSecretariaList = ({
   search = '',
   extraParams = {},
   enabled = true,
+  pageSize = SECRETARIA_PAGE_SIZE,
 }) => {
   const deferredSearch = useDeferredValue(search);
   const query = useInfiniteQuery({
-    queryKey: [...queryKey, { search: deferredSearch, ...extraParams }],
+    queryKey: [...queryKey, { search: deferredSearch, pageSize, ...extraParams }],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await queryFn({
         page: pageParam,
-        pageSize: SECRETARIA_PAGE_SIZE,
+        pageSize,
         search: deferredSearch.trim(),
         ...extraParams,
       });

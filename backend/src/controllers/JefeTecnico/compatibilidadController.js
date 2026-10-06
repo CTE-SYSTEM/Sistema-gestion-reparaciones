@@ -1,0 +1,31 @@
+// Las rutas anteriores comparten las mismas reglas que el nuevo panel.
+import prisma from '../../app/prismaClient.js';
+import * as service from '../../services/JefeTecnico/supervisionService.js';
+import { fail } from '../../utils/tecnicoWorkflow.js';
+import { respond, asignarTrabajo, procesarRepuesto, revisarIrreparable } from './supervisionController.js';
+const include = { tecnico: true, equipo: { include: { cliente: true } } };
+export const getDiagnosticosPendientes = respond(() => prisma.diagnosticos.findMany({ where: { tecnico_id: null, estado_del_diagnostico: { in: ['PENDIENTE', 'INGRESADO', 'ASIGNADO', 'EN_REVISION'] } }, include, orderBy: { fecha_hora: 'asc' } }));
+export const getTodosDiagnosticos = respond(() => prisma.diagnosticos.findMany({ include, orderBy: { id_diagnostico: 'desc' } }));
+export const getDiagnosticoById = respond(async (req) => (await service.detalle('diagnostico', req.params.id)).registro);
+export const getOrdenById = respond(async (req) => (await service.detalle('orden', req.params.id)).registro);
+export const asignarTecnicoADiagnostico = asignarTrabajo('diagnostico');
+export const asignarTecnicoAOrden = asignarTrabajo('orden');
+export const getOrdenesAprobadas = respond(() => prisma.ordenes.findMany({ where: { tecnico_id: null, estado: { notIn: ['FINALIZADO', 'ENTREGADO', 'IRREPARABLE', 'CANCELADO'] } }, include: { tecnico: true, diagnostico: { include } }, orderBy: { fecha_ingreso: 'asc' } }));
+export const getOrdenesPendientes = getOrdenesAprobadas;
+export const getRepuestosPendientesAprobacion = respond(async () => (await service.resumen()).repuestos.filter((p) => p.puede_revisar));
+export const getTecnicos = respond(async () => (await service.resumen()).tecnicos);
+export const getRepuestos = respond(async () => (await service.resumen()).catalogo);
+export const getCorreccionesJefeTecnico = respond(async () => ({ diagnosticos: await prisma.diagnosticos.findMany({ include }), ordenes: await prisma.ordenes.findMany({ include: { tecnico: true, diagnostico: { include } } }), repuestos: (await service.resumen()).repuestos }));
+const corregirTrabajo = (tipo) => respond(async (req) => {
+  const { registro } = await service.detalle(tipo, req.params.id);
+  if (req.body.tecnico_id !== undefined && Number(req.body.tecnico_id) !== registro.tecnico_id) fail(409, 'Use una intervención excepcional con motivo para reasignar');
+  if (req.body.estado || req.body.estado_del_diagnostico || req.body.diagnostico_real || req.body.presupuesto_estimado) fail(403, 'El jefe solo puede modificar la prioridad desde esta acción');
+  return service.prioridad(tipo, req.params.id, req.body, req.user);
+}, 'Prioridad corregida');
+export const corregirDiagnosticoJefeTecnico = corregirTrabajo('diagnostico');
+export const corregirOrdenJefeTecnico = corregirTrabajo('orden');
+export const aprobarSolicitudRepuesto = procesarRepuesto('aprobar');
+export const rechazarSolicitudRepuesto = procesarRepuesto('rechazar');
+export const corregirRepuestoJefeTecnico = procesarRepuesto('corregir');
+export const aprobarIrreparableOrden = (req, res) => { req.body = { ...req.body, decision: 'APROBADO' }; return revisarIrreparable(req, res); };
+export const rechazarIrreparableOrden = (req, res) => { req.body = { ...req.body, decision: 'RECHAZADO' }; return revisarIrreparable(req, res); };

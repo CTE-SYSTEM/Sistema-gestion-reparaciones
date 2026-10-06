@@ -1,28 +1,42 @@
 import prisma from '../../app/prismaClient.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
 import { METODOS_PAGO, assertInList } from '../../utils/domainValidation.js';
+import { withAuditUser } from '../../utils/auditContext.js';
 
 const normalizeText = (value = '') => String(value).trim().replace(/\s+/g, ' ');
+const parsePurchaseDate = (value) => {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date;
+};
 
 export const getCompras = async (req, res) => {
   try {
     const { page, pageSize, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim();
-    const where = search
-      ? {
-          OR: [
+    const desde = req.query.fecha_desde ? parsePurchaseDate(req.query.fecha_desde) : null;
+    const hasta = req.query.fecha_hasta ? parsePurchaseDate(req.query.fecha_hasta) : null;
+    if ((req.query.fecha_desde && !desde) || (req.query.fecha_hasta && !hasta) || (desde && hasta && desde > hasta)) {
+      return res.status(400).json({ error: 'Indique un rango de fechas válido' });
+    }
+    const where = {
+      ...(search ? { OR: [
             { documento: { contains: search, mode: 'insensitive' } },
             { proveedor: { nombre: { contains: search, mode: 'insensitive' } } },
             { repuesto: { nombre: { contains: search, mode: 'insensitive' } } },
             { metodo_pago: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {};
+          ] } : {}),
+      ...((desde || hasta) ? { fecha_obtencion: {
+        ...(desde ? { gte: desde } : {}),
+        ...(hasta ? { lt: new Date(hasta.getTime() + 24 * 60 * 60 * 1000) } : {}),
+      } } : {}),
+    };
     const [compras, countRows] = await Promise.all([
       prisma.compras.findMany({
         where,
-        include: { proveedor: true, repuesto: true },
-        orderBy: { id_compra: 'desc' },
+        include: { proveedor: true, repuesto: true, _count: { select: { archivos: true } } },
+        orderBy: [{ fecha_obtencion: 'desc' }, { id_compra: 'desc' }],
         skip: offset,
         take: pageSize,
       }),
@@ -76,7 +90,7 @@ export const createCompra = async (req, res) => {
     }
 
     const metodoPagoValidado = assertInList(metodoPago, METODOS_PAGO, 'Metodo de pago');
-    const compra = await prisma.$transaction(async (tx) => {
+    const compra = await withAuditUser(req.user, async (tx) => {
       const base = await tx.repuestos.findFirst({
         where: { id_repuesto: repuestoId, descontinuada: false },
       });
@@ -113,6 +127,8 @@ export const createCompra = async (req, res) => {
               costo_individual: costoNumber,
               porcentaje_de_ganacia: base.porcentaje_de_ganacia,
               ganancia_cordobas: base.ganancia_cordobas,
+              stock_minimo: base.stock_minimo,
+              ubicacion_fisica: base.ubicacion_fisica,
               activo: true,
               descontinuada: false,
             },
@@ -198,7 +214,7 @@ export const updateCompra = async (req, res) => {
 
     const metodoPago = assertInList(metodoPagoNormalizado, METODOS_PAGO, 'Metodo de pago');
 
-    const compra = await prisma.$transaction(async (tx) => {
+    const compra = await withAuditUser(req.user, async (tx) => {
       const actual = await tx.compras.findUnique({ where: { id_compra: compraId } });
       if (!actual) {
         const error = new Error('Compra no encontrada');

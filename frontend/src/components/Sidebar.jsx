@@ -2,6 +2,11 @@ import React, { useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   BarChart3,
+  Building2,
+  DatabaseBackup,
+  Settings,
+  SlidersHorizontal,
+  UserRound,
   Boxes,
   BriefcaseBusiness,
   ClipboardCheck,
@@ -37,26 +42,26 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
-const adminRoles = ['Administrador', 'admin_pro'];
+const adminRoles = ['Administrador', 'admin_pro', 'Admin'];
 
 const allMenuItems = [
-  { name: 'Dashboard', to: '/admin', roles: adminRoles, icon: LayoutDashboard },
-  { name: 'Usuarios', to: '/admin/usuarios', roles: adminRoles, icon: UserCog },
-  { name: 'Clientes', to: '/admin/clientes', roles: adminRoles, icon: ContactRound },
-  { name: 'Equipos', to: '/admin/equipos', roles: adminRoles, icon: Laptop },
-  { name: 'Diagnosticos', to: '/admin/diagnosticos', roles: adminRoles, icon: ClipboardCheck },
-  { name: 'Tecnicos', to: '/admin/tecnicos', roles: adminRoles, icon: Stethoscope },
-  { name: 'Ordenes', to: '/admin/ordenes', roles: adminRoles, icon: ClipboardList },
-  { name: 'Ordenes estado', to: '/admin/ordenes-estado', roles: adminRoles, icon: BarChart3 },
-  { name: 'Flujo atencion', to: '/admin/flujo-atencion', roles: adminRoles, icon: SquareKanban },
-  { name: 'Facturas', to: '/admin/visualizacion-control-facturas', roles: adminRoles, icon: FileText },
-  { name: 'Garantias', to: '/admin/garantias', roles: adminRoles, icon: ShieldCheck },
-  { name: 'Inventario', to: '/admin/inventario', roles: adminRoles, icon: Package },
-  { name: 'Repuestos', to: '/admin/repuestos', roles: adminRoles, icon: Cpu },
-  { name: 'Compras', to: '/admin/compras', roles: adminRoles, icon: ShoppingCart },
-  { name: 'Ganancias', to: '/admin/ganancias', roles: adminRoles, icon: WalletCards },
-  { name: 'Historial Equipo', to: '/admin/historial-equipo', roles: adminRoles, icon: History },
-  { name: 'Historial Repuesto', to: '/admin/historial-repuesto', roles: adminRoles, icon: TrendingUp },
+  { name: 'Resumen', to: '/admin', roles: adminRoles, icon: LayoutDashboard, group: 'Taller' },
+  { name: 'Clientes', to: '/admin/clientes', roles: adminRoles, icon: ContactRound, group: 'Gestión' },
+  { name: 'Equipos', to: '/admin/equipos', roles: adminRoles, icon: Laptop, group: 'Gestión' },
+  { name: 'Diagnósticos', to: '/admin/diagnosticos', roles: adminRoles, icon: ClipboardCheck, group: 'Gestión' },
+  { name: 'Órdenes', to: '/admin/ordenes', roles: adminRoles, icon: ClipboardList, group: 'Gestión' },
+  { name: 'Flujo de atención', to: '/admin/flujo-atencion', roles: adminRoles, icon: SquareKanban, group: 'Gestión' },
+  { name: 'Facturas', to: '/admin/visualizacion-control-facturas', roles: adminRoles, icon: FileText, group: 'Gestión' },
+  { name: 'Garantías', to: '/admin/garantias', roles: adminRoles, icon: ShieldCheck, group: 'Gestión' },
+  { name: 'Inventario', to: '/admin/inventario', roles: adminRoles, icon: Package, group: 'Gestión' },
+  { name: 'Centro de reportes', to: '/admin/reportes', roles: adminRoles, icon: BarChart3, group: 'Reportes' },
+  { name: 'Administración', to: '/admin/administracion', roles: adminRoles, icon: Settings, group: 'Administración' },
+  { name: 'Mi cuenta', to: '/admin/mi-cuenta', roles: adminRoles, icon: UserRound, group: 'Administración' },
+  { name: 'Usuarios y acceso', to: '/admin/usuarios', roles: adminRoles, icon: UserCog, group: 'Administración' },
+  { name: 'Negocio', to: '/admin/configuracion', roles: adminRoles, icon: Building2, group: 'Administración' },
+  { name: 'Reglas del negocio', to: '/admin/reglas', roles: adminRoles, icon: SlidersHorizontal, group: 'Administración' },
+  { name: 'Respaldos', to: '/admin/respaldos', roles: adminRoles, icon: DatabaseBackup, group: 'Administración' },
+  { name: 'Auditoría', to: '/admin/auditoria', roles: adminRoles, icon: History, group: 'Administración' },
 
   { name: 'Dashboard', to: '/secretaria', roles: ['Secretaria'], icon: BriefcaseBusiness },
   { name: 'Clientes', to: '/secretaria/clientes', roles: ['Secretaria'], icon: ContactRound },
@@ -112,8 +117,9 @@ const Sidebar = ({ collapsed = false, onClose = () => {}, onToggleCollapse = () 
 
       <nav className="p-2 flex-1 overflow-y-auto custom-scrollbar">
         <ul className="space-y-1">
-          {menuItems.map((item) => (
+          {menuItems.map((item, index) => (
             <li key={item.to + item.name} className="w-full">
+              {item.group && item.group !== menuItems[index - 1]?.group && !collapsed && <div className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-widest text-indigo-300/70">{item.group}</div>}
               <NavLink
                 to={item.to}
                 end={item.to === '/admin' || item.to === '/secretaria'}

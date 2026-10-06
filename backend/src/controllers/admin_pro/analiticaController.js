@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../app/prismaClient.js';
+import { getBusinessSettings } from '../../services/adminSettingsService.js';
 
 const normalizeRows = (rows) =>
   JSON.parse(JSON.stringify(rows, (_, value) => (typeof value === 'bigint' ? Number(value) : value)));
@@ -138,12 +139,14 @@ export const getProductividadAdmin = async (req, res) => {
   }
 };
 
-export const getGananciasAdmin = async (req, res) => {
-  try {
+export const getGananciasData = async (query = {}) => {
+    const req = { query };
+    const settings = (await getBusinessSettings()).reglas;
     const now = new Date();
     const fechaInicio = req.query.fecha_inicio || `${now.getFullYear()}-01-01`;
     const fechaFin = req.query.fecha_fin || `${now.getFullYear()}-12-31`;
-    const detalleLimite = Math.min(Math.max(toNumber(req.query.detalle_limite, 12), 5), 100);
+    const detalleLimite = Math.min(Math.max(toNumber(req.query.detalle_limite, 12), 5), 10001);
+    const fuentesLimite = Math.min(Math.max(toNumber(req.query.fuentes_limite, 100), 5), 10001);
 
     const [
       weeklyRows,
@@ -170,11 +173,12 @@ export const getGananciasAdmin = async (req, res) => {
           COALESCE(cl.nombre, 'Sin cliente') AS cliente,
           TRIM(CONCAT(COALESCE(e.tipo, 'Equipo'), ' ', COALESCE(e.marca, ''), ' ', COALESCE(e.modelo, ''))) AS equipo,
           COALESCE(f.total, 0) AS total_facturado,
+          COALESCE(f.monto_diagnostico, 0) AS monto_diagnostico,
           COALESCE(f.mano_obra, 0) AS mano_obra,
           COALESCE(f.monto_repuestos, 0) AS monto_repuestos,
           COALESCE(f.impuestos, 0) AS impuestos,
           COALESCE(t.nombre, dt.nombre, 'Sin asignar') AS tecnico,
-          COALESCE(o.estado, '-') AS estado,
+          COALESCE(o.estado, d.estado_del_diagnostico, '-') AS estado,
           COALESCE(o.resultado_final, '-') AS resultado_final,
           COALESCE(SUM(COALESCE(orp.cantidad_usada, 1) * COALESCE(r.costo_individual, 0)), 0) AS costo_repuestos,
           COALESCE(f.monto_repuestos, 0) - COALESCE(SUM(COALESCE(orp.cantidad_usada, 1) * COALESCE(r.costo_individual, 0)), 0) AS ganancia_repuestos,
@@ -185,8 +189,8 @@ export const getGananciasAdmin = async (req, res) => {
             ELSE 0
           END AS margen_porcentaje
         FROM "Facturas" f
-        JOIN "Ordenes" o ON o.id_orden = f.orden_id
-        JOIN "Diagnosticos" d ON d.id_diagnostico = o.diagnostico_id
+        LEFT JOIN "Ordenes" o ON o.id_orden = f.orden_id
+        JOIN "Diagnosticos" d ON d.id_diagnostico = COALESCE(f.diagnostico_id, o.diagnostico_id)
         JOIN "Equipos" e ON e.id_equipo = d.equipo_id
         JOIN "Clientes" cl ON cl.id_cliente = e.cliente_id
         LEFT JOIN "Tecnicos" t ON t.id_tecnico = o.tecnico_id
@@ -194,9 +198,9 @@ export const getGananciasAdmin = async (req, res) => {
         LEFT JOIN "Ordenes_Repuestos" orp ON orp.orden_id = o.id_orden AND orp.estado_aprobacion = 'APROBADO'
         LEFT JOIN "Repuestos" r ON r.id_repuesto = orp.repuesto_id
         WHERE f.fecha_emision::DATE BETWEEN CAST(${fechaInicio} AS DATE) AND CAST(${fechaFin} AS DATE)
-        GROUP BY o.id_orden, f.id_factura, f.fecha_emision, cl.nombre, e.tipo, e.marca, e.modelo, f.total, f.mano_obra, f.monto_repuestos, f.impuestos, t.nombre, dt.nombre, o.estado, o.resultado_final
+        GROUP BY o.id_orden, d.estado_del_diagnostico, f.id_factura, f.fecha_emision, cl.nombre, e.tipo, e.marca, e.modelo, f.total, f.mano_obra, f.monto_repuestos, f.monto_diagnostico, f.impuestos, t.nombre, dt.nombre, o.estado, o.resultado_final
         ORDER BY f.fecha_emision DESC, f.id_factura DESC
-        LIMIT 100
+        LIMIT ${fuentesLimite}
       `),
       prisma.$queryRaw(Prisma.sql`
         SELECT
@@ -233,17 +237,17 @@ export const getGananciasAdmin = async (req, res) => {
             AND COALESCE(o.fecha_cierre, o.fecha_ingreso)::DATE BETWEEN CAST(${fechaInicio} AS DATE) AND CAST(${fechaFin} AS DATE)
         ) perdidas
         ORDER BY fecha DESC NULLS LAST
-        LIMIT 100
+        LIMIT ${fuentesLimite}
       `),
       prisma.$queryRaw(Prisma.sql`
         SELECT
-          'Orden facturada'::TEXT AS fuente,
+          CASE WHEN o.id_orden IS NULL THEN 'Diagnóstico facturado' ELSE 'Orden facturada' END::TEXT AS fuente,
           f.fecha_emision AS fecha,
-          CONCAT('Factura #', f.id_factura, ' / Orden #', o.id_orden)::TEXT AS referencia,
+          CONCAT('Factura #', f.id_factura, CASE WHEN o.id_orden IS NULL THEN CONCAT(' / Diagnóstico #', d.id_diagnostico) ELSE CONCAT(' / Orden #', o.id_orden) END)::TEXT AS referencia,
           COALESCE(cl.nombre, 'Sin cliente')::TEXT AS cliente,
           TRIM(CONCAT(COALESCE(e.tipo, 'Equipo'), ' ', COALESCE(e.marca, ''), ' ', COALESCE(e.modelo, '')))::TEXT AS equipo,
           COALESCE(t.nombre, dt.nombre, 'Sin asignar')::TEXT AS tecnico,
-          COALESCE(o.estado, '-')::TEXT AS estado,
+          COALESCE(o.estado, d.estado_del_diagnostico, '-')::TEXT AS estado,
           COALESCE(f.total, 0) AS ingreso_total,
           COALESCE(f.mano_obra, 0) AS mano_obra,
           COALESCE(f.monto_repuestos, 0) AS ingreso_repuestos,
@@ -255,12 +259,13 @@ export const getGananciasAdmin = async (req, res) => {
             ELSE 0
           END AS margen_porcentaje,
           CONCAT(
-            'Mano de obra: ', COALESCE(f.mano_obra, 0),
+            'Diagnóstico: ', COALESCE(f.monto_diagnostico, 0),
+            ' / Mano de obra: ', COALESCE(f.mano_obra, 0),
             ' / Margen repuestos: ', COALESCE(f.monto_repuestos, 0) - COALESCE(SUM(COALESCE(orp.cantidad_usada, 1) * COALESCE(r.costo_individual, 0)), 0)
           )::TEXT AS motivo
         FROM "Facturas" f
-        JOIN "Ordenes" o ON o.id_orden = f.orden_id
-        JOIN "Diagnosticos" d ON d.id_diagnostico = o.diagnostico_id
+        LEFT JOIN "Ordenes" o ON o.id_orden = f.orden_id
+        JOIN "Diagnosticos" d ON d.id_diagnostico = COALESCE(f.diagnostico_id, o.diagnostico_id)
         JOIN "Equipos" e ON e.id_equipo = d.equipo_id
         JOIN "Clientes" cl ON cl.id_cliente = e.cliente_id
         LEFT JOIN "Tecnicos" t ON t.id_tecnico = o.tecnico_id
@@ -268,10 +273,10 @@ export const getGananciasAdmin = async (req, res) => {
         LEFT JOIN "Ordenes_Repuestos" orp ON orp.orden_id = o.id_orden AND orp.estado_aprobacion = 'APROBADO'
         LEFT JOIN "Repuestos" r ON r.id_repuesto = orp.repuesto_id
         WHERE f.fecha_emision::DATE BETWEEN CAST(${fechaInicio} AS DATE) AND CAST(${fechaFin} AS DATE)
-          AND UPPER(COALESCE(o.estado, '')) IN ('FINALIZADO', 'ENTREGADO', 'IRREPARABLE')
-        GROUP BY o.id_orden, f.id_factura, f.fecha_emision, cl.nombre, e.tipo, e.marca, e.modelo, f.total, f.mano_obra, f.monto_repuestos, t.nombre, dt.nombre, o.estado
+          AND (o.id_orden IS NULL OR UPPER(COALESCE(o.estado, '')) IN ('FINALIZADO', 'ENTREGADO', 'IRREPARABLE'))
+        GROUP BY o.id_orden, d.id_diagnostico, d.estado_del_diagnostico, f.id_factura, f.fecha_emision, cl.nombre, e.tipo, e.marca, e.modelo, f.total, f.mano_obra, f.monto_repuestos, f.monto_diagnostico, t.nombre, dt.nombre, o.estado
         ORDER BY ganancia_total DESC, f.fecha_emision DESC NULLS LAST
-        LIMIT 100
+        LIMIT ${fuentesLimite}
       `),
       prisma.$queryRaw(Prisma.sql`
         SELECT *
@@ -319,7 +324,7 @@ export const getGananciasAdmin = async (req, res) => {
             AND COALESCE(o.fecha_cierre, o.fecha_ingreso)::DATE BETWEEN CAST(${fechaInicio} AS DATE) AND CAST(${fechaFin} AS DATE)
         ) fuentes
         ORDER BY monto DESC, fecha DESC NULLS LAST
-        LIMIT 100
+        LIMIT ${fuentesLimite}
       `),
     ]);
 
@@ -369,11 +374,11 @@ export const getGananciasAdmin = async (req, res) => {
       totals.ganancia_neta < 0
         ? { nivel: 'alto', titulo: 'Periodo con perdida neta', detalle: 'Los costos consumidos y perdidas reales superan los ingresos.' }
         : null,
-      totals.rentabilidad_porcentaje > 0 && totals.rentabilidad_porcentaje < 30
-        ? { nivel: 'medio', titulo: 'Rentabilidad baja', detalle: 'El margen de servicios esta por debajo del 30%.' }
+      totals.rentabilidad_porcentaje > 0 && totals.rentabilidad_porcentaje < settings.rentabilidad_alerta_porcentaje
+        ? { nivel: 'medio', titulo: 'Rentabilidad baja', detalle: `El margen de servicios está por debajo del ${settings.rentabilidad_alerta_porcentaje}%.` }
         : null,
-      orderMargins.some((orden) => Number(orden.margen_porcentaje || 0) < 20)
-        ? { nivel: 'medio', titulo: 'Servicios con margen bajo', detalle: 'Hay ordenes facturadas con margen menor al 20%.' }
+      orderMargins.some((orden) => Number(orden.margen_porcentaje || 0) < settings.margen_orden_alerta_porcentaje)
+        ? { nivel: 'medio', titulo: 'Servicios con margen bajo', detalle: `Hay órdenes facturadas con margen menor al ${settings.margen_orden_alerta_porcentaje}%.` }
         : null,
       Number(activos.repuestos_sin_stock || 0) > 0
         ? { nivel: 'medio', titulo: 'Inventario sin stock', detalle: `${activos.repuestos_sin_stock} repuestos activos estan sin unidades disponibles.` }
@@ -383,8 +388,7 @@ export const getGananciasAdmin = async (req, res) => {
         : null,
     ].filter(Boolean);
 
-    res.json({
-      data: {
+    return {
         fechaInicio,
         fechaFin,
         detalleLimite,
@@ -403,8 +407,12 @@ export const getGananciasAdmin = async (req, res) => {
         perdidasFuentes: normalizeRows(perdidasFuentesRows),
         rentabilidad: normalizeRows(periodRows),
         alertas,
-      },
-    });
+    };
+};
+
+export const getGananciasAdmin = async (req, res) => {
+  try {
+    res.json({ data: await getGananciasData(req.query) });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener ganancias admin', details: error.message });
   }

@@ -1,6 +1,7 @@
 import prisma from '../../app/prismaClient.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
 import { parsePositiveId } from '../../utils/domainValidation.js';
+import { withAuditUser } from '../../utils/auditContext.js';
 
 const toPascalCase = (value) => {
   if (!value || typeof value !== 'string') return value;
@@ -16,17 +17,18 @@ const toPascalCase = (value) => {
 export const listarEquipos = async (query = {}) => {
   const { page, pageSize, offset } = parsePagination(query);
   const search = String(query.search || '').trim();
-  const where = search
-    ? {
-        OR: [
-          { cliente: { nombre: { contains: search, mode: 'insensitive' } } },
-          { tipo: { contains: search, mode: 'insensitive' } },
-          { marca: { contains: search, mode: 'insensitive' } },
-          { modelo: { contains: search, mode: 'insensitive' } },
-          { numero_serie: { contains: search, mode: 'insensitive' } },
-        ],
-      }
-    : {};
+  const clienteId = query.cliente_id ? parsePositiveId(query.cliente_id) : null;
+  if (query.cliente_id && !clienteId) throw Object.assign(new Error('Cliente inválido'), { statusCode: 400 });
+  const where = {
+    ...(clienteId ? { cliente_id: clienteId } : {}),
+    ...(search ? { OR: [
+      { cliente: { nombre: { contains: search, mode: 'insensitive' } } },
+      { tipo: { contains: search, mode: 'insensitive' } },
+      { marca: { contains: search, mode: 'insensitive' } },
+      { modelo: { contains: search, mode: 'insensitive' } },
+      { numero_serie: { contains: search, mode: 'insensitive' } },
+    ] } : {}),
+  };
   const [rows, countRows] = await Promise.all([
     prisma.equipos.findMany({
       where,
@@ -44,24 +46,25 @@ export const listarEquipos = async (query = {}) => {
   };
 };
 
-export const crearEquipo = async ({ cliente_id, tipo, marca, modelo, numero_serie }) => {
+export const crearEquipo = async ({ cliente_id, tipo, marca, modelo, numero_serie, observaciones_generales }, user) => {
   const clienteId = parsePositiveId(cliente_id);
   if (!clienteId) throw new Error('El ID del cliente es inválido');
   await prisma.clientes.findUniqueOrThrow({ where: { id_cliente: clienteId } });
 
-  return prisma.equipos.create({
+  return withAuditUser(user, (tx) => tx.equipos.create({
     data: {
       cliente_id: clienteId,
       tipo: toPascalCase(tipo) || null,
       marca: marca?.trim() || null,
       modelo: modelo?.trim() || null,
       numero_serie: numero_serie?.trim() || null,
+      observaciones_generales: observaciones_generales?.trim() || null,
     },
     include: { cliente: true },
-  });
+  }));
 };
 
-export const actualizarEquipo = async (id, { cliente_id, tipo, marca, modelo, numero_serie }) => {
+export const actualizarEquipo = async (id, { cliente_id, tipo, marca, modelo, numero_serie, observaciones_generales }, user) => {
   const equipoId = parsePositiveId(id);
   if (!equipoId) throw new Error('El ID del equipo es inválido');
   const data = {};
@@ -75,18 +78,19 @@ export const actualizarEquipo = async (id, { cliente_id, tipo, marca, modelo, nu
   if (marca !== undefined) data.marca = marca?.trim() || null;
   if (modelo !== undefined) data.modelo = modelo?.trim() || null;
   if (numero_serie !== undefined) data.numero_serie = numero_serie?.trim() || null;
+  if (observaciones_generales !== undefined) data.observaciones_generales = observaciones_generales?.trim() || null;
 
-  return prisma.equipos.update({
+  return withAuditUser(user, (tx) => tx.equipos.update({
     where: { id_equipo: equipoId },
     data,
     include: { cliente: true },
-  });
+  }));
 };
 
-export const eliminarEquipo = (id) => {
+export const eliminarEquipo = (id, user) => {
   const equipoId = parsePositiveId(id);
   if (!equipoId) throw new Error('El ID del equipo es inválido');
-  return prisma.equipos.delete({ where: { id_equipo: equipoId } });
+  return withAuditUser(user, (tx) => tx.equipos.delete({ where: { id_equipo: equipoId } }));
 };
 
 export default {

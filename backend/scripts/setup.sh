@@ -3,7 +3,7 @@ set -eu
 
 echo "--- Sincronizando Esquema ---"
 npx prisma generate
-npx prisma db push --accept-data-loss
+npx prisma db push
 
 echo ">>> Cargando funciones y procedimientos..."
 npm run db:functions:container

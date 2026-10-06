@@ -1,8 +1,9 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Bell, LogOut, Menu, UserRound } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { LogOut, Menu, UserRound } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { NotificationTray } from './NotificationTray';
+import { NotificationBell, NotificationToast } from './NotificationAttention';
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 
 const normalizeRole = (role) => String(role || '')
@@ -13,27 +14,40 @@ const normalizeRole = (role) => String(role || '')
 
 const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [showNotifications, setShowNotifications] = useState(false);
   const isSecretaria = normalizeRole(user?.rol) === 'secretaria';
+  const isAdmin = ['administrador', 'adminpro', 'admin'].includes(normalizeRole(user?.rol));
+  const hasInbox = isSecretaria || isAdmin;
   const {
     notifications,
     connected: socketConnected,
     clearNotifications,
+    notificationsError, clearing, reloadNotifications, unreadCount, markNotificationRead, loadingHistory,
+    latestNotification, dismissLatest,
   } = useRealtimeNotifications({
-    enabled: isSecretaria,
-    onNotification: () => setShowNotifications(true),
+    enabled: hasInbox,
+    persistent: true,
     onRefresh: (notification) => {
-      window.dispatchEvent(new CustomEvent('secretaria:notificacion', { detail: notification }));
+      if (isSecretaria) window.dispatchEvent(new CustomEvent('secretaria:notificacion', { detail: notification }));
     },
     refreshIntervalMs: 0,
   });
 
   useEffect(() => {
-    if (!isSecretaria) setShowNotifications(false);
-  }, [isSecretaria]);
+    if (!hasInbox) setShowNotifications(false);
+  }, [hasInbox]);
+
+  const reviewNotices = () => { reloadNotifications(); setShowNotifications(true); dismissLatest(); };
+  const openNotice = (item) => {
+    const adminPaths = { diagnostico: '/admin/diagnosticos', orden: '/admin/ordenes', repuesto: '/admin/inventario' };
+    navigate(isAdmin ? (adminPaths[item.entity?.kind] || '/admin') : ['orden_finalizada', 'irreparable_confirmado'].includes(item.type) ? '/secretaria/facturacion' : '/secretaria/nueva-orden');
+    setShowNotifications(false); dismissLatest();
+  };
 
   return (
-    <header className="app-navbar flex items-center justify-between border-b bg-white px-5 py-3 shadow-sm">
+    <><header className="app-navbar flex items-center justify-between border-b bg-white px-5 py-3 shadow-sm">
       <div className="flex items-center gap-4">
         <button
           type="button"
@@ -49,39 +63,29 @@ const Navbar = ({ onToggleSidebar }) => {
       <div className="flex items-center gap-3">
         {user ? (
           <>
-            {isSecretaria && (
+            {hasInbox && (
               <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowNotifications((value) => !value)}
-                  className="relative flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600"
-                  title={socketConnected ? 'Notificaciones conectadas' : 'Notificaciones desconectadas'}
-                  aria-label="Abrir notificaciones"
-                >
-                  <Bell className="h-4 w-4" />
-                  {notifications.length > 0 && (
-                    <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 py-0.5 text-[9px] font-black leading-none text-white">
-                      {notifications.length}
-                    </span>
-                  )}
-                  <span className={`absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full ${socketConnected ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-                </button>
+                <NotificationBell count={unreadCount} connected={socketConnected} expanded={showNotifications}
+                  onClick={() => { if (!showNotifications) reloadNotifications(); setShowNotifications((value) => !value); }} />
 
                 {showNotifications && (
                   <NotificationTray
                     notifications={notifications}
+                    total={unreadCount}
                     connected={socketConnected}
-                    onClear={() => {
-                      clearNotifications();
-                      setShowNotifications(false);
-                    }}
+                    onClear={clearNotifications}
+                    onRead={markNotificationRead}
+                    loading={loadingHistory}
+                    clearing={clearing}
+                    error={notificationsError}
+                    onOpen={openNotice}
                     onClose={() => setShowNotifications(false)}
                   />
                 )}
               </div>
             )}
 
-            <div className="flex items-center gap-3">
+            <Link to={isAdmin ? '/admin/mi-cuenta' : location.pathname} aria-label={isAdmin ? 'Abrir Mi cuenta' : 'Cuenta actual'} className="flex items-center gap-3 rounded-xl p-1 transition hover:bg-slate-50">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-black text-white">
                 {user.username?.charAt(0).toUpperCase() || <UserRound className="h-5 w-5" />}
               </div>
@@ -89,7 +93,7 @@ const Navbar = ({ onToggleSidebar }) => {
                 <div className="text-sm font-bold text-gray-800">{user.username}</div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{user.rol}</div>
               </div>
-            </div>
+            </Link>
 
             <button
               type="button"
@@ -105,7 +109,7 @@ const Navbar = ({ onToggleSidebar }) => {
           <Link to="/login" className="text-sm font-semibold text-indigo-600">Iniciar sesion</Link>
         )}
       </div>
-    </header>
+    </header><NotificationToast notification={latestNotification} onClose={dismissLatest} onReview={reviewNotices} onOpen={openNotice} /></>
   );
 };
 

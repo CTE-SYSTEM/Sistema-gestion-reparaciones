@@ -1,6 +1,6 @@
 ﻿import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react'; 
 
 // Importacion directa del SVG
@@ -19,6 +19,7 @@ const Login = () => {
 
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
@@ -49,6 +50,7 @@ const Login = () => {
       switch (userData.rol) {
         case 'Administrador':
         case 'admin_pro':
+        case 'Admin':
           targetPath = '/admin';
           break;
         case 'Secretaria':
@@ -117,7 +119,7 @@ const Login = () => {
         <div className="flex flex-col items-center w-full max-w-lg text-center">
           
           {/* SVG ampliado a un tamano visible y destacado */}
-          <div className="w-64 h-64 sm:w-80 sm:h-80 mb-6 flex items-center justify-center">
+          <div className="w-64 h-64 sm:w-80 sm:h-80 lg:w-[min(32rem,65vh)] lg:h-[min(32rem,65vh)] mb-6 flex items-center justify-center">
             <img 
               src={loadingSvg} 
               alt="Cargando..." 
@@ -155,6 +157,7 @@ const Login = () => {
           </p>
         </div>
 
+        {location.state?.message && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">{location.state.message}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">

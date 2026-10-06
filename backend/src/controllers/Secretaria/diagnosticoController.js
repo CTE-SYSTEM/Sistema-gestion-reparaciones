@@ -16,10 +16,10 @@ export const getDiagnosticos = async (req, res) => {
 
 export const createDiagnostico = async (req, res) => {
   try {
-    const {
-      equipo_id, tecnico_id, falla_reportada, diagnostico_real,
-      presupuesto_estimado, prioridad, estado_del_diagnostico, Estado_aprobacion, deja_cargador, enciende, usa_corriente_ac,
-    } = req.body;
+    const { equipo_id, tecnico_id, falla_reportada, diagnostico_real,
+      presupuesto_estimado, moneda_presupuesto, prioridad, estado_del_diagnostico, Estado_aprobacion, deja_cargador, enciende, usa_corriente_ac,
+      estado_cargador, estado_accesorios, estado_fisico, estado_encendido, estado_alimentacion, estado_acceso,
+      detalle_accesorios, observaciones_recepcion } = req.body;
 
     if (!falla_reportada?.trim()) {
       return res.status(400).json({ error: 'La falla reportada es obligatoria' });
@@ -36,20 +36,26 @@ export const createDiagnostico = async (req, res) => {
       falla_reportada,
       diagnostico_real,
       presupuesto_estimado,
+      moneda_presupuesto,
       prioridad,
       estado_del_diagnostico,
       Estado_aprobacion,
       deja_cargador,
       enciende,
       usa_corriente_ac,
-    });
+      estado_cargador, estado_accesorios, estado_fisico, estado_encendido, estado_alimentacion, estado_acceso,
+      detalle_accesorios, observaciones_recepcion,
+    }, req.user);
 
-    notifyJefeTecnico({
+    const diagnosticoId = diagnostico.id_diagnostico;
+    const equipoNombre = [diagnostico.equipo?.tipo, diagnostico.equipo?.marca, diagnostico.equipo?.modelo].filter(Boolean).join(' ') || 'Equipo recibido';
+    const clienteNombre = diagnostico.cliente?.nombre || 'Cliente del taller';
+    if (!diagnostico.tecnico_id && ['PENDIENTE', 'INGRESADO', 'ASIGNADO', 'EN_REVISION'].includes(diagnostico.estado_del_diagnostico)) await notifyJefeTecnico({
       type: 'diagnostico_creado',
-      title: 'Nuevo diagnostico registrado',
-      message: `El diagnostico #${diagnostico?.id_diagnostico || diagnostico?.id || equipoId} ya está listo para revisión`,
-      severity: 'info',
-      entity: { kind: 'diagnostico', id: Number(diagnostico?.id_diagnostico || diagnostico?.id || 0) || equipoId },
+      title: 'Nuevo diagnóstico recibido',
+      message: `Diagnóstico #${diagnosticoId} · ${equipoNombre} · ${clienteNombre}. Pendiente de asignar técnico. Prioridad: ${diagnostico.prioridad}.`,
+      severity: 'warning',
+      entity: { kind: 'diagnostico', id: diagnosticoId },
     });
 
     if (tecnico_id) {
@@ -59,7 +65,7 @@ export const createDiagnostico = async (req, res) => {
       });
 
       if (tecnico?.usuario_id) {
-        notifyTecnico(tecnico, {
+        await notifyTecnico(tecnico, {
           type: 'diagnostico_asignado',
           title: 'Nuevo diagnostico asignado',
           message: `Se te asignó el diagnostico #${diagnostico?.id_diagnostico || equipoId}`,
@@ -83,11 +89,11 @@ export const createDiagnostico = async (req, res) => {
 export const updateDiagnostico = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      equipo_id, tecnico_id, falla_reportada, diagnostico_real,
-      presupuesto_estimado, prioridad, estado, estado_del_diagnostico,
+    const { equipo_id, tecnico_id, falla_reportada, diagnostico_real,
+      presupuesto_estimado, moneda_presupuesto, prioridad, estado, estado_del_diagnostico,
       Estado_aprobacion, deja_cargador, enciende, usa_corriente_ac,
-    } = req.body;
+      estado_cargador, estado_accesorios, estado_fisico, estado_encendido, estado_alimentacion, estado_acceso,
+      detalle_accesorios, observaciones_recepcion } = req.body;
 
     if (falla_reportada !== undefined && !falla_reportada?.trim()) {
       return res.status(400).json({ error: 'La falla reportada es obligatoria' });
@@ -99,6 +105,7 @@ export const updateDiagnostico = async (req, res) => {
       falla_reportada,
       diagnostico_real,
       presupuesto_estimado,
+      moneda_presupuesto,
       prioridad,
       estado,
       estado_del_diagnostico,
@@ -106,7 +113,9 @@ export const updateDiagnostico = async (req, res) => {
       deja_cargador,
       enciende,
       usa_corriente_ac,
-    });
+      estado_cargador, estado_accesorios, estado_fisico, estado_encendido, estado_alimentacion, estado_acceso,
+      detalle_accesorios, observaciones_recepcion,
+    }, req.user);
 
     if (!diagnostico) return res.status(404).json({ error: 'Diagnostico no encontrado' });
 
@@ -118,7 +127,7 @@ export const updateDiagnostico = async (req, res) => {
       });
 
       if (tecnico?.usuario_id) {
-        notifyTecnico(tecnico, {
+        await notifyTecnico(tecnico, {
           type: 'diagnostico_actualizado',
           title: 'Diagnostico actualizado',
           message: `Se actualizó el diagnostico #${id}`,
@@ -147,7 +156,7 @@ export const updateEstadoDiagnostico = async (req, res) => {
     const { id } = req.params;
     const { estado, estado_del_diagnostico } = req.body;
     const estadoNuevo = diagnosticoService.validarEstadoDiagnostico(estado_del_diagnostico || estado);
-    const diagnostico = await diagnosticoService.cambiarEstadoDiagnostico(id, estadoNuevo);
+    const diagnostico = await diagnosticoService.cambiarEstadoDiagnostico(id, estadoNuevo, req.user);
 
     if (!diagnostico) return res.status(404).json({ error: 'Diagnostico no encontrado' });
 

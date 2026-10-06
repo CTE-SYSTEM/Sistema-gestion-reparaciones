@@ -300,6 +300,8 @@ export const useTecnicoJefeDashboard = (user) => {
     const repuesto = solicitud.repuesto?.nombre || solicitud.pieza_solicitada || 'pieza solicitada';
     const cantidad = solicitud.cantidad_usada || 1;
     if (!window.confirm(`Deseas ${texto} ${cantidad} unidad(es) de ${repuesto} para la solicitud #${id}?`)) return;
+    const motivoRechazo = accion === 'rechazar' ? window.prompt('Motivo del rechazo de la pieza:')?.trim() : null;
+    if (accion === 'rechazar' && !motivoRechazo) return;
 
     setSavingId(`repuesto-${id}`);
     setRepuestoDecisionError('');
@@ -308,7 +310,7 @@ export const useTecnicoJefeDashboard = (user) => {
       if (accion === 'aprobar') {
         await repuestosJefeService.aprobar(id);
       } else {
-        await repuestosJefeService.rechazar(id);
+        await repuestosJefeService.rechazar(id, motivoRechazo);
       }
       removeRepuestoPendiente(id);
       await fetchData();
@@ -383,6 +385,7 @@ export const useTecnicoJefeDashboard = (user) => {
         pieza_solicitada: row.pieza_solicitada || '',
         cantidad_usada: row.cantidad_usada || 1,
         estado_aprobacion: row.estado_aprobacion || 'APROBADO',
+        motivo_rechazo: row.motivo_rechazo || '',
       });
     }
 
@@ -411,6 +414,11 @@ export const useTecnicoJefeDashboard = (user) => {
         setSavingId(null);
         return;
       }
+    }
+    if (tipo === 'repuesto' && String(editForm.estado_aprobacion || '').toUpperCase() === 'DENEGADO' && !String(editForm.motivo_rechazo || '').trim()) {
+      setEditError('Indique el motivo de rechazo del repuesto.');
+      setSavingId(null);
+      return;
     }
 
     try {

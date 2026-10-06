@@ -16,10 +16,36 @@ model Usuarios {
   correo_electronico String?
   rol                String   // Admin, Jefe Tecnico, Tecnico, Recepcion
   activo             Boolean  @default(true)
+  sesion_version     Int      @default(0)
   fecha_creacion     DateTime @default(now())
   tecnico            Tecnicos?
+  archivos_servicio  ArchivosServicio[]
+  archivos_compra ArchivosCompra[]
+  historial_diagnosticos HistorialDiagnosticos[]
+  historial_ordenes HistorialOrdenes[]
+  entregas_ordenes Ordenes[] @relation("OrdenEntregadaPor")
+  aprobaciones_repuestos Ordenes_Repuestos[] @relation("AprobadorRepuesto")
+  entregas_repuestos Ordenes_Repuestos[] @relation("EntregadorRepuesto")
+  revisiones_irreparable Ordenes[] @relation("RevisorIrreparable")
+  asignaciones_registradas HistorialAsignaciones[]
+  intervenciones_tecnicas IntervencionesTecnicas[]
+  avances_tecnicos BitacoraTecnica[]
+  notificaciones Notificaciones[]
 
   @@map("Usuarios")
+}
+
+model Notificaciones {
+  id          String    @db.Uuid
+  usuario_id  Int
+  contenido   Json
+  fecha_hora  DateTime  @default(now())
+  leida_en    DateTime?
+  usuario     Usuarios  @relation(fields: [usuario_id], references: [id_usuario], onDelete: Cascade)
+
+  @@id([id, usuario_id])
+  @@index([usuario_id, leida_en, fecha_hora])
+  @@map("Notificaciones")
 }
 
 // --- CLIENTES Y EQUIPOS ---
@@ -45,6 +71,7 @@ model Equipos {
   tipo         String?       
   numero_serie String?       
   modelo       String?       
+  observaciones_generales String?
   cliente      Clientes      @relation(fields: [cliente_id], references: [id_cliente])
   diagnosticos Diagnosticos[]
 
@@ -64,7 +91,12 @@ model Tecnicos {
   activo       Boolean   @default(true)
 
   diagnosticos Diagnosticos[]
+  disponibilidad String @default("DISPONIBLE")
+  observacion_disponibilidad String?
+  asignaciones_anteriores HistorialAsignaciones[] @relation("TecnicoAnterior")
+  asignaciones_nuevas HistorialAsignaciones[] @relation("TecnicoNuevo")
   ordenes      Ordenes[]
+  solicitudes_repuestos Ordenes_Repuestos[] @relation("SolicitanteRepuesto")
 
   @@map("Tecnicos")
 }
@@ -72,14 +104,36 @@ model Tecnicos {
 model Diagnosticos {
   id_diagnostico          Int       @id @default(autoincrement())
   equipo_id               Int
+  origen_directo          Boolean   @default(false)
   tecnico_id              Int?      // Permite que sea nulo hasta asignar técnico
   falla_reportada         String?   
   diagnostico_real        String?  
+  solucion_propuesta      String?
+  borrador_tecnico        Json?
+  fecha_borrador          DateTime?
   presupuesto_estimado    Decimal?  @db.Decimal(18, 2)
+  moneda_presupuesto      String    @default("NIO") @db.VarChar(3)
   prioridad               String?   @default("Normal") // Urgente - Alta - Normal
   fecha_hora              DateTime? @default(now())
   fecha_asignacion        DateTime?
   fecha_completado        DateTime?
+  fecha_inicio            DateTime?
+  fecha_retiro_sin_reparar DateTime?
+  estado_contacto         String    @default("PENDIENTE_CONTACTAR")
+  fecha_envio_documento   DateTime?
+  fecha_respuesta_cliente DateTime?
+  observacion_respuesta   String?
+  estado_equipo           String    @default("EN_TALLER")
+  persona_recibe_retiro   String?
+  observacion_retiro      String?
+  estado_cargador         String?   @default("NO_VERIFICADO")
+  estado_accesorios       String?   @default("NO_VERIFICADOS")
+  estado_fisico           String?   @default("NO_VERIFICADO")
+  estado_encendido        String?   @default("NO_PROBADO")
+  estado_alimentacion     String?   @default("NO_PROBADA")
+  estado_acceso           String?   @default("NO_VERIFICADO")
+  detalle_accesorios      String?
+  observaciones_recepcion String?
   
   // Estados
   estado_del_diagnostico  String    @default("PENDIENTE") // PENDIENTE, EN_REVISION, COMPLETADO
@@ -94,6 +148,12 @@ model Diagnosticos {
   equipo                  Equipos   @relation(fields: [equipo_id], references: [id_equipo])
   tecnico                 Tecnicos? @relation(fields: [tecnico_id], references: [id_tecnico]) // Corregido: Tecnicos?
   ordenes                 Ordenes[]
+  archivos                ArchivosServicio[]
+  historial_estados       HistorialDiagnosticos[]
+  historial_asignaciones HistorialAsignaciones[]
+  intervenciones IntervencionesTecnicas[]
+  avances_tecnicos BitacoraTecnica[]
+  factura_diagnostico Facturas?
 
   @@map("Diagnosticos")
 }
@@ -110,18 +170,38 @@ model Ordenes {
   enciende_salida         Boolean?
   usa_corriente_ac_salida Boolean?
   observacion_final       String?
+  pruebas_salida          Json?
   fecha_cierre            DateTime?
   fecha_finalizacion      DateTime?
+  monto_autorizado        Decimal?  @db.Decimal(18, 2)
+  fecha_aprobacion_cliente DateTime?
+  fecha_inicio_reparacion DateTime?
+  fecha_entrega           DateTime?
+  fecha_cancelacion       DateTime?
+  motivo_cancelacion      String?
+  entregado_por_id        Int?
+  persona_recibe          String?
+  observacion_entrega     String?
   requiere_piezas         Boolean   @default(true)
   justificacion_irreparable String?
-  irreparable_estado      String    @default("PENDIENTE")
+  irreparable_estado      String    @default("NO_SOLICITADO")
+  usuario_revisor_irreparable_id Int?
+  fecha_revision_irreparable DateTime?
+  motivo_revision_irreparable String?
   
   // Relaciones
   diagnostico             Diagnosticos @relation(fields: [diagnostico_id], references: [id_diagnostico])
   tecnico                 Tecnicos?    @relation(fields: [tecnico_id], references: [id_tecnico]) // Corregido: Tecnicos?
+  entregado_por           Usuarios?    @relation("OrdenEntregadaPor", fields: [entregado_por_id], references: [id_usuario], onDelete: SetNull)
   
   repuestos_usados        Ordenes_Repuestos[]
   facturas                Facturas[]
+  archivos                ArchivosServicio[]
+  historial_estados       HistorialOrdenes[]
+  historial_asignaciones HistorialAsignaciones[]
+  intervenciones IntervencionesTecnicas[]
+  avances_tecnicos BitacoraTecnica[]
+  revisor_irreparable Usuarios? @relation("RevisorIrreparable", fields: [usuario_revisor_irreparable_id], references: [id_usuario], onDelete: SetNull)
 
   @@map("Ordenes")
 }
@@ -147,6 +227,8 @@ model Repuestos {
   porcentaje_de_ganacia     Decimal?             @db.Decimal(18, 2) // Campo legado: conservar para no perder datos existentes
   ganancia_cordobas Decimal?             @db.Decimal(18, 2)
   stock_actual     Int                  @default(0)
+  stock_minimo     Int                  @default(0)
+  ubicacion_fisica String?
   activo           Boolean              @default(true) // Campo legado: conservar para compatibilidad con datos/scripts existentes
   descontinuada     Boolean              @default(false)
 
@@ -166,12 +248,25 @@ model Ordenes_Repuestos {
   cantidad_usada      Int?      @default(1)
   estado_entrega      String    @default("PENDIENTE") // PENDIENTE, ENTREGADO
   fecha_entrega       DateTime?
+  fecha_solicitud     DateTime  @default(now())
+  fecha_aprobacion    DateTime?
+  fecha_rechazo       DateTime?
+  motivo_rechazo      String?
+  tecnico_solicitante_id Int?
+  usuario_aprobador_id Int?
+  usuario_entregador_id Int?
+  precio_unitario_facturado Decimal? @db.Decimal(18, 2)
+  total_facturado     Decimal? @db.Decimal(18, 2)
+  fecha_facturacion   DateTime?
   
   // El Check de aprobación del Jefe Técnico 
   estado_aprobacion   String    @default("PENDIENTE") // PENDIENTE, APROBADO, DENEGADO
   
   orden               Ordenes   @relation(fields: [orden_id], references: [id_orden])
   repuesto            Repuestos? @relation(fields: [repuesto_id], references: [id_repuesto])
+  tecnico_solicitante Tecnicos? @relation("SolicitanteRepuesto", fields: [tecnico_solicitante_id], references: [id_tecnico], onDelete: SetNull)
+  usuario_aprobador Usuarios? @relation("AprobadorRepuesto", fields: [usuario_aprobador_id], references: [id_usuario], onDelete: SetNull)
+  usuario_entregador Usuarios? @relation("EntregadorRepuesto", fields: [usuario_entregador_id], references: [id_usuario], onDelete: SetNull)
 
   @@map("Ordenes_Repuestos")
 }
@@ -186,6 +281,8 @@ model Proveedores {
   correo       String?
   web          String?   
   notas        String?   // Para anotar horarios o si tienen buenos repuestos o si incluso hubo problemas con las piezas
+  nombre_contacto String?
+  horario_atencion String?
   descontinuada    Boolean @default(true)
   repuestos    Repuestos[]
   compras      Compras[]
@@ -205,6 +302,7 @@ model Compras {
   
   proveedor        Proveedores @relation(fields: [proveedor_id], references: [id_proveedor])
   repuesto         Repuestos   @relation(fields: [repuesto_id], references: [id_repuesto])
+  archivos         ArchivosCompra[]
 
   @@map("Compras")
 }
@@ -213,20 +311,143 @@ model Compras {
 
 model Facturas {
   id_factura    Int       @id @default(autoincrement())
-  orden_id      Int       @unique
+  orden_id      Int?      @unique
+  diagnostico_id Int?    @unique
   fecha_emision DateTime? @default(now())
   monto_repuestos Decimal? @db.Decimal(18, 2) // La suma de lo que se uso
   mano_obra       Decimal? @db.Decimal(18, 2) // El costo del servicio técnico
+  monto_diagnostico Decimal? @default(0) @db.Decimal(18, 2)
   
   subtotal      Decimal?  @db.Decimal(18, 2) // monto repuestos + mano de obra
   impuestos     Decimal?  @db.Decimal(18, 2)
   total         Decimal?  @db.Decimal(18, 2)
   
   metodo_pago   String?   
-  orden         Ordenes   @relation(fields: [orden_id], references: [id_orden])
+  orden         Ordenes?   @relation(fields: [orden_id], references: [id_orden])
+  diagnostico   Diagnosticos? @relation(fields: [diagnostico_id], references: [id_diagnostico])
   garantias     Garantias[]
 
   @@map("Facturas")
+}
+
+model ArchivosCompra {
+  id_archivo Int @id @default(autoincrement())
+  compra_id Int
+  ruta_archivo String
+  nombre_original String
+  tipo_mime String
+  fecha_subida DateTime @default(now())
+  usuario_id Int?
+  compra Compras @relation(fields: [compra_id], references: [id_compra], onDelete: Cascade)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+  @@index([compra_id, fecha_subida])
+  @@map("ArchivosCompra")
+}
+
+model ArchivosServicio {
+  id_archivo Int @id @default(autoincrement())
+  diagnostico_id Int?
+  orden_id Int?
+  tipo_archivo String
+  ruta_archivo String
+  nombre_original String
+  tipo_mime String
+  fecha_subida DateTime @default(now())
+  usuario_id Int?
+  visible_tecnico Boolean @default(false)
+  diagnostico Diagnosticos? @relation(fields: [diagnostico_id], references: [id_diagnostico], onDelete: Cascade)
+  orden Ordenes? @relation(fields: [orden_id], references: [id_orden], onDelete: Cascade)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+
+  @@index([diagnostico_id, fecha_subida])
+  @@index([orden_id, fecha_subida])
+  @@map("ArchivosServicio")
+}
+
+model BitacoraTecnica {
+  id_avance Int @id @default(autoincrement())
+  diagnostico_id Int?
+  orden_id Int?
+  usuario_id Int?
+  observacion String
+  fecha_hora DateTime @default(now())
+  diagnostico Diagnosticos? @relation(fields: [diagnostico_id], references: [id_diagnostico], onDelete: Cascade)
+  orden Ordenes? @relation(fields: [orden_id], references: [id_orden], onDelete: Cascade)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+  @@index([diagnostico_id, fecha_hora])
+  @@index([orden_id, fecha_hora])
+  @@map("BitacoraTecnica")
+}
+
+model HistorialDiagnosticos {
+  id_historial Int @id @default(autoincrement())
+  diagnostico_id Int
+  proceso String
+  estado_anterior String?
+  estado_nuevo String
+  fecha_hora DateTime @default(now())
+  usuario_id Int?
+  observacion String?
+  diagnostico Diagnosticos @relation(fields: [diagnostico_id], references: [id_diagnostico], onDelete: Cascade)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+
+  @@index([diagnostico_id, fecha_hora])
+  @@map("HistorialDiagnosticos")
+}
+
+model HistorialOrdenes {
+  id_historial Int @id @default(autoincrement())
+  orden_id Int
+  estado_anterior String?
+  estado_nuevo String
+  fecha_hora DateTime @default(now())
+  usuario_id Int?
+  observacion String?
+  orden Ordenes @relation(fields: [orden_id], references: [id_orden], onDelete: Cascade)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+
+  @@index([orden_id, fecha_hora])
+  @@map("HistorialOrdenes")
+}
+
+model HistorialAsignaciones {
+  id_historial Int @id @default(autoincrement())
+  diagnostico_id Int?
+  orden_id Int?
+  tecnico_anterior_id Int?
+  tecnico_nuevo_id Int?
+  tecnico_anterior_nombre String?
+  tecnico_nuevo_nombre String?
+  usuario_id Int?
+  motivo String
+  es_excepcion Boolean @default(false)
+  fecha_hora DateTime @default(now())
+  diagnostico Diagnosticos? @relation(fields: [diagnostico_id], references: [id_diagnostico], onDelete: Cascade)
+  orden Ordenes? @relation(fields: [orden_id], references: [id_orden], onDelete: Cascade)
+  tecnico_anterior Tecnicos? @relation("TecnicoAnterior", fields: [tecnico_anterior_id], references: [id_tecnico], onDelete: SetNull)
+  tecnico_nuevo Tecnicos? @relation("TecnicoNuevo", fields: [tecnico_nuevo_id], references: [id_tecnico], onDelete: SetNull)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+  @@index([diagnostico_id, fecha_hora])
+  @@index([orden_id, fecha_hora])
+  @@map("HistorialAsignaciones")
+}
+
+model IntervencionesTecnicas {
+  id_intervencion Int @id @default(autoincrement())
+  diagnostico_id Int?
+  orden_id Int?
+  tipo String
+  motivo String
+  usuario_id Int?
+  datos_anteriores Json
+  datos_nuevos Json
+  fecha_hora DateTime @default(now())
+  diagnostico Diagnosticos? @relation(fields: [diagnostico_id], references: [id_diagnostico], onDelete: Cascade)
+  orden Ordenes? @relation(fields: [orden_id], references: [id_orden], onDelete: Cascade)
+  usuario Usuarios? @relation(fields: [usuario_id], references: [id_usuario], onDelete: SetNull)
+  @@index([diagnostico_id, fecha_hora])
+  @@index([orden_id, fecha_hora])
+  @@map("IntervencionesTecnicas")
 }
 
 model Garantias {
@@ -257,4 +478,22 @@ model Auditoria_Movimientos {
   @@index([tabla, fecha_movimiento(sort: Desc)], map: "idx_auditoria_tabla_fecha")
   @@index([operacion, fecha_movimiento(sort: Desc)], map: "idx_auditoria_operacion_fecha")
   @@map("Auditoria_Movimientos")
+}
+
+model ConfiguracionAdministracion {
+  id              Int      @id
+  valores         Json
+  revision        Int      @default(0)
+  actualizado_por Int?
+  actualizado_en  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model EstadoRespaldos {
+  id                  Int       @id
+  configuracion       String
+  proxima_ejecucion   DateTime? @db.Timestamptz(6)
+  ultimo_intento      DateTime? @db.Timestamptz(6)
+  ultimo_exito        DateTime? @db.Timestamptz(6)
+  reintentos          Int       @default(0)
+  ultimo_error        String?
 }

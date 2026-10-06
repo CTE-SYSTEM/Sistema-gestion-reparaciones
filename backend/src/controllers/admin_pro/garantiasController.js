@@ -1,5 +1,7 @@
 import prisma from '../../app/prismaClient.js';
 import { normalizeOptionalText } from '../../utils/domainValidation.js';
+import { getBusinessSettings } from '../../services/adminSettingsService.js';
+import { withAuditUser } from '../../utils/auditContext.js';
 
 export const getGarantiasAdmin = async (req, res) => {
   try {
@@ -32,7 +34,8 @@ export const getGarantiasAdmin = async (req, res) => {
 
 export const createGarantiaAdmin = async (req, res) => {
   try {
-    const { factura_id, condiciones, duracion_meses } = req.body;
+    const defaults = (await getBusinessSettings()).negocio;
+    const { factura_id, condiciones = defaults.garantia_condiciones, duracion_meses = defaults.garantia_meses } = req.body;
     if (!factura_id || !duracion_meses) {
       return res.status(400).json({ error: 'factura_id y duracion_meses son obligatorios' });
     }
@@ -47,7 +50,7 @@ export const createGarantiaAdmin = async (req, res) => {
     const fecha_inicio = new Date();
     const fecha_vencimiento = new Date(fecha_inicio);
     fecha_vencimiento.setMonth(fecha_vencimiento.getMonth() + duracion);
-    const nuevaGarantia = await prisma.garantias.create({
+    const nuevaGarantia = await withAuditUser(req.user, (tx) => tx.garantias.create({
       data: {
         factura_id: facturaId,
         condiciones: normalizeOptionalText(condiciones),
@@ -56,10 +59,11 @@ export const createGarantiaAdmin = async (req, res) => {
         fecha_vencimiento,
       },
       include: { factura: true },
-    });
+    }));
 
     res.status(201).json({ message: 'Garantía registrada exitosamente', data: nuevaGarantia });
   } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'La factura ya tiene una garantía.' });
     if (error.code === 'P2003') {
       return res.status(400).json({ error: 'La factura especificada no existe' });
     }
@@ -101,14 +105,15 @@ export const updateGarantiaAdmin = async (req, res) => {
       return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
     }
 
-    const garantia = await prisma.garantias.update({
+    const garantia = await withAuditUser(req.user, (tx) => tx.garantias.update({
       where: { id_garantia: garantiaId },
       data: updatedData,
       include: { factura: true },
-    });
+    }));
 
     res.json({ data: garantia });
   } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'La factura ya tiene una garantía.' });
     if (error.code === 'P2025') return res.status(404).json({ error: 'Garantía no encontrada' });
     res.status(500).json({ error: 'Error al actualizar garantía', details: error.message });
   }
@@ -142,7 +147,7 @@ export const renewGarantiaAdmin = async (req, res) => {
     const fecha_inicio = new Date();
     const fecha_vencimiento = new Date(fecha_inicio);
     fecha_vencimiento.setMonth(fecha_vencimiento.getMonth() + duracion);
-    const garantia = await prisma.garantias.update({
+    const garantia = await withAuditUser(req.user, (tx) => tx.garantias.update({
       where: { id_garantia: garantiaId },
       data: {
         condiciones: condiciones === undefined ? garantiaActual.condiciones : normalizeOptionalText(condiciones),
@@ -151,7 +156,7 @@ export const renewGarantiaAdmin = async (req, res) => {
         fecha_vencimiento,
       },
       include: { factura: true },
-    });
+    }));
 
     const vencidaAnteriormente = garantiaActual.fecha_vencimiento ? new Date(garantiaActual.fecha_vencimiento) < new Date() : true;
     const mensaje = vencidaAnteriormente

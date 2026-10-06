@@ -1,63 +1,12 @@
 import React from 'react';
-import { Eye, FileText } from 'lucide-react';
-import { EstadoBadge } from './TecnicoBadges';
-
-const formatPresupuesto = (value) => {
-  const amount = Number(String(value).replace(/[^\d.-]/g, ''));
-  if (Number.isNaN(amount) || amount === 0) return null;
-  const [integerPart, decimalPart] = amount.toFixed(2).split('.');
-  return `${integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}.${decimalPart}`;
-};
-
-const DiagnosticosTable = ({ items, loading, readOnly, onOpenDiagnostico }) => (
-  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
-    <table className="min-w-full divide-y divide-slate-200">
-      <thead className="bg-slate-100">
-        <tr className="text-left text-[10px] font-black uppercase text-slate-500">
-          <th className="px-6 py-4">Diagnostico</th>
-          <th className="px-6 py-4">Equipo</th>
-          <th className="px-6 py-4">Estado</th>
-          <th className="px-6 py-4">Presupuesto</th>
-          <th className="px-6 py-4">Informe</th>
-          <th className="px-6 py-4 text-right">Accion</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {items.map((item) => (
-          <tr key={item.id} className="text-sm">
-            <td className="px-6 py-4 font-black text-purple-700">#{item.id}</td>
-            <td className="px-6 py-4 font-bold text-slate-900">{item.equipo}</td>
-            <td className="px-6 py-4"><EstadoBadge estado={item.estado} /></td>
-            <td className="px-6 py-4 font-bold text-emerald-700">
-              {item.presupuesto ? `C$ ${formatPresupuesto(item.presupuesto)}` : 'Sin presupuesto'}
-            </td>
-            <td className="px-6 py-4 text-slate-600 italic">{item.diagnostico || 'Sin diagnostico registrado...'}</td>
-            <td className="px-6 py-4 text-right">
-              <button
-                onClick={() => onOpenDiagnostico({ ...item, readOnly })}
-                className={`p-2 rounded-lg transition-all ${readOnly ? 'bg-slate-100 text-slate-700 hover:bg-slate-700 hover:text-white' : 'bg-purple-100 text-purple-700 hover:bg-purple-700 hover:text-white'}`}
-                title={readOnly ? 'Ver detalle' : 'Completar diagnostico'}
-              >
-                {readOnly ? <Eye size={18} /> : <FileText size={18} />}
-              </button>
-            </td>
-          </tr>
-        ))}
-        {!loading && items.length === 0 && (
-          <tr>
-            <td colSpan="6" className="px-6 py-12 text-center text-slate-500 italic">
-              {readOnly ? 'No tienes diagnosticos completados.' : 'No tienes diagnosticos en revision.'}
-            </td>
-          </tr>
-        )}
-        {loading && (
-          <tr>
-            <td colSpan="6" className="px-6 py-12 text-center font-bold text-purple-700">Cargando diagnosticos...</td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-);
-
-export default DiagnosticosTable;
+import { EstadoBadge, PrioridadBadge } from './TecnicoBadges';
+const fecha = (v) => v ? new Date(v).toLocaleString('es-NI', { timeZone: 'America/Managua' }) : 'Sin registro';
+export default function DiagnosticosTable({ items, loading, readOnly, onOpenDiagnostico, onIniciarDiagnostico, onOpenDetalle }) {
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white text-slate-900"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="p-4">Trabajo</th><th className="p-4">Equipo y falla</th><th className="p-4">Estado</th><th className="p-4">Fechas</th><th className="p-4">Acciones</th></tr></thead><tbody className="divide-y">{items.map((d) => <tr key={d.id}>
+    <td className="p-4"><strong>#{d.id}</strong><div className="mt-2"><PrioridadBadge prioridad={d.prioridad} /></div></td>
+    <td className="p-4"><strong>{d.equipo}</strong><p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">{d.falla}</p>{!readOnly && d.horas_sin_avance >= 72 && <p className="mt-2 text-xs text-amber-700">72 horas o más sin avance</p>}</td>
+    <td className="p-4"><EstadoBadge estado={d.estado} />{d.borrador && <p className="mt-2 text-xs text-indigo-700">Borrador guardado</p>}</td>
+    <td className="p-4 text-xs"><p>{readOnly ? 'Completado: ' + fecha(d.fecha_completado) : 'Asignado: ' + fecha(d.fecha_asignacion)}</p>{d.fecha_inicio && <p className="mt-1">Inicio: {fecha(d.fecha_inicio)}</p>}</td>
+    <td className="p-4"><div className="flex flex-col items-start gap-2"><button type="button" onClick={() => onOpenDetalle?.(d)} className="rounded border px-3 py-2 text-xs">Ver expediente</button>{!readOnly && !d.fecha_inicio ? <button disabled={loading} onClick={() => onIniciarDiagnostico(d)} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">Iniciar diagnóstico</button> : <button onClick={() => onOpenDiagnostico({ ...d, readOnly })} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">{readOnly ? 'Ver informe' : d.borrador ? 'Continuar informe' : 'Registrar informe'}</button>}</div></td>
+  </tr>)}{!loading && !items.length && <tr><td colSpan={5} className="p-8 text-center text-sm text-slate-500">No hay diagnósticos que coincidan con los filtros.</td></tr>}</tbody></table></div>;
+}

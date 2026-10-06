@@ -70,6 +70,8 @@ const parseNumber = (value) => {
 const getNumericSummaries = (rows, columns) => {
   return columns
     .map((column) => {
+      // Las columnas con importes de distintas monedas no admiten un total común.
+      if (column.summarize === false) return null;
       const values = rows
         .map((row) => parseNumber(row[column.accessor]))
         .filter((value) => value !== null);

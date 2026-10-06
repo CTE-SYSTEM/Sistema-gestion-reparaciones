@@ -237,8 +237,8 @@ BEGIN
     f.total,
     f.metodo_pago::TEXT
   FROM "Facturas" f
-  JOIN "Ordenes" o ON o.id_orden = f.orden_id
-  JOIN "Diagnosticos" d ON d.id_diagnostico = o.diagnostico_id
+  LEFT JOIN "Ordenes" o ON o.id_orden = f.orden_id
+  JOIN "Diagnosticos" d ON d.id_diagnostico = COALESCE(f.diagnostico_id, o.diagnostico_id)
   JOIN "Equipos" e ON e.id_equipo = d.equipo_id
   JOIN "Clientes" cl ON cl.id_cliente = e.cliente_id
   LEFT JOIN "Tecnicos" t ON t.id_tecnico = o.tecnico_id
@@ -337,34 +337,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION admin_pro.diagnosticos_por_estado(
-  p_fecha_inicio DATE DEFAULT NULL,
-  p_fecha_fin DATE DEFAULT NULL
-)
-RETURNS TABLE (
-  estado TEXT,
-  aprobacion TEXT,
-  cantidad BIGINT,
-  presupuesto_total NUMERIC,
-  presupuesto_promedio NUMERIC
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    COALESCE(d.estado_del_diagnostico, 'SIN_ESTADO')::TEXT AS estado,
-    COALESCE(d."Estado_aprobacion", 'SIN_APROBACION')::TEXT AS aprobacion,
-    COUNT(*)::BIGINT AS cantidad,
-    COALESCE(SUM(d.presupuesto_estimado), 0) AS presupuesto_total,
-    COALESCE(AVG(d.presupuesto_estimado), 0) AS presupuesto_promedio
-  FROM "Diagnosticos" d
-  WHERE (p_fecha_inicio IS NULL OR d.fecha_hora::date >= p_fecha_inicio)
-    AND (p_fecha_fin IS NULL OR d.fecha_hora::date <= p_fecha_fin)
-  GROUP BY COALESCE(d.estado_del_diagnostico, 'SIN_ESTADO'), COALESCE(d."Estado_aprobacion", 'SIN_APROBACION')
-  ORDER BY cantidad DESC, estado ASC, aprobacion ASC;
-END;
-$$;
+-- diagnosticos_por_estado se carga en Tecnico/Presupuesto.sql con totales por moneda.
 
 CREATE OR REPLACE FUNCTION admin_pro.equipos_por_cliente()
 RETURNS TABLE (
@@ -734,13 +707,13 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    'Orden facturada'::TEXT AS fuente,
+    CASE WHEN o.id_orden IS NULL THEN 'Diagnóstico facturado' ELSE 'Orden facturada' END::TEXT AS fuente,
     f.fecha_emision AS fecha,
-    CONCAT('Factura #', f.id_factura, ' / Orden #', o.id_orden)::TEXT AS referencia,
+    CONCAT('Factura #', f.id_factura, CASE WHEN o.id_orden IS NULL THEN CONCAT(' / Diagnóstico #', d.id_diagnostico) ELSE CONCAT(' / Orden #', o.id_orden) END)::TEXT AS referencia,
     COALESCE(cl.nombre, 'Sin cliente')::TEXT AS cliente,
     TRIM(CONCAT(COALESCE(e.tipo, 'Equipo'), ' ', COALESCE(e.marca, ''), ' ', COALESCE(e.modelo, '')))::TEXT AS equipo,
     COALESCE(t.nombre, dt.nombre, 'Sin asignar')::TEXT AS tecnico,
-    COALESCE(o.estado, '-')::TEXT AS estado,
+    COALESCE(o.estado, d.estado_del_diagnostico, '-')::TEXT AS estado,
     COALESCE(f.total, 0) AS ingreso_total,
     COALESCE(f.mano_obra, 0) AS mano_obra,
     COALESCE(f.monto_repuestos, 0) AS ingreso_repuestos,
@@ -752,12 +725,13 @@ BEGIN
       ELSE 0
     END AS margen_porcentaje,
     CONCAT(
-      'Ganancia por mano de obra ', COALESCE(f.mano_obra, 0),
+      'Ganancia por diagnóstico ', COALESCE(f.monto_diagnostico, 0),
+      ', mano de obra ', COALESCE(f.mano_obra, 0),
       ' y margen de repuestos ', COALESCE(f.monto_repuestos, 0) - COALESCE(SUM(COALESCE(orp.cantidad_usada, 1) * COALESCE(r.costo_individual, 0)), 0)
     )::TEXT AS motivo
   FROM "Facturas" f
-  JOIN "Ordenes" o ON o.id_orden = f.orden_id
-  JOIN "Diagnosticos" d ON d.id_diagnostico = o.diagnostico_id
+  LEFT JOIN "Ordenes" o ON o.id_orden = f.orden_id
+  JOIN "Diagnosticos" d ON d.id_diagnostico = COALESCE(f.diagnostico_id, o.diagnostico_id)
   JOIN "Equipos" e ON e.id_equipo = d.equipo_id
   JOIN "Clientes" cl ON cl.id_cliente = e.cliente_id
   LEFT JOIN "Tecnicos" t ON t.id_tecnico = o.tecnico_id
@@ -765,8 +739,8 @@ BEGIN
   LEFT JOIN "Ordenes_Repuestos" orp ON orp.orden_id = o.id_orden AND orp.estado_aprobacion = 'APROBADO'
   LEFT JOIN "Repuestos" r ON r.id_repuesto = orp.repuesto_id
   WHERE f.fecha_emision::DATE BETWEEN p_fecha_inicio AND p_fecha_fin
-    AND UPPER(COALESCE(o.estado, '')) IN ('FINALIZADO', 'ENTREGADO', 'IRREPARABLE')
-  GROUP BY o.id_orden, f.id_factura, f.fecha_emision, cl.nombre, e.tipo, e.marca, e.modelo, f.total, f.mano_obra, f.monto_repuestos, t.nombre, dt.nombre, o.estado
+    AND (o.id_orden IS NULL OR UPPER(COALESCE(o.estado, '')) IN ('FINALIZADO', 'ENTREGADO', 'IRREPARABLE'))
+  GROUP BY o.id_orden, d.id_diagnostico, d.estado_del_diagnostico, f.id_factura, f.fecha_emision, cl.nombre, e.tipo, e.marca, e.modelo, f.total, f.mano_obra, f.monto_repuestos, f.monto_diagnostico, t.nombre, dt.nombre, o.estado
   ORDER BY ganancia_total DESC, f.fecha_emision DESC NULLS LAST
   LIMIT GREATEST(COALESCE(p_limite, 100), 1);
 END;

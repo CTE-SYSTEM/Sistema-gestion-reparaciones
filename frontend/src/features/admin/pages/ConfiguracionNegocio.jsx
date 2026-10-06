@@ -1,0 +1,6 @@
+import { AdminPage } from '../components/AdministrationUI';
+import ConfigurationEditor from '../components/ConfigurationEditor';
+
+export default function ConfiguracionNegocio() {
+  return <AdminPage title="Configuración del negocio" description="Define los datos del taller y los valores iniciales de nuevas operaciones."><ConfigurationEditor /></AdminPage>;
+}

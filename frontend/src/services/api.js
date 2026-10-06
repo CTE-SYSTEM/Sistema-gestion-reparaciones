@@ -8,6 +8,7 @@ const api = axios.create({
 const GET_CACHE_TTL_MS = 10_000;
 const getCache = new Map();
 const pendingGets = new Map();
+let cacheGeneration = 0;
 
 const buildRequestKey = (url, config = {}) => {
   const params = config.params ? JSON.stringify(config.params) : '';
@@ -19,9 +20,11 @@ const canCacheGet = (config = {}) =>
   config.cache !== false && !config.responseType && !config.signal;
 
 const clearGetCache = () => {
+  cacheGeneration += 1;
   getCache.clear();
   pendingGets.clear();
 };
+export const clearApiCache = clearGetCache;
 
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem('token');
@@ -68,9 +71,10 @@ api.get = (url, config = {}) => {
     return pendingGets.get(key);
   }
 
+  const generation = cacheGeneration;
   const request = originalGet(url, config)
     .then((response) => {
-      getCache.set(key, { response, timestamp: Date.now() });
+      if (generation === cacheGeneration) getCache.set(key, { response, timestamp: Date.now() });
       return response;
     })
     .finally(() => {

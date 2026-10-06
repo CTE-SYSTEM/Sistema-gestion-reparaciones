@@ -30,7 +30,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:secretaria": "node --test tests/secretaria/recepcion.test.js tests/secretaria/teclado.test.js tests/photoQueue.test.js",
+    "test:jefe:visual": "node tests/jefeTecnico/visual-smoke.cjs",
+    "test:jefe:correcciones:visual": "node tests/jefeTecnico/correcciones-visual.cjs",
+    "test:tecnico:visual": "node tests/tecnico/visual-smoke.cjs",
     "preview": "vite preview",
-    "tailwind:init": "tailwindcss init -p"
+    "tailwind:init": "tailwindcss init -p",
+    "test:notificaciones": "node --test tests/notificaciones/inbox.test.js"
   }
 }

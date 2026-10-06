@@ -25,7 +25,7 @@ export const TecnicoIntro = ({ showHelp }) => (
           {[
             ['1. Filtra indicadores', 'El selector de fecha cambia los cuatro contadores superiores.', 'text-violet-400'],
             ['2. Trabaja por pestanas', 'Usa diagnosticos, ordenes activas, finalizadas y piezas segun la tarea.', 'text-blue-400'],
-            ['3. Busca rapido', 'Cada seccion tiene buscador para filtrar por cliente, equipo, falla u orden.', 'text-amber-400'],
+            ['3. Busca rapido', 'Cada seccion tiene buscador para filtrar por equipo, falla u orden.', 'text-amber-400'],
             ['4. Cierra con cuidado', 'Al finalizar una orden se abre el formulario de cierre tecnico.', 'text-emerald-400'],
           ].map(([title, text, color]) => (
             <div key={title} className="rounded-xl border border-slate-800 bg-slate-900 p-4">

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { normalizeRole } from '../utils/roles.js';
 
 export const requestId = (req, res, next) => {
   req.id = req.headers['x-request-id'] || randomUUID();
@@ -30,7 +31,7 @@ export const errorHandler = (err, req, res, next) => {
     requestId: req.id,
   };
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && normalizeRole(req.user?.rol) !== 'tecnico') {
     payload.details = err.message;
   }
 

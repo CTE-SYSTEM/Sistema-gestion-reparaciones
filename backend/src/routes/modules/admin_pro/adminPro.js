@@ -24,7 +24,7 @@ import {
   deleteUsuario,
 } from '../../../controllers/admin_pro/usuariosController.js';
 import { getMonitoreoGeneral, getDashboardResumen } from '../../../controllers/admin_pro/dashboardController.js';
-import { getBackups, triggerBackupNow } from '../../../controllers/admin_pro/backupController.js';
+import { getBackups, triggerBackupNow, downloadBackupFile, verifyBackupFiles } from '../../../controllers/admin_pro/backupController.js';
 import {
   downloadDiagnosticosReporteAdmin,
   getDiagnosticosAdmin,
@@ -32,13 +32,24 @@ import {
   updateDiagnosticoEstadoAdmin,
 } from '../../../controllers/admin_pro/diagnosticosController.js';
 import { getHistorialEquipo, getHistorialRepuesto } from '../../../controllers/admin_pro/historialController.js';
-import { getReporteAdminPro } from '../../../controllers/admin_pro/reportesController.js';
+import { getReporteAdminPro, getReportCatalog, downloadReportExcel, getReportOptions } from '../../../controllers/admin_pro/reportesController.js';
+import { getMyAccount, updateMyAccount, changeMyPassword, revokeMySessions, getConfiguration,
+  updateConfiguration, getBusinessRules, getAudit } from '../../../controllers/admin_pro/administracionController.js';
 import { getGananciasAdmin, getProductividadAdmin } from '../../../controllers/admin_pro/analiticaController.js';
 
 const router = Router();
 
 router.use(authMiddleware);
 router.use(onlyAdminPro);
+
+router.get('/mi-cuenta', getMyAccount);
+router.put('/mi-cuenta', updateMyAccount);
+router.put('/mi-cuenta/password', changeMyPassword);
+router.post('/mi-cuenta/cerrar-sesiones', revokeMySessions);
+router.get('/configuracion', getConfiguration);
+router.put('/configuracion', updateConfiguration);
+router.get('/reglas', getBusinessRules);
+router.get('/auditoria', getAudit);
 
 router.get('/equipos', getEquiposAvanzado);
 router.get('/equipos/:id/historial', getHistorialEquipo);
@@ -76,11 +87,16 @@ router.delete('/usuarios/:id', deleteUsuario);
 router.get('/dashboard', getDashboardResumen);
 router.get('/backups', getBackups);
 router.post('/backups/manual', triggerBackupNow);
+router.get('/backups/:month/:file/descargar', downloadBackupFile);
+router.post('/backups/:month/:file/verificar', verifyBackupFiles);
 router.get('/analitica/productividad', getProductividadAdmin);
 router.get('/analitica/ganancias', getGananciasAdmin);
 router.put('/ordenes/:id', updateOrdenAdmin);
 router.put('/repuestos/:id', updateRepuestoAdmin);
 router.get('/monitoreo', getMonitoreoGeneral);
+router.get('/reportes/catalogo', getReportCatalog);
+router.get('/reportes/opciones', getReportOptions);
+router.get('/reportes/:tipo/excel', downloadReportExcel);
 router.get('/reportes/:tipo', getReporteAdminPro);
 
 export default router;

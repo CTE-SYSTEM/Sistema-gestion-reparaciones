@@ -1,49 +1,43 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Check, X } from 'lucide-react';
+import { notificationActionLabel } from '../utils/notificationInbox';
 
 const notificationColors = {
-  success: 'border-emerald-100 bg-emerald-50 text-emerald-800',
-  warning: 'border-amber-100 bg-amber-50 text-amber-800',
-  info: 'border-indigo-100 bg-indigo-50 text-indigo-800',
+  success: 'border-emerald-100 bg-emerald-50 text-emerald-900',
+  warning: 'border-amber-200 bg-amber-50 text-amber-950',
+  info: 'border-indigo-100 bg-indigo-50 text-indigo-950',
+  error: 'border-red-200 bg-red-50 text-red-900',
 };
 
-export const NotificationTray = ({ notifications, connected, onClear, onClose }) => (
-  <aside className="absolute right-0 top-full z-40 mt-3 w-[min(380px,calc(100vw-48px))] rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-2xl">
-    <div className="absolute -top-2 right-4 h-4 w-4 rotate-45 border-l border-t border-slate-200 bg-white" />
-    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-      <div>
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-800">Notificaciones</h2>
-        <p className="text-[10px] font-bold uppercase text-slate-400">
-          {connected ? 'En vivo' : 'Sin conexion en vivo'}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={onClear} className="rounded-lg px-3 py-1 text-[10px] font-black uppercase text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-          Limpiar
-        </button>
-        <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Cerrar notificaciones">
-          <X size={14} />
-        </button>
-      </div>
+export const NotificationTray = ({ notifications, total = notifications.length, connected, onClear, onRead, onClose, onOpen, error, clearing = false, loading = false }) => {
+  useEffect(() => {
+    const close = (event) => { if (event.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [onClose]);
+  return <aside aria-label="Bandeja de avisos pendientes" className="fixed inset-x-4 top-16 z-[60] rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-3 sm:w-[min(420px,calc(100vw-48px))]">
+    <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+      <div><h2 className="text-sm font-extrabold">Avisos pendientes · {total}</h2>
+        <p className="mt-1 text-xs text-slate-500">{connected ? 'Guardados · En vivo' : 'Guardados · Sin conexión en vivo'}</p></div>
+      <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Cerrar notificaciones"><X size={17} /></button>
     </div>
-    <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">
-      {notifications.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs font-bold text-slate-400">
-          Sin eventos recientes.
+    <div className="border-b border-slate-100 px-4 py-3"><p className="text-xs text-slate-600">Se conservan aunque cierres la web. Quedan pendientes hasta que los marques como leídos.</p>
+      {notifications.length > 0 && <button type="button" disabled={clearing} onClick={onClear} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"><Check size={15} />{clearing ? 'Guardando lectura…' : 'Marcar estos avisos como leídos'}</button>}
+      {total > notifications.length && <p className="mt-2 text-xs text-indigo-700">Se muestran {notifications.length} de {total}. Al marcarlos como leídos aparecerán los siguientes.</p>}
+    </div>
+    <div className="max-h-[min(420px,calc(100dvh-250px))] space-y-3 overflow-y-auto p-3">
+      {error && <p role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">{error}</p>}
+      {loading && <p role="status" className="text-xs text-slate-500">Recuperando avisos guardados…</p>}
+      {!notifications.length && !loading ? <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">No tienes avisos pendientes.</p> : notifications.map((item) => <article key={item.id} className={`rounded-xl border p-3 ${notificationColors[item.severity] || notificationColors.info}`}>
+        <h3 className="text-sm font-extrabold">{item.title || 'Actividad'}</h3><p className="mt-1 text-sm leading-relaxed">{item.message}</p>
+        <time className="mt-2 block text-xs opacity-70">{item.timestamp ? new Date(item.timestamp).toLocaleString('es-NI', { timeZone: 'America/Managua' }) : ''}</time>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          {onOpen && item.entity && <button type="button" onClick={() => onOpen(item)} className="rounded-lg bg-white/70 px-3 py-2 text-xs font-bold underline">{notificationActionLabel(item)}</button>}
+          {onRead && <button type="button" disabled={clearing} onClick={() => onRead(item.id)} aria-label={`Marcar aviso ${item.title || 'Actividad'} como leído`} className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-bold hover:bg-white/70 disabled:opacity-50"><Check size={14} />Marcar leído</button>}
         </div>
-      ) : (
-        notifications.map((item) => (
-          <div key={item.id} className={`rounded-xl border p-3 ${notificationColors[item.severity] || notificationColors.info}`}>
-            <div className="text-xs font-black uppercase">{item.title || 'Actividad'}</div>
-            <div className="mt-1 text-xs font-semibold leading-relaxed">{item.message}</div>
-            <div className="mt-2 text-[10px] font-bold uppercase opacity-60">
-              {item.timestamp ? new Date(item.timestamp).toLocaleString() : ''}
-            </div>
-          </div>
-        ))
-      )}
+      </article>)}
     </div>
-  </aside>
-);
+  </aside>;
+};
 
 export default NotificationTray;

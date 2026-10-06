@@ -1,0 +1,10 @@
+.tecnico-periodo { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:20px; }
+.tecnico-periodo label { font-size:13px; font-weight:600; }.tecnico-periodo small { color:#64748b; max-width:650px; }
+.tecnico-periodo select,.tecnico-filtros select,.tecnico-filtros input { padding:9px 12px; border:1px solid #dbe2ec; border-radius:8px; background:#fff; color:#334155; }
+.tecnico-filtros { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px; }.tecnico-filtros input { flex:1; min-width:180px; }
+.tecnico-paginacion { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:20px; font-size:12px; }.tecnico-paginacion span { margin-right:auto; }.tecnico-paginacion button { border:1px solid #dbe2ec; background:#fff; border-radius:7px; padding:8px 12px; }
+.tecnico-jornada { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); padding:20px; gap:16px; }.tecnico-jornada button { display:flex; flex-direction:column; align-items:flex-start; text-align:left; padding:18px; gap:12px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; }.tecnico-jornada span { color:#64748b; font-size:12px; }
+.tecnico-panel .overflow-hidden:has(table) { overflow-x:auto; }.tecnico-panel table { min-width:650px; }.tecnico-panel td { max-width:300px; overflow-wrap:anywhere; }.tecnico-panel .jefe-stat:hover { border-color:#a5b4fc; }
+[data-theme=dark] .tecnico-periodo select,[data-theme=dark] .tecnico-filtros select,[data-theme=dark] .tecnico-filtros input,[data-theme=dark] .tecnico-paginacion button,[data-theme=dark] .tecnico-jornada button { background:#17233b; color:#e2e8f0; border-color:#334155; }
+[data-theme=dark] .tecnico-dialog .bg-white { background:#17233b; color:#e2e8f0; }[data-theme=dark] .tecnico-dialog .bg-slate-50 { background:#101c36; }[data-theme=dark] .tecnico-dialog .border { border-color:#334155; }
+@media(max-width:700px) { .tecnico-jornada { grid-template-columns:1fr; }.tecnico-paginacion { flex-wrap:wrap; }.tecnico-periodo small { width:100%; }.tecnico-filtros select { flex:1; min-width:150px; } }

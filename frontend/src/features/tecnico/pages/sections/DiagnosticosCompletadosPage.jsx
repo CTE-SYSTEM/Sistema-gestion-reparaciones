@@ -8,7 +8,7 @@ const DiagnosticosCompletadosPage = ({ search, loading, items, onSearch, onOpenD
     <SearchBox
       value={search}
       onChange={(value) => onSearch('diagnosticosCompletados', value)}
-      placeholder="Buscar por ID, cliente, equipo, falla..."
+      placeholder="Buscar por ID, equipo, falla..."
     />
     <DiagnosticosTable items={items} loading={loading} readOnly onOpenDiagnostico={onOpenDiagnostico} />
   </section>

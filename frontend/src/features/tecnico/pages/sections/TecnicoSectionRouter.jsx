@@ -16,6 +16,7 @@ const TecnicoSectionRouter = ({
   solicitudesRepuestos,
   onSearch,
   onOpenDiagnostico,
+  onIniciarDiagnostico,
   onEstadoChange,
   onSolicitarPieza,
 }) => {
@@ -75,6 +76,7 @@ const TecnicoSectionRouter = ({
       items={diagnosticosEnRevision}
       onSearch={onSearch}
       onOpenDiagnostico={onOpenDiagnostico}
+      onIniciarDiagnostico={onIniciarDiagnostico}
     />
   );
 };

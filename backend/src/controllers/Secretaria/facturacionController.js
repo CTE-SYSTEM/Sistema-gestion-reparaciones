@@ -6,11 +6,15 @@ import {
   parsePositiveId,
 } from '../../utils/domainValidation.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
+import { withAuditUser } from '../../utils/auditContext.js';
+import { getBusinessSettings } from '../../services/adminSettingsService.js';
 
 const facturaInclude = {
   garantias: true,
+  diagnostico: { include: { equipo: { include: { cliente: true } } } },
   orden: {
     include: {
+      repuestos_usados: { include: { repuesto: { select: { id_repuesto: true, nombre: true } } } },
       diagnostico: {
         include: {
           equipo: {
@@ -65,10 +69,10 @@ const calcularMontoRepuestos = (repuestosUsados = []) => {
 };
 
 const tieneRepuestosSinAprobar = (orden) =>
-  (orden.repuestos_usados || []).some((detalle) => (detalle.estado_aprobacion || '').toUpperCase() !== 'APROBADO');
+  (orden.repuestos_usados || []).some((detalle) => !['APROBADO', 'DENEGADO'].includes((detalle.estado_aprobacion || '').toUpperCase()));
 
 const tieneRepuestosSinRegistrar = (orden) =>
-  (orden.repuestos_usados || []).some((detalle) => !detalle.repuesto_id);
+  (orden.repuestos_usados || []).some((detalle) => detalle.estado_aprobacion === 'APROBADO' && !detalle.repuesto_id);
 
 const decimalToNumber = (value) => (value === null || value === undefined ? value : Number(value));
 
@@ -78,6 +82,7 @@ const facturaSearchWhere = (search) => (search
         ...(Number.isInteger(Number(search)) ? [{ id_factura: Number(search) }] : []),
         { metodo_pago: { contains: search, mode: 'insensitive' } },
         { orden: { diagnostico: { equipo: { cliente: { nombre: { contains: search, mode: 'insensitive' } } } } } },
+        { diagnostico: { equipo: { cliente: { nombre: { contains: search, mode: 'insensitive' } } } } },
       ],
     }
   : {});
@@ -101,6 +106,7 @@ export const getFacturas = async (req, res) => {
       ...factura,
       monto_repuestos: decimalToNumber(factura.monto_repuestos),
       mano_obra: decimalToNumber(factura.mano_obra),
+      monto_diagnostico: decimalToNumber(factura.monto_diagnostico),
       subtotal: decimalToNumber(factura.subtotal),
       impuestos: decimalToNumber(factura.impuestos),
       total: decimalToNumber(factura.total),
@@ -118,6 +124,7 @@ export const createFactura = async (req, res) => {
     const {
       orden_id,
       mano_obra,
+      monto_diagnostico,
       impuestos,
       metodo_pago,
     } = req.body;
@@ -128,6 +135,7 @@ export const createFactura = async (req, res) => {
     }
 
     const manoObra = parseNonNegativeMoney(mano_obra, 'Mano de obra');
+    const montoDiagnostico = parseNonNegativeMoney(monto_diagnostico, 'Diagnóstico');
     const impuestoCalculado = parseNonNegativeMoney(impuestos, 'Impuestos');
     if (!String(metodo_pago || '').trim()) {
       return res.status(400).json({ error: 'El metodo de pago es obligatorio' });
@@ -138,6 +146,7 @@ export const createFactura = async (req, res) => {
       where: { id_orden: ordenId },
       include: {
         facturas: true,
+        diagnostico: { select: { id_diagnostico: true, origen_directo: true, factura_diagnostico: { select: { id_factura: true } } } },
         ...repuestosUsadosInclude,
       },
     });
@@ -155,6 +164,10 @@ export const createFactura = async (req, res) => {
     if (orden.facturas.length > 0) {
       return res.status(409).json({ error: 'Esta orden ya tiene una factura registrada' });
     }
+    if (orden.diagnostico.factura_diagnostico) return res.status(409).json({ error: 'El diagnóstico ya figura en otra factura' });
+    if (orden.diagnostico.origen_directo && montoDiagnostico !== 0) {
+      return res.status(400).json({ error: 'La orden directa no lleva cargo de diagnóstico' });
+    }
 
     if (estadoOrden === 'FINALIZADO' && tieneRepuestosSinAprobar(orden)) {
       return res.status(409).json({ error: 'La orden tiene repuestos pendientes de aprobacion. Apruebelos o rechacelos antes de facturar.' });
@@ -165,25 +178,32 @@ export const createFactura = async (req, res) => {
     }
 
     const montoRepuestos = estadoOrden === 'IRREPARABLE' ? 0 : calcularMontoRepuestos(orden.repuestos_usados);
-    const subtotalCalculado = Math.round((montoRepuestos + manoObra) * 100) / 100;
+    const subtotalCalculado = Math.round((montoRepuestos + manoObra + montoDiagnostico) * 100) / 100;
     const totalCalculado = Math.round((subtotalCalculado + impuestoCalculado) * 100) / 100;
 
-    const factura = await prisma.$transaction(async (tx) => {
+    const factura = await withAuditUser(req.user, async (tx) => {
+      if (estadoOrden !== 'IRREPARABLE') {
+        for (const detalle of orden.repuestos_usados.filter((r) => r.estado_aprobacion === 'APROBADO')) {
+          const precio = Math.round(calcularPrecioVentaRepuesto(detalle.repuesto) * 100) / 100;
+          await tx.ordenes_Repuestos.update({ where: { id_detalle_repuesto: detalle.id_detalle_repuesto }, data: {
+            precio_unitario_facturado: precio,
+            total_facturado: Math.round(Number(detalle.cantidad_usada || 0) * precio * 100) / 100,
+            fecha_facturacion: new Date(),
+          } });
+        }
+      }
       const facturaCreada = await tx.facturas.create({
         data: {
           orden_id: ordenId,
+          diagnostico_id: orden.diagnostico_id,
           monto_repuestos: montoRepuestos,
           mano_obra: manoObra,
+          monto_diagnostico: montoDiagnostico,
           subtotal: subtotalCalculado,
           impuestos: impuestoCalculado,
           total: totalCalculado,
           metodo_pago: metodoPago,
         },
-      });
-
-      await tx.ordenes.update({
-        where: { id_orden: ordenId },
-        data: { estado: 'ENTREGADO' },
       });
 
       return tx.facturas.findUnique({
@@ -202,7 +222,7 @@ export const createFactura = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'Esta orden ya tiene una factura registrada' });
+      return res.status(409).json({ error: 'Esta orden o diagnóstico ya tiene una factura registrada' });
     }
     if (error.code === 'P2003') {
       return res.status(400).json({ error: 'La orden especificada no existe' });
@@ -216,6 +236,7 @@ export const getOrdenesParaFacturar = async (req, res) => {
     const ordenes = await prisma.ordenes.findMany({
       where: {
         facturas: { none: {} },
+        diagnostico: { factura_diagnostico: { is: null } },
         OR: [
           { estado: 'IRREPARABLE' },
           {
@@ -223,8 +244,8 @@ export const getOrdenesParaFacturar = async (req, res) => {
             repuestos_usados: {
               none: {
                 OR: [
-                  { estado_aprobacion: { not: 'APROBADO' } },
-                  { repuesto_id: null },
+                  { estado_aprobacion: { notIn: ['APROBADO', 'DENEGADO'] } },
+                  { estado_aprobacion: 'APROBADO', repuesto_id: null },
                 ],
               },
             },
@@ -241,7 +262,9 @@ export const getOrdenesParaFacturar = async (req, res) => {
 
     const ordenesDisponibles = ordenes.map((orden) => {
       const repuestosFacturacion = (orden.repuestos_usados || []).map((detalle) => {
-        const precioUnitario = Math.round(calcularPrecioVentaRepuesto(detalle.repuesto) * 100) / 100;
+        const precioUnitario = detalle.precio_unitario_facturado === null
+          ? Math.round(calcularPrecioVentaRepuesto(detalle.repuesto) * 100) / 100
+          : Number(detalle.precio_unitario_facturado);
         return {
           ...detalle,
           precio_unitario: precioUnitario,
@@ -262,6 +285,56 @@ export const getOrdenesParaFacturar = async (req, res) => {
   } catch (error) {
     console.error('Error al obtener ordenes para facturar:', error);
     res.status(500).json({ error: 'Error al obtener ordenes', details: error.message });
+  }
+};
+
+export const getDiagnosticosParaFacturar = async (req, res) => {
+  try {
+    const diagnosticos = await prisma.diagnosticos.findMany({ where: {
+      origen_directo: false, estado_del_diagnostico: { in: ['COMPLETADO', 'DIAGNOSTICADO', 'RECHAZADO'] },
+      ordenes: { none: {} }, factura_diagnostico: { is: null },
+    }, include: { equipo: { include: { cliente: true } } }, orderBy: { id_diagnostico: 'desc' } });
+    res.json({ data: diagnosticos });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudieron cargar los diagnósticos pendientes de cobro' });
+  }
+};
+
+export const getTarifasFacturacion = async (req, res) => {
+  try {
+    const { reglas } = await getBusinessSettings();
+    res.json({ data: { diagnostico: reglas.tarifas_diagnostico, mano_obra: reglas.tarifas_mano_obra } });
+  } catch { res.status(500).json({ error: 'No se pudieron cargar las tarifas' }); }
+};
+
+export const createFacturaDiagnostico = async (req, res) => {
+  try {
+    const id = parsePositiveId(req.body.diagnostico_id);
+    if (!id) return res.status(400).json({ error: 'Seleccione un diagnóstico' });
+    const monto = parseNonNegativeMoney(req.body.monto_diagnostico, 'Diagnóstico');
+    const impuestos = parseNonNegativeMoney(req.body.impuestos, 'Impuestos');
+    if (monto <= 0) return res.status(400).json({ error: 'Indique un cargo de diagnóstico mayor que cero' });
+    const metodo = assertInList(req.body.metodo_pago, METODOS_PAGO, 'Método de pago');
+    if (!metodo) return res.status(400).json({ error: 'Seleccione el método de pago' });
+    const factura = await withAuditUser(req.user, async (tx) => {
+      const diagnostico = await tx.diagnosticos.findUnique({ where: { id_diagnostico: id }, include: {
+        ordenes: { select: { id_orden: true } }, factura_diagnostico: { select: { id_factura: true } },
+      } });
+      if (!diagnostico) throw Object.assign(new Error('Diagnóstico no encontrado'), { statusCode: 404 });
+      if (diagnostico.origen_directo || !['COMPLETADO', 'DIAGNOSTICADO', 'RECHAZADO'].includes(diagnostico.estado_del_diagnostico) || diagnostico.ordenes.length) {
+        throw Object.assign(new Error('Solo puede facturar un diagnóstico completado que no tenga orden de trabajo'), { statusCode: 409 });
+      }
+      if (diagnostico.factura_diagnostico) throw Object.assign(new Error('Este diagnóstico ya fue facturado'), { statusCode: 409 });
+      return tx.facturas.create({ data: {
+        diagnostico_id: id, monto_diagnostico: monto, monto_repuestos: 0, mano_obra: 0,
+        subtotal: monto, impuestos, total: Math.round((monto + impuestos) * 100) / 100,
+        metodo_pago: metodo,
+      }, include: facturaInclude });
+    });
+    res.status(201).json({ data: factura });
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Este diagnóstico ya fue facturado' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo crear la factura de diagnóstico' });
   }
 };
 

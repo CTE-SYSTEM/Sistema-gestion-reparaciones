@@ -1,186 +1,44 @@
 import React, { useState } from 'react';
-import { ChevronDown, Package } from 'lucide-react';
 import { EstadoBadge, PrioridadBadge } from './TecnicoBadges';
+import FotosServicio from '../../secretaria/components/shared/FotosServicio';
+import AvancesOrden from './AvancesOrden';
+import CorreccionOrden from './CorreccionOrden';
 
-const formatBoolean = (value) => {
-  if (value === true) return 'Si';
-  if (value === false) return 'No';
-  return 'No registrado';
+const fecha = (v) => v ? new Date(v).toLocaleString('es-NI', { timeZone: 'America/Managua' }) : 'Sin registro';
+const OrdenCard = ({ orden, completed, busy, username, onEstadoChange, onSolicitarPieza, onOpenDetalle }) => {
+  const [photosOpen, setPhotosOpen] = useState(false);
+  const piezas = orden.repuestos_usados || [];
+  const bloqueadaPorPiezas = piezas.some((p) => p.estado_aprobacion === 'PENDIENTE'
+    || (p.estado_aprobacion === 'APROBADO' && (p.estado_entrega !== 'ENTREGADO' || !p.repuesto_id)));
+  const revision = orden.estado === 'IRREPARABLE' && orden.irreparable_estado === 'PENDIENTE';
+  const cerrado = completed || revision;
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-sm">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><div className="mb-1 flex items-center gap-2"><span className="text-xs font-bold text-indigo-700">Orden #{orden.id}</span><PrioridadBadge prioridad={orden.prioridad} /></div><h2 className="text-lg font-bold">{orden.equipo}</h2></div><EstadoBadge estado={revision ? 'REVISION_JEFE' : orden.estado} /></div>
+    <p className="mb-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm">{orden.falla}</p>
+    <p className="mb-3 text-xs text-slate-500">Asignada: {fecha(orden.fecha_asignacion)}{orden.fecha_inicio_reparacion ? ' · Inicio: ' + fecha(orden.fecha_inicio_reparacion) : ' · Pendiente de inicio'}</p>
+    {!completed && orden.horas_sin_avance >= 72 && <p className="mb-3 rounded border border-amber-200 p-2 text-xs text-amber-800">Más de 72 horas sin avance registrado.</p>}
+    {revision && <p className="mb-3 rounded border border-amber-200 p-3 text-sm">Irreparabilidad pendiente de revisión del jefe. El trabajo continúa en seguimiento.</p>}
+    {orden.motivo_revision_irreparable && <p className="mb-3 rounded border border-indigo-100 p-3 text-sm"><strong>Decisión del jefe: </strong>{orden.motivo_revision_irreparable}</p>}
+    {piezas.length > 0 && <div className="mb-4 space-y-2"><h3 className="text-sm font-semibold">Piezas del trabajo</h3>{piezas.map((p) => <div key={p.id_detalle_repuesto} className="rounded border p-3 text-xs"><strong>{p.repuesto?.nombre || p.pieza_solicitada}</strong> · {p.cantidad_usada}
+      <p className="mt-1">{p.estado_aprobacion === 'APROBADO' ? p.estado_entrega === 'ENTREGADO' ? 'Aprobada y entregada' : 'Aprobada · pendiente de entrega física' : p.estado_aprobacion === 'DENEGADO' ? 'Rechazada' : 'Pendiente de aprobación'}</p>
+      {p.motivo_rechazo && <p className="mt-1 text-red-700">Motivo: {p.motivo_rechazo}</p>}
+    </div>)}</div>}
+    {bloqueadaPorPiezas && !cerrado && <p className="mb-3 text-xs text-amber-800">Para reanudar o finalizar, las solicitudes deben estar resueltas y las piezas aprobadas, entregadas.</p>}
+    {completed && <div className="mb-3 text-sm"><strong>Resultado: {orden.resultado_final || orden.estado}</strong><p className="mt-2 whitespace-pre-wrap">{orden.observacion_final}</p><p className="mt-1 text-xs">Finalizada: {fecha(orden.fecha_finalizacion)}</p></div>}
+    {completed && <CorreccionOrden orden={orden} username={username} />}
+    {orden.fecha_inicio_reparacion && <AvancesOrden orden={orden} username={username} editable={!cerrado && ['EN_REPARACION', 'ESPERANDO_PIEZA'].includes(orden.estado)} />}
+    <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => onOpenDetalle(orden)} className="rounded border px-3 py-2 text-xs font-semibold text-indigo-700">Ver expediente</button>{(!completed || !orden.correccion_cierre) && <button type="button" onClick={() => setPhotosOpen(!photosOpen)} className="rounded border px-3 py-2 text-xs">{photosOpen ? 'Cerrar fotografías' : 'Fotografías'}</button>}</div>
+    {photosOpen && (!completed || !orden.correccion_cierre) && <div className="mb-4 space-y-3"><FotosServicio kind="diagnosticos" id={orden.diagnostico_id} readOnly /><FotosServicio kind="ordenes" id={orden.id} tipoInicial="FOTO_REPARACION" allowedTypes={['FOTO_REPARACION']} readOnly={cerrado} /></div>}
+    {!cerrado && <div className="flex flex-wrap gap-2">
+      {!orden.fecha_inicio_reparacion ? <button disabled={busy} onClick={() => onEstadoChange(orden.id, 'EN_REPARACION')} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">Iniciar reparación</button> : <>
+        {orden.estado === 'ESPERANDO_PIEZA' && <button disabled={busy || bloqueadaPorPiezas} onClick={() => onEstadoChange(orden.id, 'EN_REPARACION')} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Reanudar reparación</button>}
+        <button disabled={busy || bloqueadaPorPiezas} onClick={() => onEstadoChange(orden.id, 'FINALIZADO')} className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Finalizar y registrar pruebas</button>
+        <button disabled={busy} onClick={() => onEstadoChange(orden.id, 'IRREPARABLE')} className="rounded border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">Reportar irreparable</button>
+      </>}
+      <button disabled={busy || !orden.fecha_inicio_reparacion} onClick={() => onSolicitarPieza(orden)} className="rounded border px-3 py-2 text-xs font-semibold text-indigo-700 disabled:opacity-50">Solicitar pieza</button>
+    </div>}
+  </article>;
 };
-
-const CompletedOrderDetails = ({ orden, solicitudesPiezas }) => (
-  <div className="mb-4 space-y-4">
-    <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left sm:grid-cols-2">
-      <div>
-        <span className="text-[9px] font-black uppercase text-slate-500">Cliente</span>
-        <p className="text-xs font-bold text-slate-800">{orden.cliente || 'Sin cliente'}</p>
-      </div>
-      <div>
-        <span className="text-[9px] font-black uppercase text-slate-500">Resultado final</span>
-        <p className="text-xs font-bold text-slate-800">{orden.resultado_final || orden.estado || 'Sin resultado'}</p>
-      </div>
-      <div>
-        <span className="text-[9px] font-black uppercase text-slate-500">Piezas requeridas</span>
-        <p className="text-xs font-bold text-slate-800">{orden.requiere_piezas ? 'Si' : 'No'}</p>
-      </div>
-      <div>
-        <span className="text-[9px] font-black uppercase text-slate-500">Enciende al salir</span>
-        <p className="text-xs font-bold text-slate-800">{formatBoolean(orden.enciende_salida)}</p>
-      </div>
-      <div>
-        <span className="text-[9px] font-black uppercase text-slate-500">Usa corriente AC</span>
-        <p className="text-xs font-bold text-slate-800">{formatBoolean(orden.usa_corriente_ac_salida)}</p>
-      </div>
-    </div>
-
-    <div className="rounded-xl border border-slate-200 bg-white p-4 text-left">
-      <span className="text-[9px] font-black uppercase text-slate-500">Diagnostico / trabajo realizado</span>
-      <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">
-        {orden.diagnostico || 'Sin diagnostico registrado.'}
-      </p>
-    </div>
-
-    <div className="rounded-xl border border-slate-200 bg-white p-4 text-left">
-      <span className="text-[9px] font-black uppercase text-slate-500">Observacion final</span>
-      <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">
-        {orden.observacion_final || 'Sin observaciones finales.'}
-      </p>
-    </div>
-
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 text-left">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="text-[9px] font-black uppercase text-indigo-700">Piezas vinculadas</span>
-        <span className="rounded-full bg-white px-2 py-1 text-[9px] font-black uppercase text-indigo-700">
-          {solicitudesPiezas.length}
-        </span>
-      </div>
-
-      {solicitudesPiezas.length > 0 ? (
-        <div className="space-y-2">
-          {solicitudesPiezas.map((pieza) => (
-            <div key={pieza.id_detalle_repuesto || `${pieza.repuesto_id}-${pieza.pieza_solicitada}`} className="rounded-lg border border-indigo-100 bg-white px-3 py-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-black uppercase text-slate-800">
-                  {pieza.repuesto?.nombre || pieza.pieza_solicitada || 'Pieza pendiente de registrar'}
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black uppercase text-slate-600">
-                    {pieza.estado_aprobacion || 'Sin estado'}
-                  </span>
-                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase text-emerald-700">
-                    {pieza.estado_entrega || 'PENDIENTE'}
-                  </span>
-                </div>
-              </div>
-              <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
-                Cantidad: {pieza.cantidad_usada || 1}
-                {pieza.repuesto?.descripcion ? ` · ${pieza.repuesto.descripcion}` : ''}
-              </p>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs font-semibold text-slate-500">Esta orden no tiene piezas vinculadas.</p>
-      )}
-    </div>
-  </div>
-);
-
-const OrdenCard = ({ orden, completed, onEstadoChange, onSolicitarPieza }) => {
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const solicitudesPiezas = orden.repuestos_usados || [];
-  const tienePiezasSinAprobar = orden.requiere_piezas !== false
-    && solicitudesPiezas.some((item) => item.estado_aprobacion !== 'APROBADO' || item.estado_entrega !== 'ENTREGADO');
-  const puedeFinalizar = orden.requiere_piezas === false || solicitudesPiezas.length === 0 || !tienePiezasSinAprobar;
-  const puedeEditar = !completed || orden.puedeEditarCompletada;
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-sm">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-black text-indigo-700">#{orden.id}</span>
-            <PrioridadBadge prioridad={orden.prioridad} />
-          </div>
-          <h3 className="text-lg font-bold text-slate-900">{orden.equipo}</h3>
-        </div>
-        <EstadoBadge estado={orden.estado} />
-      </div>
-      <div className="bg-slate-100 rounded-xl p-4 mb-4">
-        <span className="text-[9px] font-black text-slate-500 uppercase">Falla Reportada</span>
-        <p className="text-xs text-slate-700 italic">"{orden.falla}"</p>
-      </div>
-      {!orden.requiere_piezas && (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
-          Servicio sin piezas. La orden puede finalizarse sin solicitudes de repuestos.
-        </div>
-      )}
-      {completed && (
-        <>
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((value) => !value)}
-            className="mb-4 flex w-full items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-left text-xs font-black uppercase text-indigo-700 transition hover:bg-indigo-100"
-          >
-            <span>Ver detalle de cierre y piezas</span>
-            <ChevronDown className={`h-4 w-4 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {detailsOpen && (
-            <CompletedOrderDetails orden={orden} solicitudesPiezas={solicitudesPiezas} />
-          )}
-        </>
-      )}
-      {tienePiezasSinAprobar && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-          Todas las piezas solicitadas deben estar aprobadas y entregadas para finalizar.
-        </div>
-      )}
-      {completed ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-600">
-          Orden cerrada. Solo lectura.
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <select
-            disabled={!puedeEditar}
-            className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
-            value={orden.estado}
-            onChange={(event) => onEstadoChange(orden.id, event.target.value)}
-          >
-            <option value="EN_REPARACION">EN REPARACION</option>
-            <option value="FINALIZADO" disabled={!puedeFinalizar}>FINALIZADO</option>
-            <option value="IRREPARABLE">IRREPARABLE</option>
-          </select>
-          <button
-            onClick={() => onSolicitarPieza(orden)}
-            disabled={!puedeEditar || orden.requiere_piezas === false}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-[10px] font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Package size={14} /> Pieza
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const OrdenesGrid = ({ items, loading, completed = false, onEstadoChange, onSolicitarPieza }) => (
-  <div className="grid gap-6 md:grid-cols-2">
-    {items.map((orden) => (
-      <OrdenCard
-        key={orden.id}
-        orden={orden}
-        completed={completed}
-        onEstadoChange={onEstadoChange}
-        onSolicitarPieza={onSolicitarPieza}
-      />
-    ))}
-    {!loading && items.length === 0 && (
-      <div className="md:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 italic">
-        {completed ? 'No tienes ordenes completadas.' : 'No tienes ordenes de reparacion activas.'}
-      </div>
-    )}
-  </div>
-);
-
-export default OrdenesGrid;
+export default function OrdenesGrid({ items, loading, completed = false, busy, ...actions }) {
+  return <div className="grid gap-5 lg:grid-cols-2">{items.map((o) => <OrdenCard key={o.id} orden={o} completed={completed} busy={busy} {...actions} />)}{!loading && !items.length && <p className="col-span-full rounded-xl border border-dashed bg-white p-8 text-center text-sm text-slate-500">No hay reparaciones que coincidan con los filtros.</p>}</div>;
+}

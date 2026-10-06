@@ -1,4 +1,5 @@
 import prisma from '../../app/prismaClient.js';
+import { getBusinessSettings } from '../../services/adminSettingsService.js';
 
 export const getMonitoreoGeneral = async (req, res) => {
   try {
@@ -19,7 +20,8 @@ export const getDashboardResumen = async (req, res) => {
   try {
     const hoy = new Date();
     const limitePorVencer = new Date(hoy);
-    limitePorVencer.setDate(limitePorVencer.getDate() + 30);
+    const garantiaAvisoDias = (await getBusinessSettings()).reglas.garantia_aviso_dias;
+    limitePorVencer.setDate(limitePorVencer.getDate() + garantiaAvisoDias);
 
     const countsPromise = Promise.all([
       prisma.equipos.count(),
@@ -28,7 +30,7 @@ export const getDashboardResumen = async (req, res) => {
       prisma.facturas.count(),
       prisma.usuarios.count(),
       prisma.diagnosticos.count({ where: { estado_del_diagnostico: 'PENDIENTE' } }),
-      prisma.ordenes.count({ where: { estado: 'REPARACION' } }),
+      prisma.ordenes.count({ where: { estado: 'EN_REPARACION' } }),
     ]);
 
     const latestOrdersPromise = prisma.ordenes.findMany({
@@ -46,7 +48,7 @@ export const getDashboardResumen = async (req, res) => {
     });
 
     const upcomingGarantiasPromise = prisma.garantias.findMany({
-      where: { fecha_vencimiento: { lte: limitePorVencer } },
+      where: { fecha_vencimiento: { gte: hoy, lte: limitePorVencer } },
       include: {
         factura: {
           include: {
@@ -74,6 +76,7 @@ export const getDashboardResumen = async (req, res) => {
 
     res.json({
       data: {
+        garantiaAvisoDias,
         totals: {
           equipos,
           repuestos,
