@@ -11,7 +11,6 @@ import PageHelp from './components/PageHelp';
 // Contexto de Autenticación
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { PersonalizacionProvider } from './features/personalizacion';
-import CameraCapture from './features/secretaria/components/shared/CameraCapture';
 
 import './App.css';
 
@@ -141,16 +140,6 @@ function Page({ children, fullWidth = false }) {
   );
 }
 
-function CameraSmoke() {
-  const [open, setOpen] = useState(false);
-  const [captured, setCaptured] = useState('');
-  return <div className="p-8">
-    <button type="button" onClick={() => setOpen(true)}>Usar cámara de este equipo</button>
-    {captured && <p role="status">Foto preparada: {captured}</p>}
-    {open && <CameraCapture onClose={() => setOpen(false)} onCapture={(file) => { setCaptured(file.name); return true; }} />}
-  </div>;
-}
-
 const router = createBrowserRouter(
   [
     {
@@ -162,7 +151,6 @@ const router = createBrowserRouter(
       ),
       children: [
         { path: 'login', element: <Page><Login /></Page> },
-        { path: 'camera-smoke', element: <CameraSmoke /> },
         { path: 'foto-temporal/:token', element: <Suspense fallback={<RouteFallback />}><FotoTemporal /></Suspense> },
 
         // 1. RUTAS CON SIDEBAR Y NAVBAR GLOBAL
