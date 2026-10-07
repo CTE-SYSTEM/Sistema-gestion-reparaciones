@@ -28,6 +28,8 @@ export default function CameraCapture({ onClose, onCapture }) {
   useEffect(() => {
     let active = true;
     let stream;
+    let timedOut = false;
+    let timeoutId;
     const video = videoRef.current;
     const start = async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -36,11 +38,18 @@ export default function CameraCapture({ onClose, onCapture }) {
         return;
       }
       try {
+        timeoutId = window.setTimeout(() => {
+          if (!active) return;
+          timedOut = true;
+          setError('La cámara no respondió a tiempo. Revise el permiso del navegador o use el teléfono.');
+          setStarting(false);
+        }, 15000);
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } },
           audio: false,
         });
-        if (!active) {
+        window.clearTimeout(timeoutId);
+        if (!active || timedOut) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -48,8 +57,9 @@ export default function CameraCapture({ onClose, onCapture }) {
         video.srcObject = stream;
         await video.play();
       } catch (cameraError) {
+        window.clearTimeout(timeoutId);
         stream?.getTracks().forEach((track) => track.stop());
-        if (active) setError(cameraErrorMessage(cameraError));
+        if (active && !timedOut) setError(cameraErrorMessage(cameraError));
       } finally {
         if (active) setStarting(false);
       }
@@ -57,6 +67,7 @@ export default function CameraCapture({ onClose, onCapture }) {
     start();
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
       stream?.getTracks().forEach((track) => track.stop());
       if (video) video.srcObject = null;
     };
