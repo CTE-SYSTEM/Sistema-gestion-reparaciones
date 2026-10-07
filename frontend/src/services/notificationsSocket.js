@@ -7,6 +7,7 @@ const getSocketUrl = () => {
 };
 
 export const createNotificationsSocket = () => {
+  if (import.meta.env.VITE_NOTIFICATIONS_MODE === 'poll') return null;
   const token = sessionStorage.getItem('token');
   if (!token) return null;
 

@@ -11,7 +11,8 @@ import {
   solicitarRepuesto,
 } from '../../../controllers/Tecnico/tecnicosController.js';
 import authMiddleware, { requireRole } from '../../../middlewares/authMiddleware.js';
-import { getResumenTecnico, getSolicitudesTecnico, getCatalogoTecnico, getDetalleTecnico, postAvanceTecnico, putBorradorTecnico } from '../../../controllers/Tecnico/tecnicosController.js';
+import { getResumenTecnico, getSolicitudesTecnico, getCatalogoTecnico, getDetalleTecnico, postAvanceTecnico, putBorradorTecnico,
+  patchDiagnosticoTecnico, patchAvanceTecnico, patchIrreparableTecnico, patchSolicitudTecnico } from '../../../controllers/Tecnico/tecnicosController.js';
 
 const router = Router();
 
@@ -25,6 +26,11 @@ router.get('/ordenes/:id', requireRole('Tecnico'), getDetalleTecnico('orden'));
 router.put('/diagnosticos/:id/borrador', requireRole('Tecnico'), putBorradorTecnico);
 router.post('/diagnosticos/:id/avances', requireRole('Tecnico'), postAvanceTecnico('diagnostico'));
 router.post('/ordenes/:id/avances', requireRole('Tecnico'), postAvanceTecnico('orden'));
+router.patch('/diagnosticos/:id/correccion', requireRole('Tecnico'), patchDiagnosticoTecnico);
+router.patch('/diagnosticos/:id/avances/:avanceId', requireRole('Tecnico'), patchAvanceTecnico('diagnostico'));
+router.patch('/ordenes/:id/avances/:avanceId', requireRole('Tecnico'), patchAvanceTecnico('orden'));
+router.patch('/ordenes/:id/irreparable', requireRole('Tecnico'), patchIrreparableTecnico);
+router.patch('/solicitudes/:id', requireRole('Tecnico'), patchSolicitudTecnico);
 
 router.get('/', requireRole('Secretaria', 'TecnicoJefe', 'Administrador', 'admin_pro'), getTecnicos);
 router.get('/mis-diagnosticos/:username', requireRole('Tecnico'), getMisDiagnosticos);

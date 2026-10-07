@@ -15,4 +15,4 @@ export const subirFotoServicio = (kind, id, tipo, file, { onProgress, correccion
   } : undefined,
 });
 export const descargarFotoServicio = (id) => api.get(`/archivos-servicio/${id}/contenido`, { responseType: 'blob' });
-export const revisarFotoTecnica = (id, visible) => api.patch(`/archivos-servicio/${id}/visibilidad-tecnica`, { visible_tecnico: visible, sin_datos_cliente: visible });
+export const revisarFotoTecnica = (id, visible, motivo) => api.patch(`/archivos-servicio/${id}/visibilidad-tecnica`, { visible_tecnico: visible, sin_datos_cliente: visible, motivo });

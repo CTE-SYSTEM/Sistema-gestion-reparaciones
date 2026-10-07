@@ -1,34 +1,11 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const escapeHtml = (value) => {
-  const text = value == null ? '' : String(value);
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
-const serializeExcel = (rows, columns) => {
-  const headers = columns.map((col) => `<th>${escapeHtml(col.header)}</th>`).join('');
-  const body = rows.map((row) => (
-    `<tr>${columns.map((col) => `<td>${escapeHtml(row[col.accessor])}</td>`).join('')}</tr>`
-  )).join('');
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-  </head>
-  <body>
-    <table>
-      <thead><tr>${headers}</tr></thead>
-      <tbody>${body}</tbody>
-    </table>
-  </body>
-</html>`;
+const excelValue = (value) => {
+  if (value == null) return '';
+  if (value instanceof Date) return value;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return value;
 };
 
 const normalizePdfCell = (value) => {
@@ -48,6 +25,7 @@ const buildPdfTableData = (rows, columns) => {
 
 const formatReportDate = () => {
   return new Date().toLocaleString('es-NI', {
+    timeZone: 'America/Managua',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -71,7 +49,7 @@ const getNumericSummaries = (rows, columns) => {
   return columns
     .map((column) => {
       // Las columnas con importes de distintas monedas no admiten un total común.
-      if (column.summarize === false) return null;
+      if (column.summarize !== true) return null;
       const values = rows
         .map((row) => parseNumber(row[column.accessor]))
         .filter((value) => value !== null);
@@ -88,7 +66,7 @@ const getNumericSummaries = (rows, columns) => {
     .slice(0, 3);
 };
 
-const drawHeader = (doc, title, rows, columns) => {
+const drawHeader = (doc, title, rows, columns, recordCount = rows.length) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const generatedAt = formatReportDate();
   const summaries = getNumericSummaries(rows, columns);
@@ -108,7 +86,7 @@ const drawHeader = (doc, title, rows, columns) => {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(203, 213, 225);
-  doc.text('Sistema de gestion - Admin Pro', 32, 21);
+  doc.text('Sistema de gestión - Administración', 32, 21);
   doc.text(`Generado: ${generatedAt}`, 32, 26);
 
   doc.setFillColor(248, 250, 252);
@@ -123,7 +101,7 @@ const drawHeader = (doc, title, rows, columns) => {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(`${rows.length} registros exportados`, 20, 57);
+  doc.text(`${recordCount} ${recordCount === 1 ? 'registro exportado' : 'registros exportados'}`, 20, 57);
 
   summaries.forEach((summary, index) => {
     const x = 20 + index * 58;
@@ -141,19 +119,27 @@ const drawHeader = (doc, title, rows, columns) => {
   return summaries.length ? 80 : 68;
 };
 
-const drawFooter = (doc) => {
+const drawFooter = (doc, title) => {
   const pageCount = doc.internal.getNumberOfPages();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
   for (let page = 1; page <= pageCount; page += 1) {
     doc.setPage(page);
+    if (page > 1) {
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pageWidth, 16, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(title, 14, 10, { maxWidth: pageWidth - 28 });
+    }
     doc.setDrawColor(226, 232, 240);
     doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15);
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
-    doc.text('Sistema de gestion', 14, pageHeight - 9);
-    doc.text(`Pagina ${page} de ${pageCount}`, pageWidth - 14, pageHeight - 9, { align: 'right' });
+    doc.text('Sistema de gestión', 14, pageHeight - 9);
+    doc.text(`Página ${page} de ${pageCount}`, pageWidth - 14, pageHeight - 9, { align: 'right' });
   }
 };
 
@@ -202,27 +188,68 @@ const drawEmptySection = (doc, y) => {
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('Sin registros para este periodo.', 18, y);
+  doc.text('Sin registros para este período.', 18, y);
   return y + 8;
 };
 
-export const downloadJsonCsv = (rows, columns, filename) => {
-  const excel = serializeExcel(rows, columns);
-  const excelFilename = filename.replace(/\.csv$/i, '.xls');
-  const blob = new Blob([excel], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+export const downloadJsonExcel = async (rows, columns, filename) => {
+  const { default: ExcelJS } = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sistema de gestión';
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet('Reporte', {
+    views: [{ state: 'frozen', ySplit: 4 }],
+    pageSetup: { orientation: columns.length > 6 ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  const title = filename.replace(/\.(csv|xls|xlsx)$/i, '').replaceAll('_', ' ');
+  const lastColumn = Math.max(columns.length, 1);
+  sheet.mergeCells(1, 1, 1, lastColumn);
+  sheet.getCell(1, 1).value = title;
+  sheet.getCell(1, 1).font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  sheet.getCell(1, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+  sheet.getCell(1, 1).alignment = { vertical: 'middle' };
+  sheet.getRow(1).height = 30;
+  sheet.mergeCells(2, 1, 2, lastColumn);
+  sheet.getCell(2, 1).value = `Generado: ${formatReportDate()} · ${rows.length} registros`;
+  sheet.getCell(2, 1).font = { size: 10, color: { argb: 'FF475569' } };
+  sheet.getRow(2).height = 23;
+
+  const header = sheet.getRow(4);
+  header.values = columns.map((column) => column.header);
+  header.height = 28;
+  header.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF312E81' } };
+    cell.alignment = { vertical: 'middle', wrapText: true };
+  });
+  rows.forEach((row, rowIndex) => {
+    const excelRow = sheet.addRow(columns.map((column) => excelValue(row[column.accessor])));
+    if (rowIndex % 2 === 1) {
+      excelRow.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; });
+    }
+    excelRow.eachCell((cell) => { cell.alignment = { vertical: 'top', wrapText: true }; });
+  });
+  columns.forEach((column, index) => {
+    const longest = Math.max(String(column.header).length, ...rows.slice(0, 200).map((row) => String(excelValue(row[column.accessor])).length));
+    sheet.getColumn(index + 1).width = Math.min(Math.max(longest + 2, 14), 48);
+  });
+  if (columns.length) sheet.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: columns.length } };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
 
   link.href = url;
-  link.download = excelFilename;
+  link.download = filename.replace(/\.(csv|xls|xlsx)$/i, '') + '.xlsx';
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 export const downloadJsonPdf = (rows, columns, filename, title = 'Reporte') => {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', format: columns.length > 9 ? 'a3' : 'a4' });
   const { headers, body } = buildPdfTableData(rows, columns);
   const startY = drawHeader(doc, title, rows, columns);
 
@@ -255,21 +282,14 @@ export const downloadJsonPdf = (rows, columns, filename, title = 'Reporte') => {
       font: 'helvetica',
       valign: 'middle',
     },
-    margin: { left: 14, right: 14 },
+    margin: { top: 22, left: 14, right: 14, bottom: 22 },
     pageBreak: 'auto',
-    didDrawPage: (data) => {
-      if (data.pageNumber > 1) {
-        doc.setFillColor(15, 23, 42);
-        doc.rect(0, 0, doc.internal.pageSize.getWidth(), 16, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text(title, 14, 10);
-      }
-    },
+    horizontalPageBreak: columns.length > 12,
+    horizontalPageBreakRepeat: 0,
+    horizontalPageBreakBehaviour: 'afterAllRows',
   });
 
-  drawFooter(doc);
+  drawFooter(doc, title);
   doc.save(filename);
 };
 
@@ -280,15 +300,22 @@ export const downloadSectionedPdf = ({
   metadata = [],
   sections = [],
 }) => {
-  const doc = new jsPDF({ orientation: 'landscape' });
+  const maxColumns = Math.max(0, ...sections.map((section) => section.columns?.length || 0));
+  const doc = new jsPDF({ orientation: 'landscape', format: maxColumns > 9 ? 'a3' : 'a4' });
   const totalRows = sections.reduce((sum, section) => sum + (section.rows?.length || 0), 0);
-  let cursorY = drawHeader(doc, title, [{ total: totalRows }], [{ header: 'Registros', accessor: 'total' }]);
+  let cursorY = drawHeader(doc, title, [], [], totalRows);
 
   if (description) {
+    const lines = doc.splitTextToSize(description, doc.internal.pageSize.getWidth() - 36);
+    if (cursorY + lines.length * 4 > doc.internal.pageSize.getHeight() - 25) {
+      doc.addPage();
+      cursorY = 26;
+    }
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(description, 18, cursorY - 6, { maxWidth: doc.internal.pageSize.getWidth() - 36 });
+    doc.text(lines, 18, cursorY);
+    cursorY += lines.length * 4 + 6;
   }
 
   cursorY = drawMetadata(doc, metadata, cursorY);
@@ -332,23 +359,16 @@ export const downloadSectionedPdf = ({
         font: 'helvetica',
         valign: 'middle',
       },
-      margin: { left: 14, right: 14 },
+      margin: { top: 22, left: 14, right: 14, bottom: 22 },
       pageBreak: 'auto',
-      didDrawPage: (data) => {
-        if (data.pageNumber > 1) {
-          doc.setFillColor(15, 23, 42);
-          doc.rect(0, 0, doc.internal.pageSize.getWidth(), 16, 'F');
-          doc.setTextColor(255, 255, 255);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          doc.text(title, 14, 10);
-        }
-      },
+      horizontalPageBreak: section.columns.length > 12,
+      horizontalPageBreakRepeat: 0,
+      horizontalPageBreakBehaviour: 'afterAllRows',
     });
 
     cursorY = doc.lastAutoTable.finalY + 12;
   });
 
-  drawFooter(doc);
+  drawFooter(doc, title);
   doc.save(filename);
 };

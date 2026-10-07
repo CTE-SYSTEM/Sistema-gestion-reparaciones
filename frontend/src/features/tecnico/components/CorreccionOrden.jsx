@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../services/api';
-import FotosServicio from '../../secretaria/components/shared/FotosServicio';
 import { pruebasSalidaPorTipo } from '../utils/pruebasSalida';
 
 const pruebas = [
@@ -24,6 +23,7 @@ export default function CorreccionOrden({ orden, username }) {
   const client = useQueryClient();
   const meta = orden.correccion_cierre;
   const puedeGuardar = meta && (!meta.requiere_excepcion || meta.permite_excepcion);
+  const puedeReabrir = Boolean(meta?.puede_editar_informe && puedeGuardar);
   useEffect(() => {
     setObservacion(orden.observacion_final || '');
     setEnciende(orden.enciende_salida == null ? '' : String(orden.enciende_salida));
@@ -35,7 +35,10 @@ export default function CorreccionOrden({ orden, username }) {
     mutationFn: (body) => api.patch(`/tecnicos/ordenes/${orden.id}/correccion-cierre`, body),
     onSuccess: () => { setAclaracion(''); setMotivo(''); setExcepcion(false); client.invalidateQueries({ queryKey: ['tecnico', username] }); },
   });
-  if (!meta) return null;
+  if (!meta) return <section className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+    <button type="button" disabled className="rounded border bg-white px-3 py-2 text-xs font-semibold text-slate-500">Reabrir reparación</button>
+    <p className="mt-2 text-xs text-slate-600">Esta orden no tiene un cierre técnico reabrible.</p>
+  </section>;
   const requiredTests = pruebasSalidaPorTipo(orden.equipoTipo);
   const submit = (event) => {
     event.preventDefault();
@@ -45,7 +48,8 @@ export default function CorreccionOrden({ orden, username }) {
     });
   };
   return <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-sm">
-    <div className="flex flex-wrap items-center justify-between gap-2"><div><strong>Correcciones del cierre</strong><p className="text-xs text-slate-600">Plazo normal: {meta.plazo_horas} horas desde la finalización · hasta {fecha(meta.fecha_limite)}.</p></div><button type="button" onClick={() => setOpen(!open)} className="rounded border bg-white px-3 py-2 text-xs font-semibold text-indigo-700">{open ? 'Ocultar' : 'Ver correcciones y fotos'}</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><strong>Correcciones del cierre</strong><p className="text-xs text-slate-600">Plazo normal: {meta.plazo_horas} horas desde la finalización · hasta {fecha(meta.fecha_limite)}.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={!puedeReabrir} onClick={() => { setTipo('REABRIR'); setOpen(true); guardar.reset(); }} className="rounded border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-60">Reabrir reparación</button><button type="button" onClick={() => setOpen(!open)} className="rounded border bg-white px-3 py-2 text-xs font-semibold text-indigo-700">{open ? 'Ocultar correcciones' : 'Corregir informe o añadir aclaración'}</button></div></div>
+    {!puedeReabrir && <p className="mt-2 text-xs text-slate-600">{meta.requiere_excepcion && !meta.permite_excepcion ? 'El plazo venció y las excepciones están deshabilitadas.' : 'La orden ya fue facturada, entregada o aprobada como irreparable.'}</p>}
     {open && <div className="mt-4 space-y-4">
       {meta.requiere_excepcion && <p className="rounded border border-amber-300 bg-amber-100 p-3 text-xs font-semibold text-amber-900">El plazo normal venció. Cualquier actualización quedará marcada como excepción.</p>}
       {!puedeGuardar && <p className="text-xs text-red-700">Las correcciones excepcionales están deshabilitadas en las reglas del negocio.</p>}
@@ -62,9 +66,6 @@ export default function CorreccionOrden({ orden, username }) {
         <button type="submit" disabled={guardar.isPending} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{guardar.isPending ? 'Guardando…' : tipo === 'CORREGIR' ? 'Guardar informe corregido' : tipo === 'REABRIR' ? 'Reabrir reparación' : 'Guardar aclaración'}</button>
         {guardar.isSuccess && <p role="status" className="text-xs text-emerald-700">Corrección registrada en el historial.</p>}{guardar.error && <p role="alert" className="text-xs text-red-700">{guardar.error.response?.data?.error || 'No se pudo guardar la corrección.'}</p>}
       </form>}
-      <FotosServicio kind="diagnosticos" id={orden.diagnostico_id} readOnly />
-      <FotosServicio kind="ordenes" id={orden.id} tipoInicial="FOTO_REPARACION" allowedTypes={['FOTO_REPARACION']} readOnly={!puedeGuardar} correccion={puedeGuardar ? { motivo, excepcion, requiere_excepcion: meta.requiere_excepcion } : null} />
-      {puedeGuardar && <p className="text-xs text-slate-600">Para agregar fotos de reparación, escribe el motivo arriba{meta.requiere_excepcion ? ' y confirma la excepción' : ''}. Las fotos anteriores se conservan.</p>}
     </div>}
   </section>;
 }

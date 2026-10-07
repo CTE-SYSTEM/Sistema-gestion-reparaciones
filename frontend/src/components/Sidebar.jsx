@@ -1,5 +1,5 @@
-import React, { useContext } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useContext, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Building2,
@@ -13,6 +13,7 @@ import {
   ClipboardList,
   ClipboardPenLine,
   ContactRound,
+  ChevronDown,
   Cpu,
   FileCheck,
   FilePlus2,
@@ -79,9 +80,46 @@ const allMenuItems = [
   { name: 'Dashboard', to: '/tecnico', roles: ['Tecnico'], icon: LayoutDashboard },
 ];
 
+const adminMenu = [
+  { type: 'link', item: allMenuItems[0] },
+  { type: 'group', name: 'Gestión', icon: BriefcaseBusiness, items: allMenuItems.filter((item) => item.group === 'Gestión') },
+  { type: 'link', item: allMenuItems.find((item) => item.to === '/admin/reportes') },
+  { type: 'group', name: 'Administración', icon: Settings, items: allMenuItems.filter((item) => item.group === 'Administración') },
+];
+
+const groupForPath = (path) => allMenuItems.find((item) => item.group && path === item.to)?.group
+  || allMenuItems.find((item) => item.group && item.to !== '/admin' && path.startsWith(`${item.to}/`))?.group;
+
 const Sidebar = ({ collapsed = false, onClose = () => {}, onToggleCollapse = () => {}, open = true }) => {
   const { user } = useContext(AuthContext);
+  const { pathname } = useLocation();
+  const isAdmin = adminRoles.includes(user?.rol);
   const menuItems = allMenuItems.filter((item) => item.roles.includes(user?.rol));
+  const [groupPreference, setGroupPreference] = useState({ path: pathname, group: groupForPath(pathname) || null });
+  const openGroup = groupPreference.path === pathname ? groupPreference.group : groupForPath(pathname) || null;
+
+  const renderLink = (item) => (
+    <NavLink
+      to={item.to}
+      end={item.to === '/admin' || item.to === '/secretaria'}
+      onClick={onClose}
+      className={({ isActive }) =>
+        `sidebar-nav-link flex w-full min-w-0 items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
+        ${isActive
+          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+          : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'}`
+      }
+      title={collapsed ? item.name : undefined}
+    >
+      <item.icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+      <span className="sidebar-nav-label min-w-0 flex-1 truncate text-sm font-medium tracking-wide">{item.name}</span>
+    </NavLink>
+  );
+
+  const toggleGroup = (name) => {
+    setGroupPreference({ path: pathname, group: openGroup === name && !collapsed ? null : name });
+    if (collapsed) onToggleCollapse();
+  };
 
   return (
     <aside
@@ -117,28 +155,31 @@ const Sidebar = ({ collapsed = false, onClose = () => {}, onToggleCollapse = () 
 
       <nav className="p-2 flex-1 overflow-y-auto custom-scrollbar">
         <ul className="space-y-1">
-          {menuItems.map((item, index) => (
-            <li key={item.to + item.name} className="w-full">
-              {item.group && item.group !== menuItems[index - 1]?.group && !collapsed && <div className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-widest text-indigo-300/70">{item.group}</div>}
-              <NavLink
-                to={item.to}
-                end={item.to === '/admin' || item.to === '/secretaria'}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex w-full min-w-0 items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
-                  ${isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                    : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'}`
-                }
-                title={collapsed ? item.name : undefined}
+          {isAdmin ? adminMenu.map((section) => {
+            if (section.type === 'link') {
+              return <li key={section.item.to} className="w-full">{renderLink(section.item)}</li>;
+            }
+            const expanded = openGroup === section.name && !collapsed;
+            const active = groupForPath(pathname) === section.name;
+            const groupId = `sidebar-group-${section.name === 'Gestión' ? 'gestion' : 'administracion'}`;
+            return <li key={section.name} className="w-full">
+              <button
+                type="button"
+                className={`sidebar-group-toggle flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${active ? 'bg-indigo-500/15 text-indigo-100' : 'text-gray-300 hover:bg-gray-800/50 hover:text-white'}`}
+                onClick={() => toggleGroup(section.name)}
+                aria-expanded={expanded}
+                aria-controls={groupId}
+                title={collapsed ? section.name : undefined}
               >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium tracking-wide">
-                  {item.name}
-                </span>
-              </NavLink>
-            </li>
-          ))}
+                <section.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                <span className="sidebar-nav-label min-w-0 flex-1 truncate">{section.name}</span>
+                <ChevronDown className={`sidebar-nav-chevron h-4 w-4 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+              <ul id={groupId} hidden={!expanded} className="mt-1 space-y-1 border-l border-indigo-400/20 pl-2 ml-5">
+                {section.items.map((item) => <li key={item.to}>{renderLink(item)}</li>)}
+              </ul>
+            </li>;
+          }) : menuItems.map((item) => <li key={item.to + item.name} className="w-full">{renderLink(item)}</li>)}
         </ul>
       </nav>
 

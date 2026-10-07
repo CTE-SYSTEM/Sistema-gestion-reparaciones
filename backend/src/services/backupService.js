@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'node:os';
 import { createWriteStream, createReadStream } from 'fs';
 import { createHash, randomUUID } from 'node:crypto';
 import pg from 'pg';
@@ -11,12 +12,14 @@ import prisma from '../app/prismaClient.js';
 import { databaseConnection, getBusinessSettings, recordAdminAction } from './adminSettingsService.js';
 import { fail } from '../utils/adminPolicy.js';
 import { nextBackupDate, nicaraguaParts, validateBackupLocation } from '../utils/backupSchedule.js';
+import { deleteBackupFile, fetchBackupFile, listRemoteBackupFiles, remoteBackups, signedBackupDownloadUrl, uploadBackupFile } from './backupObjectStorage.js';
+import { createNeonSnapshot, deleteNeonSnapshot, neonSnapshotExists } from './neonSnapshots.js';
 
 const execFileAsync = promisify(execFile);
 
 const CONTAINER_BACKUP_ROOT = path.join(path.sep, 'backup', 'CTE-Backup');
-const BACKUP_ROOT = process.env.BACKUP_ROOT || CONTAINER_BACKUP_ROOT;
-const BACKUP_DISPLAY_ROOT = process.env.BACKUP_DISPLAY_ROOT || BACKUP_ROOT;
+const BACKUP_ROOT = remoteBackups() ? path.join(os.tmpdir(), 'sgr-backups') : process.env.BACKUP_ROOT || CONTAINER_BACKUP_ROOT;
+const BACKUP_DISPLAY_ROOT = process.env.BACKUP_DISPLAY_ROOT || (remoteBackups() ? 'R2 · respaldos' : BACKUP_ROOT);
 const PRODUCT_BACKUP_NAME = 'productos';
 let scheduler = null;
 let polling = false;
@@ -51,8 +54,9 @@ export const postgresTool = async (tool) => {
   const [server] = await prisma.$queryRaw`SELECT current_setting('server_version_num') AS version`;
   const major = Math.floor(Number(server.version) / 10000);
   if (process.platform !== 'win32') {
-    const candidate = `/usr/lib/postgresql${major}/bin/${tool}`;
-    try { await fs.access(candidate); return candidate; } catch { /* Instalaciones con binarios en PATH. */ }
+    for (const candidate of [`/usr/libexec/postgresql${major}/${tool}`, `/usr/lib/postgresql${major}/bin/${tool}`]) {
+      try { await fs.access(candidate); return candidate; } catch { /* Probar la siguiente ubicación. */ }
+    }
   }
   return process.platform === 'win32' ? `${tool}.exe` : tool;
 };
@@ -120,85 +124,129 @@ const queryAllTablesJson = async (backupFolder, timestamp) => {
   return filePath;
 };
 
-const generateProductsExcel = async (backupFolder, products, timestamp) => {
+export const generateProductsExcel = async (backupFolder, products, timestamp) => {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Productos');
+  workbook.creator = 'Sistema de gestión';
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet('Inventario', {
+    views: [{ state: 'frozen', ySplit: 4 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
 
   sheet.columns = [
-    { header: 'ID', key: 'id_repuesto', width: 10 },
-    { header: 'Nombre', key: 'nombre', width: 35 },
-    { header: 'Descripción', key: 'descripcion', width: 50 },
-    { header: 'Categoria', key: 'categoria', width: 25 },
-    { header: 'Proveedor', key: 'proveedor', width: 30 },
-    { header: 'Costo', key: 'costo_individual', width: 15 },
-    { header: 'Stock', key: 'stock', width: 10 },
-    { header: 'Activo', key: 'activo', width: 10 },
-    { header: 'Descontinuado', key: 'descontinuada', width: 15 },
+    { key: 'id_repuesto', width: 12 },
+    { key: 'nombre', width: 35 },
+    { key: 'descripcion', width: 50 },
+    { key: 'categoria', width: 25 },
+    { key: 'proveedor', width: 30 },
+    { key: 'costo_individual', width: 16 },
+    { key: 'stock', width: 12 },
+    { key: 'activo', width: 12 },
+    { key: 'descontinuada', width: 18 },
   ];
+  sheet.mergeCells('A1:I1');
+  sheet.getCell('A1').value = 'Inventario de repuestos';
+  sheet.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF1E293B' } };
+  sheet.getRow(1).height = 30;
+  sheet.mergeCells('A2:I2');
+  sheet.getCell('A2').value = `${products.length} registros · ${new Intl.DateTimeFormat('es-NI', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Managua' }).format(new Date())}`;
+  sheet.getCell('A2').font = { size: 10, color: { argb: 'FF64748B' } };
+  const header = sheet.getRow(4);
+  header.values = ['ID', 'Nombre', 'Descripción', 'Categoría', 'Proveedor', 'Costo', 'Stock', 'Activo', 'Descontinuado'];
+  header.height = 26;
+  header.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    cell.alignment = { vertical: 'middle', wrapText: true };
+  });
 
-  products.forEach((product) => {
-    sheet.addRow({
+  products.forEach((product, index) => {
+    const row = sheet.addRow({
       id_repuesto: product.id_repuesto,
       nombre: product.nombre || '',
       descripcion: product.descripcion || '',
       categoria: product.categoria?.nombre_tipo || '',
       proveedor: product.proveedor?.nombre || '',
-      costo_individual: product.costo_individual ? String(product.costo_individual) : '0',
+      costo_individual: Number(product.costo_individual ?? 0),
       stock: product.stock_actual ?? 0,
       activo: product.activo ? 'SI' : 'NO',
       descontinuada: product.descontinuada ? 'SI' : 'NO',
     });
+    row.alignment = { vertical: 'top', wrapText: true };
+    row.getCell(6).numFmt = '#,##0.00';
+    if (index % 2 === 1) row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    });
   });
+  sheet.autoFilter = { from: 'A4', to: 'I4' };
+  sheet.printTitlesRow = '1:4';
 
   const filePath = path.join(backupFolder, `${PRODUCT_BACKUP_NAME}_${timestamp}.xlsx`);
   await workbook.xlsx.writeFile(filePath);
   return filePath;
 };
 
-const generateProductsPdf = async (backupFolder, products, timestamp) => {
+export const generateProductsPdf = async (backupFolder, products, timestamp) => {
   const filePath = path.join(backupFolder, `${PRODUCT_BACKUP_NAME}_${timestamp}.pdf`);
-  const doc = new PDFDocument({ margin: 32, size: 'A4', layout: 'landscape' });
+  const doc = new PDFDocument({ margin: 32, size: 'A4', layout: 'landscape', bufferPages: true });
   const writeStream = createWriteStream(filePath);
   doc.pipe(writeStream);
-
-  doc.fontSize(18).text('Backup de Productos - Repuestos', { align: 'center' });
-  doc.moveDown(0.5);
-  doc.fontSize(10).fillColor('gray').text(`Fecha de backup: ${new Date().toLocaleString()}`, { align: 'center' });
-  doc.moveDown(1);
-
-  const columns = ['ID', 'Nombre', 'Categoria', 'Proveedor', 'Costo', 'Stock', 'Activo', 'Descontinuado'];
-  const columnWidths = [40, 150, 100, 100, 60, 40, 40, 60];
-
-  doc.font('Helvetica-Bold').fontSize(9);
-  columns.forEach((column, index) => {
-    doc.text(column, { continued: index !== columns.length - 1, width: columnWidths[index], underline: false });
-  });
-  doc.moveDown(0.3);
-  doc.moveTo(doc.x, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).strokeColor('#cccccc').stroke();
-  doc.moveDown(0.5);
-  doc.font('Helvetica').fontSize(8);
-
-  for (const product of products) {
-    const row = [
-      String(product.id_repuesto),
-      product.nombre || '-',
-      product.categoria?.nombre_tipo || '-',
-      product.proveedor?.nombre || '-',
-      product.costo_individual ? String(product.costo_individual) : '0',
-      String(product.stock_actual ?? 0),
-      product.activo ? 'SI' : 'NO',
-      product.descontinuada ? 'SI' : 'NO',
-    ];
-
-    row.forEach((value, index) => {
-      doc.text(value, { continued: index !== row.length - 1, width: columnWidths[index] });
+  const left = doc.page.margins.left;
+  const right = doc.page.width - doc.page.margins.right;
+  const widths = [42, 162, 112, 112, 88, 60, 58, 140];
+  const labels = ['ID', 'Nombre', 'Categoría', 'Proveedor', 'Costo', 'Stock', 'Activo', 'Descontinuado'];
+  const generatedAt = new Intl.DateTimeFormat('es-NI', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Managua' }).format(new Date());
+  const drawPageHeader = (continued = false) => {
+    doc.rect(left, 32, right - left, 48).fill('#1e293b');
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(continued ? 13 : 17)
+      .text('Inventario de repuestos', left + 12, 43, { width: right - left - 24 });
+    doc.fillColor('#cbd5e1').font('Helvetica').fontSize(9)
+      .text(`${products.length} registros · Generado: ${generatedAt}`, left + 12, 65, { width: right - left - 24 });
+    doc.rect(left, 94, right - left, 28).fill('#e2e8f0');
+    let x = left;
+    labels.forEach((label, index) => {
+      doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(8)
+        .text(label, x + 6, 103, { width: widths[index] - 12, height: 14 });
+      x += widths[index];
     });
-    doc.moveDown(0.4);
-
-    if (doc.y > doc.page.height - 80) {
+    return 122;
+  };
+  let y = drawPageHeader();
+  if (!products.length) {
+    doc.fillColor('#64748b').font('Helvetica').fontSize(10).text('Sin repuestos registrados.', left + 8, y + 15);
+  }
+  for (const [index, product] of products.entries()) {
+    const values = [
+      String(product.id_repuesto), product.nombre || '-', product.categoria?.nombre_tipo || '-',
+      product.proveedor?.nombre || '-', Number(product.costo_individual ?? 0).toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      String(product.stock_actual ?? 0), product.activo ? 'Sí' : 'No', product.descontinuada ? 'Sí' : 'No',
+    ];
+    doc.font('Helvetica').fontSize(8);
+    const height = Math.min(88, Math.max(28, ...values.map((value, column) =>
+      doc.heightOfString(value, { width: widths[column] - 12 }) + 16)));
+    if (y + height > doc.page.height - 58) {
       doc.addPage();
-      doc.font('Helvetica').fontSize(8);
+      y = drawPageHeader(true);
     }
+    if (index % 2 === 1) doc.rect(left, y, right - left, height).fill('#f8fafc');
+    doc.moveTo(left, y + height).lineTo(right, y + height).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+    let x = left;
+    values.forEach((value, column) => {
+      doc.fillColor('#334155').font('Helvetica').fontSize(8)
+        .text(value, x + 6, y + 6, { width: widths[column] - 12, height: height - 12, ellipsis: true });
+      x += widths[column];
+    });
+    y += height;
+  }
+
+  const pages = doc.bufferedPageRange();
+  for (let page = pages.start; page < pages.start + pages.count; page += 1) {
+    doc.switchToPage(page);
+    const footerY = doc.page.height - 49;
+    doc.moveTo(left, footerY - 6).lineTo(right, footerY - 6).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
+    doc.fillColor('#64748b').font('Helvetica').fontSize(8)
+      .text('Inventario de respaldo', left, footerY, { width: 250 });
+    doc.text(`Página ${page - pages.start + 1} de ${pages.count}`, right - 120, footerY, { width: 120, align: 'right' });
   }
 
   doc.end();
@@ -236,6 +284,16 @@ const checksum = async (filePath) => {
 
 export const resolveBackupFile = async (month, file) => {
   validateBackupLocation(month, file);
+  if (remoteBackups()) {
+    const destination = path.join(BACKUP_ROOT, month, file);
+    const staging = `${destination}.${randomUUID()}.partial`;
+    try { await fetchBackupFile(month, file, staging); await fs.rename(staging, destination); }
+    catch (error) {
+      await fs.unlink(staging).catch(() => {});
+      if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) fail(404, 'El archivo ya no está disponible.');
+      throw error;
+    }
+  }
   const root = await fs.realpath(BACKUP_ROOT);
   const monthPath = path.join(root, month);
   const location = path.join(monthPath, file);
@@ -250,10 +308,17 @@ export const resolveBackupFile = async (month, file) => {
   }
 };
 
+export const getBackupDownloadUrl = async (month, file) => {
+  validateBackupLocation(month, file);
+  if (!remoteBackups()) return null;
+  return signedBackupDownloadUrl(month, file);
+};
+
 const runBackup = async (user, origin = 'manual') => {
   const lock = new pg.Client({ connectionString: databaseConnection(), connectionTimeoutMillis: 10000 });
   let acquired = false;
   let scheduledAttempt = false, scheduleUpdated = false;
+  let backupFolder;
   try {
     await lock.connect();
     acquired = (await lock.query('SELECT pg_try_advisory_lock(734822) AS acquired')).rows[0].acquired;
@@ -267,7 +332,7 @@ const runBackup = async (user, origin = 'manual') => {
     }
     await prisma.$executeRaw`UPDATE "EstadoRespaldos" SET ultimo_intento = now() WHERE id = 1`;
     const started = new Date(), timestamp = `${formatDate(started)}_${randomUUID().slice(0, 8)}`;
-    const backupFolder = await createDirectory(getBackupMonthFolder(started));
+    backupFolder = await createDirectory(getBackupMonthFolder(started));
     if ((await fs.lstat(backupFolder)).isSymbolicLink()) fail(400, 'No se permiten enlaces en respaldos.');
     const manifestName = `backup_meta_${timestamp}.json`;
     const job = { id: timestamp, month: path.basename(backupFolder), manifest: manifestName,
@@ -284,11 +349,18 @@ const runBackup = async (user, origin = 'manual') => {
     try {
       const dump = path.join(backupFolder, `db_dump_${timestamp}.dump`);
       try {
-        await runPgDump(dump);
-        await addFile(dump, 'BASE_COMPLETA');
+        if (remoteBackups()) {
+          const snapshot = await createNeonSnapshot(`sgr-${timestamp}`);
+          const snapshotFile = path.join(backupFolder, `neon_snapshot_${timestamp}.json`);
+          await fs.writeFile(snapshotFile, JSON.stringify(snapshot, null, 2), 'utf8');
+          await addFile(snapshotFile, 'BASE_NEON_SNAPSHOT');
+        } else {
+          await runPgDump(dump);
+          await addFile(dump, 'BASE_COMPLETA');
+        }
         job.estado = 'COMPLETO';
       } catch (error) {
-        job.advertencias.push('No se pudo generar la copia restaurable de PostgreSQL. Se conserva una exportación parcial de tablas públicas.');
+        job.advertencias.push('No se pudo crear la instantánea o copia restaurable de PostgreSQL. Se conserva una exportación parcial de tablas públicas.');
         const snapshot = await queryAllTablesJson(backupFolder, timestamp);
         await addFile(snapshot, 'TABLAS_JSON');
         job.estado = 'PARCIAL';
@@ -302,6 +374,10 @@ const runBackup = async (user, origin = 'manual') => {
       await addFile(await createReportFile(backupFolder, `backup_report_${timestamp}.txt`, reportLines), 'INFORME');
       job.fin = new Date().toISOString();
       await writeManifest();
+      if (remoteBackups()) {
+        for (const file of job.archivos) await uploadBackupFile(job.month, path.join(backupFolder, file.nombre));
+        await uploadBackupFile(job.month, path.join(backupFolder, manifestName));
+      }
       await recordAdminAction(user, 'Respaldos', `RESPALDO_${job.estado}`, null, { id: job.id, estado: job.estado }, `Respaldo ${origin}.`);
       if (job.estado === 'COMPLETO') {
         await prisma.$executeRaw`UPDATE "EstadoRespaldos" SET ultimo_exito = now() WHERE id = 1`;
@@ -310,6 +386,7 @@ const runBackup = async (user, origin = 'manual') => {
           console.error('[BackupService] Conservación:', error.message);
           job.advertencias.push('La copia se completó, pero no se pudieron retirar todas las copias antiguas.');
           await writeManifest();
+          if (remoteBackups()) await uploadBackupFile(job.month, path.join(backupFolder, manifestName));
         }
       }
       if (scheduledAttempt) { await finishScheduledAttempt(job.estado === 'COMPLETO'); scheduleUpdated = true; }
@@ -318,6 +395,7 @@ const runBackup = async (user, origin = 'manual') => {
       job.estado = 'FALLIDO'; job.fin = new Date().toISOString();
       job.advertencias.push('No se pudo completar la generación de archivos. Revise la conexión y el almacenamiento.');
       await writeManifest();
+      if (remoteBackups()) await uploadBackupFile(job.month, path.join(backupFolder, manifestName)).catch(() => {});
       await recordAdminAction(user, 'Respaldos', 'RESPALDO_FALLIDO', null, { id: job.id, estado: job.estado }, 'Error al generar el respaldo.');
       throw error;
     }
@@ -325,10 +403,12 @@ const runBackup = async (user, origin = 'manual') => {
     if (scheduledAttempt && !scheduleUpdated) await finishScheduledAttempt(false).catch((error) => console.error('[BackupService] Programación:', error.message));
     if (acquired) await lock.query('SELECT pg_advisory_unlock(734822)').catch(() => {});
     await lock.end();
+    if (remoteBackups() && backupFolder) await fs.rm(backupFolder, { recursive: true, force: true }).catch(() => {});
   }
 };
 
 const listBackupFiles = async () => {
+  if (remoteBackups()) return listRemoteBackupFiles();
   await createDirectory(BACKUP_ROOT);
   const monthEntries = await fs.readdir(BACKUP_ROOT, { withFileTypes: true });
   const months = [];
@@ -369,9 +449,19 @@ const pruneBackups = async (days) => {
   const cutoff = Date.now() - days * 86400000;
   for (const job of jobs) {
     if (job.estado !== 'COMPLETO' || job.id === latest?.id || Date.parse(job.fin) >= cutoff) continue;
+    if (remoteBackups()) {
+      const snapshotFile = job.archivos.find((file) => file.tipo === 'BASE_NEON_SNAPSHOT');
+      if (snapshotFile) {
+        const snapshot = JSON.parse(await fs.readFile(await resolveBackupFile(job.month, snapshotFile.nombre), 'utf8'));
+        await deleteNeonSnapshot(snapshot.id);
+      }
+    }
     // Solo elimina archivos de copias gestionadas, con rutas comprobadas y manteniendo la última completa.
     for (const file of [...job.archivos.map((f) => f.nombre), job.manifest]) {
-      try { await fs.unlink(await resolveBackupFile(job.month, file)); }
+      try {
+        if (remoteBackups()) await deleteBackupFile(job.month, file);
+        else await fs.unlink(await resolveBackupFile(job.month, file));
+      }
       catch (error) { if (error.status !== 404) throw error; }
     }
   }
@@ -393,7 +483,9 @@ export const getBackupSummary = async () => {
   const [months, jobs, states] = await Promise.all([listBackupFiles(), getBackupJobs(), prisma.$queryRaw`SELECT * FROM "EstadoRespaldos" WHERE id = 1`]);
   return { root: BACKUP_DISPLAY_ROOT, months, jobs, schedule: settings, state: states[0],
     latestComplete: jobs.find((job) => job.estado === 'COMPLETO') || null,
-    coverage: 'PostgreSQL completo cuando hay archivo .dump. Las fotografías requieren una copia independiente.' };
+    coverage: remoteBackups()
+      ? 'La base se recupera desde la instantánea de Neon. Los PDF y Excel están en R2; las fotos requieren su propia política de copias.'
+      : 'PostgreSQL completo cuando hay archivo .dump. Las fotografías requieren una copia independiente.' };
 };
 export const createBackupNow = async (user) => {
   const latestBackup = await runBackup(user);
@@ -411,14 +503,20 @@ export const verifyBackup = async (month, manifest, user) => {
     if (file.tipo === 'BASE_COMPLETA') {
       await execFileAsync(await postgresTool('pg_restore'), ['--list', target], { timeout: 60000, maxBuffer: 16 * 1024 * 1024 });
     }
+    if (file.tipo === 'BASE_NEON_SNAPSHOT') {
+      const snapshot = JSON.parse(await fs.readFile(target, 'utf8'));
+      if (!(await neonSnapshotExists(snapshot.id))) fail(409, 'La instantánea ya no existe en Neon.');
+    }
   } } catch (error) {
     job.integridad = { verificada_en: new Date().toISOString(), resultado: 'ERROR' };
     await fs.writeFile(location, JSON.stringify(job, null, 2), 'utf8');
+    if (remoteBackups()) await uploadBackupFile(month, location);
     await recordAdminAction(user, 'Respaldos', 'VERIFICACION_FALLIDA', null, { id: job.id }, 'No se pudo comprobar la integridad de todos los archivos.');
     throw error;
   }
   job.integridad = { verificada_en: new Date().toISOString(), resultado: 'ARCHIVOS_VALIDOS' };
   await fs.writeFile(location, JSON.stringify(job, null, 2), 'utf8');
+  if (remoteBackups()) await uploadBackupFile(month, location);
   await recordAdminAction(user, 'Respaldos', 'VERIFICACION', null, { id: job.id }, 'Integridad de archivos y estructura PostgreSQL comprobadas; no se ha restaurado la base.');
   return { data: job, message: 'Integridad comprobada. Esta revisión no sustituye una prueba de restauración.' };
 };
@@ -445,6 +543,7 @@ export const runScheduledBackup = async () => {
     } catch (error) {
       if (error.status === 409) return;
       console.error('[BackupService] Respaldo programado fallido:', error.message);
+      if (remoteBackups()) throw error;
     }
   } finally { polling = false; }
 };

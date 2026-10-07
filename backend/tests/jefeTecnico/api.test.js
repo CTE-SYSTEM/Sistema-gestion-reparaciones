@@ -154,6 +154,26 @@ if (!databaseName) {
       await request(`/diagnosticos/correcciones/diagnosticos/${d.id_diagnostico}`, 'PATCH', { tecnico_id: tecnicoB.perfil.id_tecnico, motivo: 'Atajo' }, jefe, 409);
     });
   });
+  test('El jefe consulta casos cerrados de todo el taller y las correcciones del diagnóstico vinculado', async () => {
+    const o = await order({ estado: 'FINALIZADO', tecnico_id: tecnicoA.perfil.id_tecnico,
+      observacion_final: 'Reparación terminada', fecha_finalizacion: new Date() });
+    await prisma.diagnosticos.update({ where: { id_diagnostico: o.diagnostico_id }, data: { estado_del_diagnostico: 'APROBADO' } });
+    const otra = await diag({ estado_del_diagnostico: 'COMPLETADO', tecnico_id: tecnicoB.perfil.id_tecnico });
+    await prisma.intervencionesTecnicas.createMany({ data: [
+      { diagnostico_id: o.diagnostico_id, tipo: 'ACLARACION_DIAGNOSTICO', motivo: 'Prueba adicional', usuario_id: tecnicoA.id_usuario,
+        datos_anteriores: { estado: 'APROBADO' }, datos_nuevos: { aclaracion: 'Fuente verificada de nuevo' } },
+      { diagnostico_id: otra.id_diagnostico, tipo: 'ACLARACION_DIAGNOSTICO', motivo: 'Otro expediente', usuario_id: tecnicoA.id_usuario,
+        datos_anteriores: { estado: 'COMPLETADO' }, datos_nuevos: { aclaracion: 'No pertenece a esta orden' } },
+    ] });
+    const summary = await api('/jefe-tecnico/resumen');
+    assert.ok(summary.trabajos.some((w) => w.tipo === 'diagnostico' && w.id === o.diagnostico_id && w.estado === 'APROBADO'));
+    assert.ok(summary.trabajos.some((w) => w.tipo === 'diagnostico' && w.id === otra.id_diagnostico && w.tecnico?.id_tecnico === tecnicoB.perfil.id_tecnico));
+    assert.ok(summary.trabajos.some((w) => w.tipo === 'orden' && w.id === o.id_orden && w.estado === 'FINALIZADO'));
+    const detail = await api(`/jefe-tecnico/ordenes/${o.id_orden}`);
+    assert.equal(detail.intervenciones_diagnostico.length, 1);
+    assert.equal(detail.intervenciones_diagnostico[0].datos_nuevos.aclaracion, 'Fuente verificada de nuevo');
+    await request(`/jefe-tecnico/ordenes/${o.id_orden}`, 'GET', undefined, tecnicoA, 403);
+  });
   test('Excepciones: motivo obligatorio, responsabilidad conservada e historial atómico', async (t) => {
     await t.test('reasignar conserva fechas y registra quién cambió la responsabilidad', async () => {
       const o = await startedOrder();
@@ -187,7 +207,7 @@ if (!databaseName) {
       const d = await diag(); await assign('diagnosticos', d.id_diagnostico);
       await request(`/jefe-tecnico/diagnosticos/${d.id_diagnostico}/intervencion`, 'POST', closure, jefe, 403);
       const o = await order({ estado: 'FINALIZADO', tecnico_id: tecnicoA.perfil.id_tecnico });
-      await prisma.facturas.create({ data: { orden_id: o.id_orden, mano_obra: 100, monto_repuestos: 0, subtotal: 100, total: 100, impuestos: 0 } });
+      await prisma.facturas.create({ data: { orden_id: o.id_orden, diagnostico_id: o.diagnostico_id, mano_obra: 100, monto_repuestos: 0, subtotal: 100, total: 100, impuestos: 0 } });
       await prisma.ordenes.update({ where: { id_orden: o.id_orden }, data: { estado: 'EN_REPARACION' } });
       await exception(o, { tipo: 'REASIGNACION', tecnico_id: tecnicoB.perfil.id_tecnico, motivo: 'Facturada' }, 409);
     });
@@ -336,7 +356,7 @@ if (!databaseName) {
         assert.equal((await history(o, p)).length, 0);
       };
       await assertBlocked();
-      await prisma.facturas.create({ data: { orden_id: o.id_orden, monto_repuestos: 200, mano_obra: 0, subtotal: 200, impuestos: 0, total: 200 } });
+      await prisma.facturas.create({ data: { orden_id: o.id_orden, diagnostico_id: o.diagnostico_id, monto_repuestos: 200, mano_obra: 0, subtotal: 200, impuestos: 0, total: 200 } });
       await assertBlocked();
       assert.equal((await prisma.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: p.id_detalle_repuesto } })).estado_entrega, 'ENTREGADO');
     });

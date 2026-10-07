@@ -131,11 +131,11 @@ export default function OrdenesAvanzado() {
       const response = await ordenesAdminService.getRepuestosReporte(selectedOrden.id_orden, {
         responseType: 'blob',
       });
-      const blob = new Blob([response.data], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `repuestos-orden-${selectedOrden.id_orden}.xls`;
+      link.download = `repuestos-orden-${selectedOrden.id_orden}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();

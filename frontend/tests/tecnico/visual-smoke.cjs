@@ -7,6 +7,9 @@ const output = path.resolve(__dirname, '../../../tmp/tecnico');
 const diagnostics = Array.from({ length: 23 }, (_, i) => ({ id_diagnostico: i + 1, equipo: { id_equipo: i + 1, tipo: 'Laptop', marca: 'Prueba', modelo: 'Modelo técnico ' + (i + 1) },
   falla_reportada: 'No enciende', estado_del_diagnostico: 'EN_REVISION', prioridad: 'Normal', fecha_hora: new Date().toISOString(), fecha_asignacion: new Date().toISOString(), fecha_inicio: new Date().toISOString(), detalle_accesorios: 'Cargador', estado_fisico: 'SIN_DANOS_VISIBLES' }));
 const orden = { id_orden: 1, diagnostico_id: 1, diagnostico: diagnostics[0], estado: 'EN_REPARACION', prioridad: 'Normal', requiere_piezas: true, fecha_asignacion: new Date().toISOString(), fecha_inicio_reparacion: new Date().toISOString(), repuestos_usados: [], irreparable_estado: 'NO_SOLICITADO' };
+const cerrada = { ...orden, id_orden: 2, estado: 'FINALIZADO', resultado_final: 'REPARADO', observacion_final: 'Reparación terminada',
+  fecha_finalizacion: new Date().toISOString(), correccion_cierre: { puede_editar_informe: true, requiere_excepcion: false,
+    permite_excepcion: true, plazo_horas: 24, fecha_limite: new Date(Date.now() + 24 * 3600000).toISOString() } };
 const captures = [], failures = [], mutations = [];
 (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.CTE_BROWSER_EXECUTABLE ? { executablePath: process.env.CTE_BROWSER_EXECUTABLE } : {}) });
@@ -21,14 +24,14 @@ const captures = [], failures = [], mutations = [];
       if (req.method() !== 'GET') {
         const body = req.postDataJSON(); mutations.push({ pathname, body });
         if (pathname.endsWith('/borrador')) diagnostics[0].borrador_tecnico = body;
-        if (/diagnosticos\/\d+$/.test(pathname)) { Object.assign(diagnostics[0], body, { estado_del_diagnostico: 'COMPLETADO', borrador_tecnico: null }); }
+        if (/diagnosticos\/\d+$/.test(pathname)) { Object.assign(diagnostics[0], body, { estado_del_diagnostico: 'COMPLETADO', borrador_tecnico: null, puede_reabrir_diagnostico: true, motivo_reapertura: null }); }
         if (pathname.endsWith('/avances')) data = { data: { id_avance: 1, observacion: body.observacion, fecha_hora: new Date().toISOString() } };
       } else if (pathname.endsWith('/resumen')) data = { data: { diagnosticos_activos: 23, ordenes_activas: 1, piezas_pendientes: 1, revision_jefe: 0, esperando_piezas: 0 } };
       else if (pathname.includes('/mis-diagnosticos/')) {
         const p = Number(url.searchParams.get('page') || 1), completed = url.searchParams.get('grupo') === 'completados';
         const rows = diagnostics.filter((d) => completed ? d.estado_del_diagnostico === 'COMPLETADO' : d.estado_del_diagnostico !== 'COMPLETADO');
         data = { data: rows.slice((p - 1) * 20, p * 20), meta: { page: p, total: rows.length, hasMore: p * 20 < rows.length } };
-      } else if (pathname.includes('/mis-ordenes/')) data = { data: url.searchParams.get('grupo') === 'completados' ? [] : [orden], meta: { page: 1, total: 1, hasMore: false } };
+      } else if (pathname.includes('/mis-ordenes/')) data = { data: url.searchParams.get('grupo') === 'completados' ? [cerrada] : [orden], meta: { page: 1, total: 1, hasMore: false } };
       else if (pathname.endsWith('/catalogo')) data = { data: [{ id_repuesto: 25, nombre: 'Fuente compatible', descripcion: 'Para portátil', disponible: Number(url.searchParams.get('cantidad') || 1) <= 2 }], meta: { page: 1, total: 1, hasMore: false } };
       else if (pathname.endsWith('/solicitudes')) data = { data: [{ id_detalle_repuesto: 1, orden_id: 1, repuesto_id: 25, pieza_solicitada: 'Fuente compatible', cantidad_usada: 1, estado_aprobacion: 'APROBADO', estado_entrega: 'PENDIENTE', fecha_solicitud: new Date().toISOString() }], meta: { page: 1, total: 1, hasMore: false } };
       else if (/\/tecnicos\/(diagnosticos|ordenes)\/\d+$/.test(pathname)) data = { data: { registro: pathname.includes('/ordenes/') ? orden : diagnostics[0], historial: [], avances: [], asignaciones: [] } };
@@ -66,7 +69,8 @@ const captures = [], failures = [], mutations = [];
     await page.getByRole('button', { name: 'Marcar Completado', exact: true }).click();
     await page.getByLabel('Moneda del presupuesto').waitFor({ state: 'hidden' });
     const completed = mutations.find((r) => /diagnosticos\/\d+$/.test(r.pathname)).body; assert.equal(completed.moneda_presupuesto, 'USD'); assert.equal(Number(completed.presupuesto_estimado), 125.50);
-    await go('Diagnósticos completados'); await page.getByRole('button', { name: 'Ver expediente', exact: true }).first().click();
+    await go('Diagnósticos completados'); assert.equal(await page.getByRole('button', { name: 'Reabrir diagnóstico', exact: true }).first().isEnabled(), true);
+    await page.getByRole('button', { name: 'Ver expediente', exact: true }).first().click();
     await page.getByText('Presupuesto técnico: US$ 125.50', { exact: true }).waitFor(); await shot('informe-presupuesto-usd'); await page.getByRole('button', { name: 'Cerrar expediente' }).click();
     await go('Reparaciones activas'); await page.getByRole('button', { name: 'Finalizar y registrar pruebas' }).click();
     const encendido = page.getByLabel('Encendido al finalizar'); assert.equal(await encendido.inputValue(), '');
@@ -84,6 +88,7 @@ const captures = [], failures = [], mutations = [];
     await page.getByRole('button', { name: 'Enviar solicitud', exact: true }).click();
     await go('Solicitudes de piezas'); await page.getByText('Pendiente de entrega', { exact: true }).waitFor(); await shot('seguimiento-piezas');
     await go('Diagnósticos completados'); await go('Reparaciones cerradas');
+    assert.equal(await page.getByRole('button', { name: 'Reabrir reparación', exact: true }).first().isEnabled(), true);
     await go('Diagnósticos activos'); await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; }); await shot('tema-oscuro');
     await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'Abrir navegación' }).click(); await shot('movil-navegacion'); await go('Mi trabajo');
     await page.waitForFunction(() => !document.querySelector('.jefe-sidebar')?.classList.contains('open'));

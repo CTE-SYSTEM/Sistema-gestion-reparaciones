@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 
 // Estructura estática de columnas extraída del renderizado para evitar consumo innecesario de memoria
 const columns = [
@@ -55,7 +55,7 @@ export default function RendimientoTecnicos() {
   const downloadReportCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(data, columns, `rendimiento_tecnicos_${fromDate || 'desde'}_${toDate || 'hasta'}.csv`);
+      await downloadJsonExcel(data, columns, `rendimiento_tecnicos_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {

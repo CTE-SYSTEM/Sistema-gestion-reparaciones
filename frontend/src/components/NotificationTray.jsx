@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Check, X } from 'lucide-react';
 import { notificationActionLabel } from '../utils/notificationInbox';
 
@@ -10,15 +10,26 @@ const notificationColors = {
 };
 
 export const NotificationTray = ({ notifications, total = notifications.length, connected, onClear, onRead, onClose, onOpen, error, clearing = false, loading = false }) => {
+  const trayRef = useRef(null);
+
   useEffect(() => {
-    const close = (event) => { if (event.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
+    const closeOnEscape = (event) => { if (event.key === 'Escape') onClose?.(); };
+    const closeOnOutsidePress = (event) => {
+      const notificationControl = trayRef.current?.parentElement;
+      if (notificationControl && !notificationControl.contains(event.target)) onClose?.();
+    };
+
+    window.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+    };
   }, [onClose]);
-  return <aside aria-label="Bandeja de avisos pendientes" className="fixed inset-x-4 top-16 z-[60] rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-3 sm:w-[min(420px,calc(100vw-48px))]">
+  return <aside ref={trayRef} aria-label="Bandeja de avisos pendientes" className="fixed inset-x-4 top-16 z-[60] rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-3 sm:w-[min(420px,calc(100vw-48px))]">
     <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
       <div><h2 className="text-sm font-extrabold">Avisos pendientes · {total}</h2>
-        <p className="mt-1 text-xs text-slate-500">{connected ? 'Guardados · En vivo' : 'Guardados · Sin conexión en vivo'}</p></div>
+        <p className="mt-1 text-xs text-slate-500">{import.meta.env.VITE_NOTIFICATIONS_MODE === 'poll' ? 'Guardados · Actualización periódica' : connected ? 'Guardados · En vivo' : 'Guardados · Sin conexión en vivo'}</p></div>
       <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Cerrar notificaciones"><X size={17} /></button>
     </div>
     <div className="border-b border-slate-100 px-4 py-3"><p className="text-xs text-slate-600">Se conservan aunque cierres la web. Quedan pendientes hasta que los marques como leídos.</p>

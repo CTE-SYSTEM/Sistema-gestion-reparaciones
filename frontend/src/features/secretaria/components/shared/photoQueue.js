@@ -1,5 +1,6 @@
 export const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+export const MAX_PHOTO_BYTES = Number(import.meta.env?.VITE_MAX_PHOTO_BYTES) || 5 * 1024 * 1024;
+export const PHOTO_LIMIT_LABEL = `${Math.round(MAX_PHOTO_BYTES / (1024 * 1024))} MB`;
 
 export const photoFingerprint = (file) =>
   JSON.stringify([file.name, file.size, file.type, file.lastModified]);
@@ -14,7 +15,7 @@ export const selectNewPhotos = (files, photos = []) => {
     let error = '';
     if (!PHOTO_MIME_TYPES.includes(file.type)) error = 'Use una imagen JPG, PNG o WebP.';
     else if (!file.size) error = 'El archivo está vacío.';
-    else if (file.size > MAX_PHOTO_BYTES) error = 'La imagen supera los 5 MB permitidos.';
+    else if (file.size > MAX_PHOTO_BYTES) error = `La imagen supera los ${PHOTO_LIMIT_LABEL} permitidos.`;
 
     if (error) {
       rejected.push({ name: file.name, error });

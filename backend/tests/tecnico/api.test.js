@@ -142,6 +142,98 @@ if (!databaseName) {
     await prisma.ordenes.update({ where: { id_orden: id }, data: { estado: 'FINALIZADO' } });
     await api(`/tecnicos/ordenes/${id}/avances`, { method: 'POST', body: { observacion: 'Cambio tardío' }, status: 409 });
   });
+  test('El técnico corrige informes y notas con motivo e historial, y aclara informes ya vinculados', async () => {
+    const f = await fixture({ estado_del_diagnostico: 'COMPLETADO', fecha_inicio: new Date(),
+      fecha_completado: new Date(), diagnostico_real: 'Informe inicial' });
+    const id = f.diagnostico.id_diagnostico;
+    const url = `/tecnicos/diagnosticos/${id}/correccion`;
+    await api(url, { actor: otro, method: 'PATCH', body: { tipo: 'CORREGIR', motivo: 'Error', diagnostico_real: 'Otro' }, status: 403 });
+    await api(url, { method: 'PATCH', body: { tipo: 'CORREGIR', diagnostico_real: 'Informe corregido' }, status: 400 });
+    privateFree(await api(url, { method: 'PATCH', body: { tipo: 'CORREGIR', motivo: 'Dato mal transcrito',
+      diagnostico_real: 'Informe corregido', solucion_propuesta: 'Revisar fuente', presupuesto_estimado: 25 } }), f.cliente);
+    const note = await prisma.bitacoraTecnica.create({ data: { diagnostico_id: id, usuario_id: tecnico.id_usuario, observacion: 'Nota original' } });
+    await api(`/tecnicos/diagnosticos/${id}/avances/${note.id_avance}`, { method: 'PATCH', body: { observacion: 'Nota corregida', motivo: 'Error en prueba' } });
+    const detail = await api(`/tecnicos/diagnosticos/${id}`);
+    privateFree(detail, f.cliente);
+    assert.equal(detail.data.avances[0].observacion, 'Nota corregida');
+    assert.ok(detail.data.correcciones.some((c) => c.tipo === 'CORRECCION_DIAGNOSTICO' && c.antes.diagnostico_real === 'Informe inicial'));
+    assert.ok(detail.data.correcciones.some((c) => c.tipo === 'CORRECCION_AVANCE' && c.antes.observacion === 'Nota original'));
+    await prisma.ordenes.create({ data: { diagnostico_id: id, tecnico_id: tecnico.perfil.id_tecnico, estado: 'ASIGNADO' } });
+    await api(url, { method: 'PATCH', body: { tipo: 'CORREGIR', motivo: 'Cambio tardío', diagnostico_real: 'Otro informe' }, status: 409 });
+    await api(url, { method: 'PATCH', body: { tipo: 'ACLARAR', motivo: 'Dato adicional', aclaracion: 'Fuente revisada de nuevo' } });
+  });
+  test('Un diagnóstico completado por error vuelve a revisión con borrador e historial', async () => {
+    const f = await fixture({ estado_del_diagnostico: 'COMPLETADO', fecha_inicio: new Date(),
+      fecha_completado: new Date(), diagnostico_real: 'Falla en placa\n\nSolución: Revisar fuente',
+      solucion_propuesta: 'Revisar fuente', presupuesto_estimado: 150 });
+    const id = f.diagnostico.id_diagnostico, url = `/tecnicos/diagnosticos/${id}/correccion`;
+    assert.equal((await api(`/tecnicos/diagnosticos/${id}`)).data.puede_reabrir_diagnostico, true);
+    const completedList = await api('/tecnicos/mis-diagnosticos/tecnico_privacidad?grupo=completados');
+    const listed = completedList.data.find((d) => d.id_diagnostico === id);
+    assert.equal(listed?.puede_reabrir_diagnostico, true);
+    assert.equal(listed?.motivo_reapertura, null);
+    await api(url, { actor: otro, method: 'PATCH', body: { tipo: 'REABRIR', motivo: 'Cierre accidental' }, status: 403 });
+    await api(url, { method: 'PATCH', body: { tipo: 'REABRIR' }, status: 400 });
+    const reopened = await api(url, { method: 'PATCH', body: { tipo: 'REABRIR', motivo: 'Se completó por error antes de la segunda prueba' } });
+    privateFree(reopened, f.cliente);
+    assert.equal(reopened.data.estado_del_diagnostico, 'EN_REVISION');
+    assert.equal(reopened.data.fecha_completado, null);
+    assert.equal(reopened.data.diagnostico_real, '');
+    assert.equal(reopened.data.borrador_tecnico.diagnostico, 'Falla en placa');
+    assert.equal(reopened.data.borrador_tecnico.solucion, 'Revisar fuente');
+    assert.equal(reopened.data.borrador_tecnico.presupuesto, 150);
+    const detail = await api(`/tecnicos/diagnosticos/${id}`);
+    assert.ok(detail.data.correcciones.some((c) => c.tipo === 'REAPERTURA_DIAGNOSTICO' && c.antes.estado === 'COMPLETADO'));
+    assert.ok(detail.data.historial.some((h) => h.estado_anterior === 'COMPLETADO' && h.estado_nuevo === 'EN_REVISION'));
+    assert.ok((await api('/tecnicos/mis-diagnosticos/tecnico_privacidad')).data.some((d) => d.id_diagnostico === id));
+    await api(`/tecnicos/diagnosticos/${id}`, { method: 'PUT', body: { diagnostico_real: 'Placa revisada', solucion_propuesta: 'Fuente sustituida', presupuesto_estimado: 180 } });
+    assert.equal((await prisma.diagnosticos.findUnique({ where: { id_diagnostico: id } })).estado_del_diagnostico, 'COMPLETADO');
+    const linked = await order();
+    const linkedList = await api('/tecnicos/mis-diagnosticos/tecnico_privacidad?grupo=completados');
+    assert.match(linkedList.data.find((d) => d.id_diagnostico === linked.diagnostico.id_diagnostico)?.motivo_reapertura || '', /orden asociada/);
+    await api(`/tecnicos/diagnosticos/${linked.diagnostico.id_diagnostico}/correccion`, { method: 'PATCH', body: { tipo: 'REABRIR', motivo: 'Error' }, status: 409 });
+    await prisma.diagnosticos.update({ where: { id_diagnostico: linked.diagnostico.id_diagnostico }, data: { estado_del_diagnostico: 'APROBADO' } });
+    const approvedId = linked.diagnostico.id_diagnostico;
+    const approvedDetail = await api(`/tecnicos/diagnosticos/${approvedId}`);
+    assert.equal(approvedDetail.data.puede_reabrir_diagnostico, false);
+    assert.match(approvedDetail.data.registro.motivo_reapertura, /orden asociada/);
+    await api(`/tecnicos/diagnosticos/${approvedId}/correccion`, { method: 'PATCH', body: { tipo: 'REABRIR', motivo: 'Error' }, status: 409 });
+    await api(`/tecnicos/diagnosticos/${approvedId}/correccion`, { method: 'PATCH', body: { tipo: 'ACLARAR', motivo: 'Aclarar el resultado', aclaracion: 'Prueba adicional documentada' } });
+    const approvedAfter = await api(`/tecnicos/diagnosticos/${approvedId}`);
+    assert.ok(approvedAfter.data.correcciones.some((c) => c.tipo === 'ACLARACION_DIAGNOSTICO' && c.despues.aclaracion === 'Prueba adicional documentada'));
+    assert.equal(approvedAfter.data.registro.estado_del_diagnostico, 'APROBADO');
+    const sent = await fixture({ estado_del_diagnostico: 'COMPLETADO', fecha_completado: new Date(),
+      diagnostico_real: 'Enviado', estado_contacto: 'DOCUMENTO_ENVIADO', fecha_envio_documento: new Date() });
+    await api(`/tecnicos/diagnosticos/${sent.diagnostico.id_diagnostico}/correccion`, { method: 'PATCH', body: { tipo: 'REABRIR', motivo: 'Error' }, status: 409 });
+  });
+  test('La solicitud pendiente puede corregirse o retirarse antes de la decisión del jefe', async () => {
+    const f = await order({ estado: 'ESPERANDO_PIEZA', fecha_inicio_reparacion: new Date() }), id = f.orden.id_orden;
+    const piece = await prisma.ordenes_Repuestos.create({ data: { orden_id: id, tecnico_solicitante_id: tecnico.perfil.id_tecnico,
+      pieza_solicitada: 'Pantalla', cantidad_usada: 1, estado_aprobacion: 'PENDIENTE' } });
+    const url = `/tecnicos/solicitudes/${piece.id_detalle_repuesto}`;
+    await api(url, { actor: otro, method: 'PATCH', body: { tipo: 'RETIRAR', motivo: 'Error' }, status: 403 });
+    await api(url, { method: 'PATCH', body: { tipo: 'CORREGIR', pieza_solicitada: 'Pantalla', cantidad: 2, motivo: 'Cantidad errónea' } });
+    assert.equal((await prisma.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: piece.id_detalle_repuesto } })).cantidad_usada, 2);
+    await api(url, { method: 'PATCH', body: { tipo: 'RETIRAR', motivo: 'Ya no se necesita' } });
+    assert.equal(await prisma.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: piece.id_detalle_repuesto } }), null);
+    assert.equal((await prisma.ordenes.findUnique({ where: { id_orden: id } })).estado, 'EN_REPARACION');
+    const detail = await api(`/tecnicos/ordenes/${id}`); privateFree(detail, f.cliente);
+    assert.ok(detail.data.correcciones.some((c) => c.tipo === 'RETIRO_SOLICITUD_TECNICO' && c.antes.cantidad_usada === 2));
+  });
+  test('El informe irreparable pendiente puede corregirse o retirarse antes de la decisión', async () => {
+    const f = await order({ estado: 'IRREPARABLE', fecha_inicio_reparacion: new Date(),
+      irreparable_estado: 'PENDIENTE', resultado_final: 'IRREPARABLE', justificacion_irreparable: 'Informe inicial', observacion_final: 'Informe inicial' });
+    const id = f.orden.id_orden, url = `/tecnicos/ordenes/${id}/irreparable`;
+    await api(url, { actor: otro, method: 'PATCH', body: { tipo: 'RETIRAR', motivo: 'Error' }, status: 403 });
+    await api(url, { method: 'PATCH', body: { tipo: 'CORREGIR', motivo: 'Prueba omitida', justificacion: 'Daño de placa confirmado' } });
+    assert.equal((await prisma.ordenes.findUnique({ where: { id_orden: id } })).justificacion_irreparable, 'Daño de placa confirmado');
+    await api(url, { method: 'PATCH', body: { tipo: 'RETIRAR', motivo: 'Reparación posible' } });
+    const orden = await prisma.ordenes.findUnique({ where: { id_orden: id } });
+    assert.equal(orden.estado, 'EN_REPARACION'); assert.equal(orden.irreparable_estado, 'NO_SOLICITADO');
+    const detail = await api(`/tecnicos/ordenes/${id}`); privateFree(detail, f.cliente);
+    assert.ok(detail.data.correcciones.some((c) => c.tipo === 'RETIRO_IRREPARABLE'));
+    await api(url, { method: 'PATCH', body: { tipo: 'CORREGIR', motivo: 'Tardío', justificacion: 'Otra' }, status: 409 });
+  });
   test('Irreparable pendiente permanece activa; la decisión del jefe se refleja sin datos privados', async () => {
     const f = await order({ estado: 'EN_REPARACION', fecha_inicio_reparacion: new Date() }), id = f.orden.id_orden;
     await api(`/tecnicos/ordenes/${id}/estado`, { method: 'PATCH', body: { estado: 'IRREPARABLE', observacion_final: 'Daño en placa', enciende_salida: 'true' }, status: 400 });
@@ -161,19 +253,54 @@ if (!databaseName) {
     assert.equal((await api(`/archivos-servicio/diagnosticos/${f.diagnostico.id_diagnostico}`)).data.length, 0);
     await api(`/archivos-servicio/${id}/contenido`, { status: 403 });
     await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { method: 'PATCH', body: { visible_tecnico: true, sin_datos_cliente: true }, status: 403 });
-    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true }, status: 400 });
-    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true, sin_datos_cliente: true } });
+    assert.equal((await api(`/archivos-servicio/diagnosticos/${f.diagnostico.id_diagnostico}`, { actor: jefe })).data[0].id_archivo, id);
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true, motivo: 'Sin datos personales' }, status: 400 });
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true, sin_datos_cliente: true }, status: 400 });
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true, sin_datos_cliente: true, motivo: 'Solo muestra el equipo' } });
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true, sin_datos_cliente: true, motivo: 'Duplicado' }, status: 409 });
     const [audit] = await prisma.$queryRaw`SELECT usuario_id FROM "Auditoria_Movimientos" WHERE tabla = 'ArchivosServicio' AND registro_pk->>'id_archivo' = ${String(id)} ORDER BY id_auditoria DESC LIMIT 1`;
     assert.ok(audit, 'La revisión de la foto tiene una auditoría vinculada a su identificador');
     assert.equal(audit.usuario_id, jefe.id_usuario);
+    const review = (await api(`/jefe-tecnico/diagnosticos/${f.diagnostico.id_diagnostico}`, { actor: jefe })).data.intervenciones.find((entry) => entry.tipo === 'REVISION_FOTO_TECNICA');
+    assert.equal(review.motivo, 'Solo muestra el equipo');
+    assert.equal(review.usuario_id, jefe.id_usuario);
+    assert.equal(review.datos_nuevos.id_archivo, id);
+    assert.equal(review.datos_nuevos.visible_tecnico, true);
     privateFree(await api(`/archivos-servicio/diagnosticos/${f.diagnostico.id_diagnostico}`), f.cliente);
     const image = await request(`/archivos-servicio/${id}/contenido`); const meta = await sharp(image.data).metadata();
     assert.equal(meta.format, 'webp'); assert.equal(meta.width, 12); assert.equal(meta.height, 12);
     assert.equal(image.headers.get('content-type'), 'image/webp');
     assert.equal(meta.exif, undefined); assert.equal(meta.xmp, undefined); assert.ok(image.headers.get('content-disposition').includes('foto-tecnica-'));
     await api(`/archivos-servicio/${id}/contenido`, { actor: otro, status: 403 });
-    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: secretaria, method: 'PATCH', body: { visible_tecnico: false } });
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: secretaria, method: 'PATCH', body: { visible_tecnico: false, motivo: 'Se detectó una etiqueta con datos del cliente' } });
     await api(`/archivos-servicio/${id}/contenido`, { status: 403 });
+    const history = (await api(`/jefe-tecnico/diagnosticos/${f.diagnostico.id_diagnostico}`, { actor: jefe })).data.intervenciones.filter((entry) => entry.tipo === 'REVISION_FOTO_TECNICA');
+    assert.equal(history.length, 2);
+    assert.equal(history[0].motivo, 'Se detectó una etiqueta con datos del cliente');
+    assert.equal(history[0].datos_nuevos.visible_tecnico, false);
+  });
+  test('La revisión de fotos de reparación conserva el motivo en la orden', async () => {
+    const f = await order();
+    const bytes = await sharp({ create: { width: 12, height: 12, channels: 3, background: '#fff' } }).jpeg().toBuffer();
+    const uploaded = await api(`/archivos-servicio/ordenes/${f.orden.id_orden}`, { actor: secretaria, method: 'POST', bytes,
+      headers: { 'Content-Type': 'image/jpeg', 'X-Tipo-Archivo': 'FOTO_REPARACION' }, status: 201 });
+    const id = uploaded.data.id_archivo;
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: true, sin_datos_cliente: true, motivo: 'Evidencia de la pieza reparada' } });
+    const detail = (await api(`/jefe-tecnico/ordenes/${f.orden.id_orden}`, { actor: jefe })).data;
+    const review = detail.intervenciones.find((entry) => entry.tipo === 'REVISION_FOTO_TECNICA');
+    assert.equal(review.motivo, 'Evidencia de la pieza reparada');
+    assert.equal(review.datos_nuevos.id_archivo, id);
+    assert.equal(review.datos_nuevos.visible_tecnico, true);
+    await api(`/archivos-servicio/${id}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: { visible_tecnico: false, motivo: 'La foto corresponde a otro equipo' } });
+    assert.equal((await api(`/archivos-servicio/ordenes/${f.orden.id_orden}`, { actor: jefe })).data[0].visible_tecnico, false);
+    const diagnosticPhoto = await api(`/archivos-servicio/diagnosticos/${f.diagnostico.id_diagnostico}`, { actor: secretaria, method: 'POST', bytes,
+      headers: { 'Content-Type': 'image/jpeg', 'X-Tipo-Archivo': 'FOTO_DIAGNOSTICO' }, status: 201 });
+    await api(`/archivos-servicio/${diagnosticPhoto.data.id_archivo}/visibilidad-tecnica`, { actor: jefe, method: 'PATCH', body: {
+      visible_tecnico: true, sin_datos_cliente: true, motivo: 'Diagnóstico visible para el responsable de la orden',
+    } });
+    const linked = (await api(`/jefe-tecnico/ordenes/${f.orden.id_orden}`, { actor: jefe })).data;
+    assert.ok(linked.intervenciones_diagnostico.some((entry) => entry.tipo === 'REVISION_FOTO_TECNICA'
+      && entry.datos_nuevos.id_archivo === diagnosticPhoto.data.id_archivo));
   });
   test('Corrección del cierre y fotos conservan historial; fuera del plazo se marcan como excepción', async () => {
     const f = await order({ estado: 'EN_REPARACION', fecha_inicio_reparacion: new Date() });
@@ -181,6 +308,8 @@ if (!databaseName) {
     await api(`/tecnicos/ordenes/${id}/estado`, { method: 'PATCH', body: { estado: 'FINALIZADO',
       observacion_final: 'Informe original', enciende_salida: true, usa_corriente_ac_salida: true,
       pruebas_salida: { funcion_principal: 'CORRECTO', carga: 'CORRECTO', pantalla: 'CORRECTO', conectividad: 'CORRECTO' } } });
+    const cerradas = await api('/tecnicos/mis-ordenes/tecnico_privacidad?grupo=completados');
+    assert.equal(cerradas.data.find((o) => o.id_orden === id)?.correccion_cierre?.puede_editar_informe, true);
     const correction = { tipo: 'CORREGIR', motivo: 'Faltó anotar una prueba', observacion_final: 'Informe corregido',
       enciende_salida: true, usa_corriente_ac_salida: false,
       pruebas_salida: { funcion_principal: 'CORRECTO', carga: 'CORRECTO', pantalla: 'CORRECTO', conectividad: 'CORRECTO' } };

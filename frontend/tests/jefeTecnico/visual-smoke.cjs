@@ -1,4 +1,4 @@
-// Revisión visual local y de solo lectura. Requiere Playwright y Edge/Chromium.
+// Revisión visual local sin modificar datos. Requiere Playwright y Edge/Chromium.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs/promises');
@@ -79,13 +79,25 @@ const sessionScript = `
     if (await detailButton.count()) {
       await detailButton.click();
       const dialog = page.getByRole('dialog');
-      await dialog.getByRole('heading', { name: 'Historial del trabajo' }).waitFor();
+      await dialog.getByRole('button', { name: 'Datos generales', exact: true }).waitFor();
       assert.ok(await dialog.getByText('Técnico responsable', { exact: true }).count());
+      await dialog.getByRole('button', { name: 'Avances e historial', exact: true }).click();
+      await dialog.getByRole('heading', { name: 'Cambios de estado y asignaciones' }).waitFor();
+      await dialog.getByRole('button', { name: 'Fotografías', exact: true }).click();
+      assert.equal(await dialog.getByRole('button', { name: 'Actualizar fotos' }).count(), 0);
+      assert.equal(await dialog.getByLabel('Tomar fotografía con cámara').count(), 0);
+      const photoButton = dialog.locator('section button.text-left').first();
+      if (await photoButton.count()) {
+        await photoButton.click();
+        await dialog.getByLabel('Motivo de la revisión fotográfica').waitFor();
+        const reviewButton = dialog.getByRole('button', { name: /^(Autorizar para el técnico|Retirar del expediente técnico)$/ });
+        assert.equal(await reviewButton.isDisabled(), true);
+      }
       await screenshot('dialogo-detalle');
       await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
     }
     await screenshot('escritorio-seguimiento');
-    for (const [title, name] of [['Equipo técnico', 'equipo'], ['Repuestos', 'repuestos'], ['Irreparables', 'irreparables'], ['Pendientes y retrasos', 'alertas'], ['Correcciones y excepciones', 'intervenciones']]) {
+    for (const [title, name] of [['Diagnósticos cerrados', 'diagnosticos-cerrados'], ['Órdenes cerradas', 'ordenes-cerradas'], ['Equipo técnico', 'equipo'], ['Repuestos', 'repuestos'], ['Irreparables', 'irreparables'], ['Pendientes y retrasos', 'alertas'], ['Correcciones y excepciones', 'intervenciones']]) {
       await go(title); await screenshot(`escritorio-${name}`);
     }
     await go('Resumen del taller');

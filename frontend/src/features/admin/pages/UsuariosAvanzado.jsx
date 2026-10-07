@@ -45,6 +45,7 @@ export default function UsuariosAvanzado() {
 
   const [passwordUsuario, setPasswordUsuario] = useState(null);
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
@@ -109,25 +110,7 @@ export default function UsuariosAvanzado() {
         rol: selectedUsuario.rol,
         activo: selectedUsuario.activo === 'Sí',
       });
-      const passwordNueva = String(selectedUsuario.password_nueva || '').trim();
-      if (passwordNueva) {
-        if (passwordNueva.length < passwordMinimum) {
-          setEditMessage(`El perfil se guardó, pero la contraseña debe tener al menos ${passwordMinimum} caracteres.`);
-          return;
-        }
-
-        if (!String(selectedUsuario.admin_password || '').trim()) {
-          setEditMessage('Ingrese la contraseña del administrador para cambiar la contraseña del usuario.');
-          return;
-        }
-
-        await usuariosService.updatePassword(selectedUsuario.id_usuario, {
-          password: passwordNueva,
-          admin_password: selectedUsuario.admin_password,
-        });
-      }
-
-      setEditMessage(passwordNueva ? 'Usuario y contraseña actualizados correctamente.' : 'Usuario actualizado correctamente.');
+      setEditMessage('Usuario actualizado correctamente.');
       fetchUsuarios();
       setTimeout(() => setSelectedUsuario(null), 1000);
     } catch (err) {
@@ -146,6 +129,11 @@ export default function UsuariosAvanzado() {
       return;
     }
 
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage('La confirmación de contraseña no coincide.');
+      return;
+    }
+
     if (!adminPassword.trim()) {
       setPasswordMessage('Ingrese la contraseña del administrador.');
       return;
@@ -160,6 +148,7 @@ export default function UsuariosAvanzado() {
       });
       setPasswordMessage(response.data?.message || 'Contraseña actualizada correctamente.');
       setNewPassword('');
+      setConfirmPassword('');
       setAdminPassword('');
       setTimeout(() => setPasswordUsuario(null), 1000);
     } catch (err) {
@@ -258,7 +247,7 @@ export default function UsuariosAvanzado() {
           {canResetPassword && !isOwnAccount(row) && (
             <button
               type="button"
-              onClick={() => { setPasswordUsuario(row); setPasswordMessage(''); setNewPassword(''); setSelectedUsuario(null); }}
+              onClick={() => { setPasswordUsuario(row); setPasswordMessage(''); setNewPassword(''); setConfirmPassword(''); setAdminPassword(''); setSelectedUsuario(null); }}
               className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-amber-700"
             >
               Contraseña
@@ -546,32 +535,6 @@ export default function UsuariosAvanzado() {
                 <label htmlFor="edit-activo" className="text-sm text-slate-700 cursor-pointer select-none font-semibold">Cuenta Activa</label>
               </div>
 
-              {canResetPassword && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700">Nueva contraseña</label>
-                  <input
-                    type="password"
-                    value={selectedUsuario.password_nueva || ''}
-                    onChange={(e) => setSelectedUsuario((prev) => ({ ...prev, password_nueva: e.target.value }))}
-                    className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50"
-                    placeholder="Dejar vacío para no cambiarla"
-                  />
-                </div>
-              )}
-
-              {canResetPassword && selectedUsuario.password_nueva && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700">Contraseña del administrador</label>
-                  <input
-                    type="password"
-                    value={selectedUsuario.admin_password || ''}
-                    onChange={(e) => setSelectedUsuario((prev) => ({ ...prev, admin_password: e.target.value }))}
-                    className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50"
-                    placeholder="Confirme su contraseña"
-                  />
-                </div>
-              )}
-
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -613,7 +576,21 @@ export default function UsuariosAvanzado() {
                   className="mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50"
                   minLength={passwordMinimum}
                   autoComplete="new-password"
+                  required
                   placeholder={`Mínimo ${passwordMinimum} caracteres`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700">Confirmar nueva contraseña</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50"
+                  minLength={passwordMinimum}
+                  autoComplete="new-password"
+                  required
                 />
               </div>
 
@@ -625,6 +602,8 @@ export default function UsuariosAvanzado() {
                   onChange={(e) => setAdminPassword(e.target.value)}
                   className="mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50"
                   placeholder="Confirme su contraseña"
+                  autoComplete="current-password"
+                  required
                 />
               </div>
 

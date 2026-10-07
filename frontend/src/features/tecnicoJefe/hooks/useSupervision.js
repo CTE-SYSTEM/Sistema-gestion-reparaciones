@@ -55,6 +55,18 @@ export function useSupervision(user) {
     } finally { if (current === detailRequest.current) setDetailLoading(false); }
   };
 
+  const refreshDetail = async () => {
+    if (dialog?.action !== 'detalle') return;
+    const current = detailRequest.current;
+    try {
+      const response = await service.detalle(dialog.row.tipo, dialog.row.id);
+      if (current === detailRequest.current) { setDetail(response.data.data); setFormError(''); }
+    } catch (err) {
+      if (current === detailRequest.current) setFormError(err.response?.data?.error || 'La foto se revisó, pero no se pudo actualizar el historial.');
+    }
+    await reload();
+  };
+
   const submit = async (values) => {
     if (!dialog || busy) return;
     setBusy(true); setFormError('');
@@ -75,5 +87,5 @@ export function useSupervision(user) {
     } catch (err) { setFormError(err.response?.data?.error || 'No se pudo registrar el cambio.'); }
     finally { setBusy(false); }
   };
-  return { data, loading, error, notice, busy, dialog, detail, detailLoading, formError, allowed, reload, open, closeDialog, submit, realtime };
+  return { data, loading, error, notice, busy, dialog, detail, detailLoading, formError, allowed, reload, open, closeDialog, submit, refreshDetail, realtime };
 }

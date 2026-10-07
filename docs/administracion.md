@@ -1,6 +1,6 @@
 # Administración del taller
 
-La barra lateral del administrador agrupa Gestión, Reportes y Administración. El resumen ofrece accesos al centro de reportes, a la administración y a los respaldos. Las rutas anteriores siguen disponibles para los módulos de gestión.
+La barra lateral del administrador muestra Resumen y Centro de reportes como accesos directos. Gestión y Administración se despliegan al pulsar sus encabezados; al entrar directamente a una página, se abre su grupo. Todas las páginas y rutas anteriores siguen disponibles. El resumen ofrece accesos al centro de reportes, a la administración y a los respaldos.
 
 | Apartado | Función | Ruta |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ La barra lateral del administrador agrupa Gestión, Reportes y Administración. 
 
 Mi cuenta exige la contraseña actual para guardar el perfil, cambiar contraseña o cerrar todas las sesiones. Un cambio de contraseña invalida los tokens anteriores; después hay que iniciar sesión otra vez. La creación y el restablecimiento administrativo usan el mínimo configurado, inicialmente ocho caracteres, con un máximo de 72 bytes compatible con bcrypt. Las contraseñas existentes se conservan.
 
-No se puede desactivar la cuenta propia ni cambiar su rol. Los cambios de acceso se serializan para conservar al menos un administrador activo incluso con solicitudes simultáneas. Usuarios permite crear Secretaría, Técnico y Jefe técnico; conserva los administradores existentes y no permite elevar nuevas cuentas a administrador desde ese formulario. Crear un técnico genera su perfil vinculado.
+No se puede desactivar la cuenta propia ni cambiar su rol. Los cambios de acceso se serializan para conservar al menos un administrador activo incluso con solicitudes simultáneas. Usuarios permite crear Secretaría, Técnico y Jefe técnico; conserva los administradores existentes y no permite elevar nuevas cuentas a administrador desde ese formulario. Crear un técnico genera su perfil vinculado. La acción **Contraseña** de cada usuario pide la nueva contraseña, su confirmación y la contraseña del administrador; al guardarla invalida las sesiones anteriores de ese usuario.
 
 El correo del perfil es un dato de contacto. La recuperación mediante correo o SMS todavía requiere una implementación y credenciales del proveedor; estos cambios no crean cuentas de prueba ni envían códigos.
 
@@ -42,13 +42,17 @@ Al cambiar el reporte o sus filtros se descarta el resultado anterior. Excel es 
 
 Los diagnósticos conservan `moneda_presupuesto`, separando NIO y USD. No hay conversión ni suma entre monedas. Los resultados de reparaciones incluyen los costos registrados; no representan un estado contable con gastos operativos ausentes. Inventario distingue stock físico, reservado y disponible, y sus salidas corresponden a repuestos aprobados y entregados.
 
+Las demás páginas administrativas también generan archivos Excel `.xlsx` reales, con encabezados, autofiltros de columnas y fila fija. Esto incluye las descargas de diagnósticos y repuestos de una orden; los teléfonos y referencias se conservan como texto. Los PDF incluyen el total correcto de registros, encabezados y numeración en cada página; los reportes anchos usan orientación horizontal y tamaño A3 cuando hace falta. Los totales numéricos del PDF solo se muestran en columnas marcadas explícitamente para sumar, para evitar sumar identificadores o importes de distintas monedas.
+
 ## Respaldos y recuperación
 
-Las copias se organizan por mes y llevan un manifiesto con fecha, origen, usuario, estado, archivos, tamaño y SHA-256. Una copia completa usa `pg_dump --format=custom`, incluye todos los esquemas de la base y conserva funciones y reglas SQL. Si falla, una exportación JSON de tablas públicas se identifica como **PARCIAL**. También se genera inventario Excel/PDF e informe de resultado.
+Las copias se organizan por mes y llevan un manifiesto con fecha, origen, usuario, estado, archivos, tamaño y SHA-256. Una copia completa usa `pg_dump --format=custom`, incluye todos los esquemas de la base y conserva funciones y reglas SQL. Si falla, una exportación JSON de tablas públicas se identifica como **PARCIAL**. También se genera inventario Excel/PDF e informe de resultado. El inventario usa presentación neutral: Excel con filtros y cifras numéricas, PDF con columnas alineadas, encabezados repetidos y páginas numeradas.
 
-El Dockerfile instala `postgresql16-client`, correspondiente al PostgreSQL 16 de Compose. El servicio comprueba que la versión mayor de `pg_dump` coincide con el servidor; una incompatibilidad produce copia parcial, nunca una declaración de copia restaurable. Para instalaciones externas pueden configurarse `PG_DUMP_PATH` y `PG_RESTORE_PATH`. La compatibilidad entre versiones sigue las restricciones de [PostgreSQL sobre pg_dump](https://www.postgresql.org/docs/16/app-pgdump.html).
+El Dockerfile instala clientes PostgreSQL 16 y 17 para respaldar tanto la base local de Compose como Neon. El servicio elige la versión correspondiente al servidor; una incompatibilidad produce copia parcial, nunca una declaración de copia restaurable. Para instalaciones externas pueden configurarse `PG_DUMP_PATH` y `PG_RESTORE_PATH`. La compatibilidad entre versiones sigue las restricciones de [PostgreSQL sobre pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html).
 
 La programación puede ser diaria, semanal o mensual, con hora de Nicaragua. La próxima ejecución y los reintentos persisten en PostgreSQL: reiniciar el servidor conserva una ejecución pendiente. Un bloqueo de PostgreSQL impide dos copias simultáneas entre procesos. Ante un fallo programado hay dos reintentos, a cinco y diez minutos, antes de continuar con el calendario. El backend debe estar activo para ejecutar las copias.
+
+En Vercel la API no mantiene un proceso permanente: una tarea diaria comprueba las copias vencidas. El respaldo de la base es una instantánea de la rama de Neon, y PDF, Excel y manifiesto se guardan en R2. La verificación consulta Neon y comprueba SHA-256 de los archivos de R2. El archivo de referencia de la instantánea no es un `.dump`; la recuperación se hace desde Neon. Consulte [despliegue-vercel-neon.md](despliegue-vercel-neon.md) para configurar las variables y conocer los límites del plan.
 
 La conservación se expresa en días; cero conserva todo. Solo se retiran copias completas antiguas gestionadas por el servicio, siempre manteniendo la última completa. Los archivos anteriores sin manifiesto y las copias parciales no se eliminan por esta regla.
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 
 const COLUMNS = [
   { header: 'Cliente', accessor: 'cliente' },
@@ -73,10 +73,10 @@ export default function ClientesAvanzado() {
   }, [clientes, searchTerm, searchParam]);
 
   // Handlers para Descargas de Reportes utilizando la lista filtrada
-  const downloadClientesCsv = () => {
+  const downloadClientesCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(clientesFiltrados, COLUMNS, 'clientes_equipos.csv');
+      await downloadJsonExcel(clientesFiltrados, COLUMNS, 'clientes_equipos.xlsx');
     } catch (err) {
       setError('No se pudo descargar el reporte en Excel.');
     } finally {

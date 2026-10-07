@@ -2,7 +2,7 @@ import prisma from '../../app/prismaClient.js';
 import { Prisma } from '@prisma/client';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { ORDEN_ESTADOS, RESULTADOS_ORDEN, assertInList, parseNonNegativeMoney, parsePositiveId } from '../../utils/domainValidation.js';
-import { assertPuedeFinalizar, assertTrabajoPropio, auditMotivo, fail, lockTrabajo } from '../../utils/tecnicoWorkflow.js';
+import { assertPuedeFinalizar, assertTrabajoPropio, auditMotivo, fail, lockTrabajo, motivoObligatorio } from '../../utils/tecnicoWorkflow.js';
 import { stockDisponible } from './stockDisponible.js';
 import { monedaPresupuesto } from '../../utils/monedaPresupuesto.js';
 import { normalizeRole } from '../../utils/roles.js';
@@ -48,6 +48,8 @@ const diagnosticoInclude = {
   avances_tecnicos: { orderBy: { fecha_hora: 'desc' }, take: 1 },
   equipo: { include: { cliente: true } },
   tecnico: true,
+  ordenes: { select: { id_orden: true }, take: 1 },
+  factura_diagnostico: { select: { id_factura: true } },
 };
 
 export const getDatabaseMessage = (error) => {
@@ -436,6 +438,158 @@ export const corregirCierreOrden = (value, payload, user) => withAuditUser(user,
   return ordenTecnica(actualizado);
 });
 
+export const corregirDiagnostico = (value, payload, user) => withAuditUser(user, async (tx) => {
+  const id = parsePositiveId(value);
+  if (!id) fail(400, 'Diagnóstico no válido');
+  await lockTrabajo(tx, 'diagnostico', id);
+  const actual = await tx.diagnosticos.findUnique({ where: { id_diagnostico: id }, include: diagnosticoInclude });
+  if (!actual) fail(404, 'Diagnóstico no encontrado');
+  await assertTrabajoPropio(tx, user, actual.tecnico_id);
+  const motivo = motivoObligatorio(payload.motivo);
+  const tipo = String(payload.tipo || '').toUpperCase();
+  if (!['CORREGIR', 'ACLARAR', 'REABRIR'].includes(tipo)) fail(400, 'Seleccione corrección, aclaración o reapertura');
+  if (tipo === 'ACLARAR' ? !diagnosticosCerrados.includes(actual.estado_del_diagnostico)
+    : actual.estado_del_diagnostico !== 'COMPLETADO')
+    fail(409, 'Esta acción no está disponible para el estado actual del diagnóstico');
+  const [vinculada, facturada] = await Promise.all([
+    tx.ordenes.count({ where: { diagnostico_id: id } }), tx.facturas.count({ where: { diagnostico_id: id } }),
+  ]);
+  if (tipo !== 'ACLARAR' && (vinculada || facturada)) fail(409, 'El diagnóstico ya tiene una orden o factura. Registre una aclaración para conservar el informe utilizado');
+  if (tipo === 'REABRIR' && (actual.fecha_envio_documento || actual.estado_contacto !== 'PENDIENTE_CONTACTAR'))
+    fail(409, 'El diagnóstico ya avanzó en la comunicación con el cliente. Registre una aclaración en vez de reabrirlo');
+  const anterior = { diagnostico_real: actual.diagnostico_real, solucion_propuesta: actual.solucion_propuesta,
+    presupuesto_estimado: actual.presupuesto_estimado?.toString() ?? null, moneda_presupuesto: actual.moneda_presupuesto,
+    estado: actual.estado_del_diagnostico, fecha_completado: actual.fecha_completado };
+  let nuevo = {};
+  if (tipo === 'CORREGIR') {
+    const informe = String(payload.diagnostico_real || '').trim();
+    const solucion = String(payload.solucion_propuesta || '').trim();
+    if (!informe || informe.length > 10000 || solucion.length > 10000) fail(400, 'Registre un informe válido de hasta 10000 caracteres');
+    const presupuesto = payload.presupuesto_estimado === '' || payload.presupuesto_estimado == null ? null
+      : parseNonNegativeMoney(payload.presupuesto_estimado, 'El presupuesto estimado');
+    nuevo = { diagnostico_real: solucion ? `${informe}\n\nSolución: ${solucion}` : informe,
+      solucion_propuesta: solucion || null, presupuesto_estimado: presupuesto,
+      moneda_presupuesto: monedaPresupuesto(payload.moneda_presupuesto, actual.moneda_presupuesto) };
+    if (actual.diagnostico_real === nuevo.diagnostico_real
+      && (actual.solucion_propuesta || null) === nuevo.solucion_propuesta
+      && (actual.presupuesto_estimado == null ? null : Number(actual.presupuesto_estimado)) === presupuesto
+      && actual.moneda_presupuesto === nuevo.moneda_presupuesto) fail(400, 'Cambie al menos un dato del informe');
+  } else if (tipo === 'REABRIR') {
+    const informe = diagnosticoTecnico(actual).diagnostico_real;
+    nuevo = { estado_del_diagnostico: 'EN_REVISION', fecha_completado: null,
+      fecha_inicio: actual.fecha_inicio || new Date(), diagnostico_real: null, solucion_propuesta: null,
+      presupuesto_estimado: null, fecha_borrador: new Date(),
+      borrador_tecnico: { diagnostico: informe, solucion: actual.solucion_propuesta || '',
+        presupuesto: actual.presupuesto_estimado == null ? '' : Number(actual.presupuesto_estimado),
+        moneda_presupuesto: actual.moneda_presupuesto || 'NIO' } };
+  } else {
+    nuevo = { aclaracion: String(payload.aclaracion || '').trim() };
+    if (!nuevo.aclaracion || nuevo.aclaracion.length > 4000) fail(400, 'Escriba una aclaración de hasta 4000 caracteres');
+  }
+  await auditMotivo(tx, motivo);
+  const updated = tipo === 'ACLARAR' ? actual : await tx.diagnosticos.update({ where: { id_diagnostico: id }, data: nuevo, include: diagnosticoInclude });
+  await tx.intervencionesTecnicas.create({ data: { diagnostico_id: id, tipo: tipo === 'CORREGIR' ? 'CORRECCION_DIAGNOSTICO' : tipo === 'REABRIR' ? 'REAPERTURA_DIAGNOSTICO' : 'ACLARACION_DIAGNOSTICO',
+    motivo, usuario_id: user.id, datos_anteriores: anterior, datos_nuevos: tipo === 'REABRIR' ? {
+      estado: 'EN_REVISION', fecha_completado: null, borrador_tecnico: nuevo.borrador_tecnico,
+    } : nuevo } });
+  return diagnosticoTecnico(updated);
+});
+
+export const corregirAvance = (kind, value, avanceValue, payload, user) => withAuditUser(user, async (tx) => {
+  const id = parsePositiveId(value), avanceId = parsePositiveId(avanceValue);
+  if (!id || !avanceId) fail(400, 'Avance no válido');
+  const diagnostic = kind === 'diagnostico';
+  await lockTrabajo(tx, kind, id);
+  const r = await tx[diagnostic ? 'diagnosticos' : 'ordenes'].findUnique({
+    where: { [diagnostic ? 'id_diagnostico' : 'id_orden']: id }, include: diagnostic ? diagnosticoInclude : ordenInclude });
+  if (!r) fail(404, 'Trabajo no encontrado');
+  await assertTrabajoPropio(tx, user, r.tecnico_id);
+  const avance = await tx.bitacoraTecnica.findUnique({ where: { id_avance: avanceId } });
+  if (!avance || avance[diagnostic ? 'diagnostico_id' : 'orden_id'] !== id) fail(404, 'Avance no encontrado');
+  if (avance.usuario_id !== user.id) fail(403, 'Solo puede corregir sus propias notas');
+  const cliente = diagnostic ? r.equipo?.cliente : r.diagnostico?.equipo?.cliente;
+  const observacion = textoTecnico(String(payload.observacion || '').trim(), cliente);
+  if (!observacion || observacion.length > 2000) fail(400, 'Escriba un avance de hasta 2000 caracteres');
+  if (observacion === avance.observacion) fail(400, 'Cambie la nota antes de guardarla');
+  const motivo = motivoObligatorio(payload.motivo);
+  await auditMotivo(tx, motivo);
+  const updated = await tx.bitacoraTecnica.update({ where: { id_avance: avanceId }, data: { observacion }, include: { usuario: { select: { nombre_usuario: true } } } });
+  await tx.intervencionesTecnicas.create({ data: { [diagnostic ? 'diagnostico_id' : 'orden_id']: id,
+    tipo: 'CORRECCION_AVANCE', motivo, usuario_id: user.id,
+    datos_anteriores: { id_avance: avanceId, observacion: avance.observacion }, datos_nuevos: { id_avance: avanceId, observacion } } });
+  return avanceTecnico(updated, cliente);
+});
+
+export const corregirSolicitud = (value, payload, user) => withAuditUser(user, async (tx) => {
+  const id = parsePositiveId(value);
+  if (!id) fail(400, 'Solicitud no válida');
+  const previous = await tx.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: id } });
+  if (!previous) fail(404, 'Solicitud no encontrada');
+  await lockTrabajo(tx, 'orden', previous.orden_id);
+  await tx.$queryRaw`SELECT id_detalle_repuesto FROM "Ordenes_Repuestos" WHERE id_detalle_repuesto = ${id} FOR UPDATE`;
+  const solicitud = await tx.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: id }, include: { orden: true } });
+  if (!solicitud) fail(404, 'Solicitud no encontrada');
+  const tecnico = await assertTrabajoPropio(tx, user, solicitud.orden.tecnico_id);
+  if (solicitud.tecnico_solicitante_id !== tecnico?.id_tecnico) fail(403, 'Solo puede corregir sus solicitudes');
+  if (solicitud.estado_aprobacion !== 'PENDIENTE' || !['EN_REPARACION', 'ESPERANDO_PIEZA'].includes(solicitud.orden.estado))
+    fail(409, 'La solicitud ya fue revisada o la orden está cerrada');
+  const motivo = motivoObligatorio(payload.motivo);
+  const tipo = String(payload.tipo || '').toUpperCase();
+  if (!['CORREGIR', 'RETIRAR'].includes(tipo)) fail(400, 'Seleccione corregir o retirar la solicitud');
+  const anterior = { id_detalle_repuesto: id, repuesto_id: solicitud.repuesto_id,
+    pieza_solicitada: solicitud.pieza_solicitada, cantidad_usada: solicitud.cantidad_usada };
+  let nuevo;
+  if (tipo === 'CORREGIR') {
+    const pieza = String(payload.pieza_solicitada || '').trim();
+    const cantidad = Number(payload.cantidad);
+    if (!pieza || pieza.length > 250 || !Number.isInteger(cantidad) || cantidad < 1) fail(400, 'Indique una pieza y cantidad válidas');
+    // La selección del catálogo sigue bajo responsabilidad del jefe técnico.
+    const catalogo = await tx.repuestos.findFirst({ where: { nombre: { equals: pieza, mode: 'insensitive' }, descontinuada: false } });
+    const repuestoId = catalogo?.id_repuesto || (pieza === solicitud.pieza_solicitada ? solicitud.repuesto_id : null);
+    if (repuestoId && await stockDisponible(tx, repuestoId) < cantidad) fail(409, 'Stock insuficiente para solicitar el repuesto');
+    nuevo = { pieza_solicitada: pieza, cantidad_usada: cantidad, repuesto_id: repuestoId };
+    if (pieza === solicitud.pieza_solicitada && cantidad === solicitud.cantidad_usada) fail(400, 'Cambie la pieza o la cantidad');
+  } else nuevo = { retirada: true, id_detalle_repuesto: id };
+  await auditMotivo(tx, motivo);
+  if (tipo === 'RETIRAR') {
+    await tx.ordenes_Repuestos.delete({ where: { id_detalle_repuesto: id } });
+    const pendientes = await tx.ordenes_Repuestos.count({ where: { orden_id: solicitud.orden_id,
+      OR: [{ estado_aprobacion: 'PENDIENTE' }, { estado_aprobacion: 'APROBADO', estado_entrega: 'PENDIENTE' }] } });
+    if (!pendientes && solicitud.orden.estado === 'ESPERANDO_PIEZA') await tx.ordenes.update({ where: { id_orden: solicitud.orden_id }, data: { estado: 'EN_REPARACION' } });
+  } else await tx.ordenes_Repuestos.update({ where: { id_detalle_repuesto: id }, data: nuevo });
+  await tx.intervencionesTecnicas.create({ data: { orden_id: solicitud.orden_id,
+    tipo: tipo === 'RETIRAR' ? 'RETIRO_SOLICITUD_TECNICO' : 'CORRECCION_SOLICITUD_TECNICO',
+    motivo, usuario_id: user.id, datos_anteriores: anterior, datos_nuevos: nuevo } });
+  return { orden_id: solicitud.orden_id, id_detalle_repuesto: id, tipo };
+});
+
+export const corregirIrreparable = (value, payload, user) => withAuditUser(user, async (tx) => {
+  const id = parsePositiveId(value);
+  if (!id) fail(400, 'Orden no válida');
+  await lockTrabajo(tx, 'orden', id);
+  const orden = await tx.ordenes.findUnique({ where: { id_orden: id }, include: ordenInclude });
+  if (!orden) fail(404, 'Orden no encontrada');
+  await assertTrabajoPropio(tx, user, orden.tecnico_id);
+  if (orden.estado !== 'IRREPARABLE' || orden.irreparable_estado !== 'PENDIENTE') fail(409, 'El jefe ya decidió o no hay informe pendiente');
+  const tipo = String(payload.tipo || '').toUpperCase();
+  if (!['CORREGIR', 'RETIRAR'].includes(tipo)) fail(400, 'Seleccione corregir o retirar el informe');
+  const motivo = motivoObligatorio(payload.motivo);
+  const justificacion = String(payload.justificacion || '').trim();
+  if (tipo === 'CORREGIR' && (!justificacion || justificacion.length > 4000)) fail(400, 'Escriba una justificación de hasta 4000 caracteres');
+  if (tipo === 'CORREGIR' && justificacion === orden.justificacion_irreparable) fail(400, 'Cambie la justificación');
+  const anterior = { estado: orden.estado, irreparable_estado: orden.irreparable_estado,
+    justificacion_irreparable: orden.justificacion_irreparable, observacion_final: orden.observacion_final };
+  const nuevo = tipo === 'CORREGIR' ? { justificacion_irreparable: justificacion, observacion_final: justificacion }
+    : { estado: 'EN_REPARACION', irreparable_estado: 'NO_SOLICITADO', justificacion_irreparable: null,
+      observacion_final: null, resultado_final: null, enciende_salida: null, usa_corriente_ac_salida: null };
+  await auditMotivo(tx, motivo);
+  const updated = await tx.ordenes.update({ where: { id_orden: id }, data: nuevo, include: ordenInclude });
+  await tx.intervencionesTecnicas.create({ data: { orden_id: id,
+    tipo: tipo === 'RETIRAR' ? 'RETIRO_IRREPARABLE' : 'CORRECCION_IRREPARABLE', motivo, usuario_id: user.id,
+    datos_anteriores: anterior, datos_nuevos: nuevo } });
+  return ordenTecnica(updated);
+});
+
 export const guardarBorrador = (value, payload, user) => withAuditUser(user, async (tx) => {
   const id = parsePositiveId(value);
   if (!id) fail(400, 'Diagnóstico no válido');
@@ -462,20 +616,30 @@ export const detalleTecnico = async (kind, value, user) => {
   if (!r) fail(404, 'Trabajo no encontrado');
   await assertTrabajoPropio(prisma, user, r.tecnico_id);
   const cliente = diagnostic ? r.equipo?.cliente : r.diagnostico?.equipo?.cliente;
-  const [historial, avances, asignaciones, correcciones, settings] = await Promise.all([
+  const [historial, avances, asignaciones, correcciones, settings, ordenesVinculadas] = await Promise.all([
     prisma[diagnostic ? 'historialDiagnosticos' : 'historialOrdenes'].findMany({ where: { [key]: id }, orderBy: { fecha_hora: 'desc' }, include: { usuario: { select: { nombre_usuario: true } } } }),
     prisma.bitacoraTecnica.findMany({ where: { [key]: id }, orderBy: { fecha_hora: 'desc' }, include: { usuario: { select: { nombre_usuario: true } } } }),
     prisma.historialAsignaciones.findMany({ where: { [key]: id }, orderBy: { fecha_hora: 'desc' }, select: { id_historial: true, fecha_hora: true, es_excepcion: true, tecnico_anterior_nombre: true, tecnico_nuevo_nombre: true } }),
-    diagnostic ? Promise.resolve([]) : prisma.intervencionesTecnicas.findMany({ where: { orden_id: id, tipo: { in: ['CORRECCION_CIERRE', 'ACLARACION_CIERRE', 'CORRECCION_FOTO_CIERRE', 'REAPERTURA_CIERRE'] } }, orderBy: { fecha_hora: 'desc' }, include: { usuario: { select: { nombre_usuario: true } } } }),
+    prisma.intervencionesTecnicas.findMany({ where: { [key]: id, tipo: { in: diagnostic
+      ? ['CORRECCION_DIAGNOSTICO', 'ACLARACION_DIAGNOSTICO', 'REAPERTURA_DIAGNOSTICO', 'CORRECCION_AVANCE']
+      : ['CORRECCION_CIERRE', 'ACLARACION_CIERRE', 'CORRECCION_FOTO_CIERRE', 'REAPERTURA_CIERRE',
+        'CORRECCION_AVANCE', 'CORRECCION_SOLICITUD_TECNICO', 'RETIRO_SOLICITUD_TECNICO',
+        'CORRECCION_IRREPARABLE', 'RETIRO_IRREPARABLE'] } }, orderBy: { fecha_hora: 'desc' }, include: { usuario: { select: { nombre_usuario: true } } } }),
     getBusinessSettings(),
+    diagnostic ? Promise.all([prisma.ordenes.count({ where: { diagnostico_id: id } }), prisma.facturas.count({ where: { diagnostico_id: id } })]) : Promise.resolve([0, 0]),
   ]);
   return { registro: diagnostic ? diagnosticoTecnico(r) : ordenTecnica(r, settings.reglas), historial: historialTecnico(historial, cliente), avances: avances.map((a) => avanceTecnico(a, cliente)), asignaciones,
+    puede_corregir_informe: diagnostic && r.estado_del_diagnostico === 'COMPLETADO' && ordenesVinculadas.every((n) => n === 0),
+    puede_reabrir_diagnostico: diagnostic && r.estado_del_diagnostico === 'COMPLETADO' && ordenesVinculadas.every((n) => n === 0)
+      && !r.fecha_envio_documento && r.estado_contacto === 'PENDIENTE_CONTACTAR',
     correcciones: correcciones.map((c) => ({ id_intervencion: c.id_intervencion, tipo: c.tipo, fecha_hora: c.fecha_hora,
       motivo: textoTecnico(c.motivo, cliente), es_excepcion: c.datos_nuevos?.es_excepcion === true,
       aclaracion: textoTecnico(c.datos_nuevos?.aclaracion || '', cliente),
       observacion_anterior: ['CORRECCION_CIERRE', 'REAPERTURA_CIERRE'].includes(c.tipo) ? textoTecnico(c.datos_anteriores?.observacion_final || '', cliente) : null,
       observacion_nueva: ['CORRECCION_CIERRE', 'REAPERTURA_CIERRE'].includes(c.tipo) ? textoTecnico(c.datos_nuevos?.observacion_final || '', cliente) : null,
       id_archivo: c.tipo === 'CORRECCION_FOTO_CIERRE' ? c.datos_nuevos?.id_archivo : null,
+      antes: Object.fromEntries(Object.entries(c.datos_anteriores || {}).map(([k, v]) => [k, typeof v === 'string' ? textoTecnico(v, cliente) : v])),
+      despues: Object.fromEntries(Object.entries(c.datos_nuevos || {}).map(([k, v]) => [k, typeof v === 'string' ? textoTecnico(v, cliente) : v])),
       usuario: c.usuario?.nombre_usuario || 'Técnico' })) };
 };
 

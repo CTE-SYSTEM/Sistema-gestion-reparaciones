@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+node_modules
+.qa-inventario
+uploads
+npm-debug.log*

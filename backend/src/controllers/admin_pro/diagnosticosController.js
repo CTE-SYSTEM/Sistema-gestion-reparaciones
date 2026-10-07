@@ -1,4 +1,5 @@
 import prisma from '../../app/prismaClient.js';
+import { createAdminExcel } from '../../utils/adminExcel.js';
 import { monedaPresupuesto } from '../../utils/monedaPresupuesto.js';
 import { DIAGNOSTICO_ESTADOS, PRIORIDADES, assertInList, parseNonNegativeMoney, parsePositiveId } from '../../utils/domainValidation.js';
 
@@ -93,16 +94,6 @@ const buildDiagnosticoDateFilter = ({ fecha_inicio, fecha_fin, year, month, week
   return { gte: start, lte: end };
 };
 
-const escapeExcelCell = (value) => {
-  const text = value == null ? '' : String(value);
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
 export const downloadDiagnosticosReporteAdmin = async (req, res) => {
   try {
     const dateFilter = buildDiagnosticoDateFilter(req.query);
@@ -126,28 +117,15 @@ export const downloadDiagnosticosReporteAdmin = async (req, res) => {
       item.estado_del_diagnostico,
       item.Estado_aprobacion,
       item.prioridad || '-',
-      item.presupuesto_estimado ?? 0,
+      Number(item.presupuesto_estimado ?? 0),
       item.moneda_presupuesto,
       item.falla_reportada || '-',
       item.diagnostico_real || '-',
     ]);
 
-    const headerHtml = headers.map((header) => `<th>${escapeExcelCell(header)}</th>`).join('');
-    const rowsHtml = rows
-      .map((row) => `<tr>${row.map((cell) => `<td>${escapeExcelCell(cell)}</td>`).join('')}</tr>`)
-      .join('');
-    const excel = `<!doctype html>
-<html>
-  <head><meta charset="utf-8" /></head>
-  <body>
-    <table>
-      <thead><tr>${headerHtml}</tr></thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  </body>
-</html>`;
-    res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="diagnosticos-reporte.xls"');
+    const excel = await createAdminExcel({ title: 'Reporte de diagnósticos', headers, rows });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="diagnosticos-reporte.xlsx"');
     res.send(excel);
   } catch (error) {
     res.status(500).json({ error: 'Error al generar reporte de diagnosticos', details: error.message });

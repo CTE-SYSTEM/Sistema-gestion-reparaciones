@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { AdminStatCard, ExportActions } from '../components';
 
 const columns = [
@@ -98,7 +98,7 @@ export default function FacturasAvanzado() {
         fecha_emision: f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString() : '-',
         total: `C$ ${f.total.toFixed(2)}`
       }));
-      downloadJsonCsv(exportData, columns, `control_facturas_${fromDate || 'desde'}_${toDate || 'hasta'}.csv`);
+      await downloadJsonExcel(exportData, columns, `control_facturas_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {
@@ -204,7 +204,7 @@ export default function FacturasAvanzado() {
               </button>
               <ExportActions
               disabled={downloading || loading || facturasFiltradas.length === 0}
-              onCsv={downloadFacturasCsv}
+              onExcel={downloadFacturasCsv}
               onPdf={downloadFacturasPdf}
             />
           </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Table from '../../../components/Table';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { inventarioAdminService, reportesAdminService } from '../services';
 
 // Estructura estática extraída fuera del render para optimizar memoria
@@ -85,7 +85,7 @@ export default function InventarioAvanzado() {
   const downloadInventoryCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(repuestos, columns, 'inventario_repuestos.csv');
+      await downloadJsonExcel(repuestos, columns, 'inventario_repuestos.xlsx');
     } catch (err) {
       setError('No se pudo descargar el reporte de inventario.');
     } finally {

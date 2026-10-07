@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 
 const columns = [
   { header: 'Compra', accessor: 'id_compra' },
@@ -57,7 +57,7 @@ export default function ComprasAvanzado() {
   const downloadComprasCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(compras, columns, `compras_${fromDate || 'desde'}_${toDate || 'hasta'}.csv`);
+      await downloadJsonExcel(compras, columns, `compras_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
     } catch (err) {
       setError('No se pudo descargar el reporte de compras.');
     } finally {

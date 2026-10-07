@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import Table from '../../../components/Table';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { garantiasAdminService } from '../services';
 import { administracionService } from '../services/administracionService';
 
@@ -302,7 +302,7 @@ export default function GarantiasAvanzado() {
   const downloadGarantiasCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(garantias, columns, 'garantias.csv');
+      await downloadJsonExcel(garantias, columns, 'garantias.xlsx');
     } catch (err) {
       setError('No se pudo descargar el reporte en Excel.');
     } finally {

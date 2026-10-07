@@ -1,4 +1,4 @@
-import { createBackupNow, getBackupSummary, resolveBackupFile, verifyBackup } from '../../services/backupService.js';
+import { createBackupNow, getBackupDownloadUrl, getBackupSummary, resolveBackupFile, verifyBackup } from '../../services/backupService.js';
 
 const backupError = (res, error) => {
   console.error('[Respaldos]', error.message);
@@ -18,7 +18,7 @@ export const triggerBackupNow = async (req, res) => {
   try {
     const data = await createBackupNow(req.user);
     res.json({ data, message: data.latestBackup.estado === 'COMPLETO'
-      ? 'Copia de PostgreSQL e inventario generada.'
+      ? 'Copia de la base e inventario generada.'
       : 'Copia parcial: no se pudo generar el respaldo restaurable de PostgreSQL. Revise las advertencias.' });
   } catch (error) {
     backupError(res, error);
@@ -27,6 +27,8 @@ export const triggerBackupNow = async (req, res) => {
 
 export const downloadBackupFile = async (req, res) => {
   try {
+    const url = await getBackupDownloadUrl(req.params.month, req.params.file);
+    if (url) return res.json({ data: { url } });
     const target = await resolveBackupFile(req.params.month, req.params.file);
     res.download(target, req.params.file, (error) => { if (error && !res.headersSent) backupError(res, error); });
   } catch (error) { backupError(res, error); }

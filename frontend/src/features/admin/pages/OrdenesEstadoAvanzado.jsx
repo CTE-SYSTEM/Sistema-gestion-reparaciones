@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 
 // Estructura estática extraída fuera del render para optimizar memoria
 const columns = [
@@ -46,7 +46,7 @@ export default function OrdenesEstadoAvanzado() {
     setDownloading(true);
     setError('');
     try {
-      downloadJsonCsv(data, columns, `ordenes_estado_${fromDate || 'desde'}_${toDate || 'hasta'}.csv`);
+      await downloadJsonExcel(data, columns, `ordenes_estado_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {

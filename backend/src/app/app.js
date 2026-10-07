@@ -29,6 +29,9 @@ import adminProRoutes from '../routes/modules/admin_pro/adminPro.js';
 import flujoAtencionRoutes from '../routes/modules/flujoAtencion.js';
 import healthRoutes from '../routes/health.js';
 import notificacionesRoutes from '../routes/modules/notificaciones.js';
+import photoTransferRoutes from '../routes/modules/photoTransfer.js';
+import photoTransferRemoteRoutes from '../routes/modules/photoTransferRemote.js';
+import internalBackupRoutes from '../routes/internalBackup.js';
 
 const app = express();
 
@@ -74,6 +77,8 @@ app.use('/api/diagnosticos', diagnosticoRoutesJefe);
 app.use('/api/jefe-tecnico', supervisionRoutes);
 app.use('/api/admin_pro', adminProRoutes);
 app.use('/api/flujo-atencion', flujoAtencionRoutes);
+app.use('/api/photo-transfer', process.env.VERCEL === '1' ? photoTransferRemoteRoutes : photoTransferRoutes);
+app.use('/api/internal', internalBackupRoutes);
 
 app.get('/', (req, res) => {
   res.json({

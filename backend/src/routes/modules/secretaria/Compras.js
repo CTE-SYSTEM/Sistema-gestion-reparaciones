@@ -3,11 +3,12 @@ import { getCompras, createCompra, updateCompra } from '../../../controllers/Sec
 import authMiddleware, { requirePermission } from '../../../middlewares/authMiddleware.js';
 import { PERMISSIONS } from '../../../utils/permissions.js';
 import { descargarFotoCompra, listarFotosCompra, subirFotoCompra } from '../../../controllers/Secretaria/archivosCompraController.js';
+import { photoBodyLimit } from '../../../utils/photoLimit.js';
 
 const router = Router();
 
 router.use(authMiddleware, requirePermission(PERMISSIONS.COMPRAS_GESTIONAR));
-const photoBody = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '5mb' });
+const photoBody = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: photoBodyLimit });
 
 router.get('/fotos', listarFotosCompra);
 router.get('/fotos/:id/contenido', descargarFotoCompra);

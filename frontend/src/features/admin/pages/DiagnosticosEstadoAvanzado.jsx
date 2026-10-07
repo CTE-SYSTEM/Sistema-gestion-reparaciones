@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Table from '../../../components/Table';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { diagnosticosAdminService, tecnicosAdminService } from '../services';
 import { formatoPresupuesto } from '../../../utils/monedaPresupuesto';
 
@@ -135,10 +135,10 @@ export default function DiagnosticosEstadoAvanzado() {
     },
   ], []);
 
-  const downloadReportCsv = () => {
+  const downloadReportCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(filteredDiagnosticos, diagnosticoColumnsBase, 'diagnosticos_general.csv');
+      await downloadJsonExcel(filteredDiagnosticos, diagnosticoColumnsBase, 'diagnosticos_general.xlsx');
     } catch (err) {
       setError('No se pudo descargar el reporte general.');
     } finally {

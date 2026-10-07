@@ -1,4 +1,5 @@
 import prisma from '../../app/prismaClient.js';
+import { createAdminExcel } from '../../utils/adminExcel.js';
 import { ORDEN_ESTADOS, RESULTADOS_ORDEN, assertInList, parsePositiveId } from '../../utils/domainValidation.js';
 
 // 3. Monitoreo de órdenes y facturas
@@ -122,21 +123,13 @@ export const getRepuestosPorOrdenAdmin = async (req, res) => {
   }
 };
 
-const escapeExcelCell = (value) => {
-  const text = value == null ? '' : String(value);
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
 export const downloadRepuestosPorOrdenAdmin = async (req, res) => {
   try {
     const { id } = req.params;
+    const ordenId = parsePositiveId(id);
+    if (!ordenId) return res.status(400).json({ error: 'ID de orden inválido' });
     const repuestos = await prisma.ordenes_Repuestos.findMany({
-      where: { orden_id: Number(id) },
+      where: { orden_id: ordenId },
       include: {
         repuesto: { include: { categoria: true } },
         orden: {
@@ -178,26 +171,13 @@ export const downloadRepuestosPorOrdenAdmin = async (req, res) => {
       item.pieza_solicitada || '-',
       item.cantidad_usada ?? 0,
       item.estado_aprobacion || '-',
-      item.repuesto?.costo_individual ?? 0,
+      Number(item.repuesto?.costo_individual ?? 0),
     ]);
 
-    const headerHtml = headers.map((header) => `<th>${escapeExcelCell(header)}</th>`).join('');
-    const rowsHtml = rows
-      .map((row) => `<tr>${row.map((cell) => `<td>${escapeExcelCell(cell)}</td>`).join('')}</tr>`)
-      .join('');
-    const excel = `<!doctype html>
-<html>
-  <head><meta charset="utf-8" /></head>
-  <body>
-    <table>
-      <thead><tr>${headerHtml}</tr></thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  </body>
-</html>`;
-    const filename = `repuestos-orden-${id}.xls`;
+    const excel = await createAdminExcel({ title: `Repuestos de la orden ${ordenId}`, headers, rows });
+    const filename = `repuestos-orden-${ordenId}.xlsx`;
 
-    res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(excel);
   } catch (error) {

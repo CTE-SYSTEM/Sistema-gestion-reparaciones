@@ -8,6 +8,8 @@ export const mapDiagnostico = (d) => ({
   presupuesto: d.presupuesto_estimado ?? '', moneda_presupuesto: d.moneda_presupuesto || 'NIO', borrador: d.borrador_tecnico,
   fecha_hora: d.fecha_hora, fecha_asignacion: d.fecha_asignacion, fecha_inicio: d.fecha_inicio,
   fecha_completado: d.fecha_completado, fecha_borrador: d.fecha_borrador,
+  puede_reabrir_diagnostico: d.puede_reabrir_diagnostico === true,
+  motivo_reapertura: d.motivo_reapertura || '',
   ultimo_avance: d.ultimo_avance, horas_sin_avance: d.horas_sin_avance,
   recepcion: Object.fromEntries(['estado_cargador', 'estado_accesorios', 'estado_fisico', 'estado_encendido',
     'estado_alimentacion', 'estado_acceso', 'detalle_accesorios'].map((k) => [k, d[k]])),

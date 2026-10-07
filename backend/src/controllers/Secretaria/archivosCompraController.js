@@ -6,6 +6,7 @@ import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js'
 import { parsePositiveId } from '../../utils/domainValidation.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { borrarFoto, guardarFoto, leerFoto, r2Configured } from '../../services/Secretaria/fotoStorage.js';
+import { maxPhotoBytes, photoLimitLabel } from '../../utils/photoLimit.js';
 
 const uploadRoot = path.resolve(process.env.PURCHASE_UPLOAD_DIR || 'uploads/compras');
 const mimeInfo = {
@@ -52,8 +53,8 @@ export const subirFotoCompra = async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Compra inválida' });
   const mime = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
   const bytes = req.body;
-  if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > 5 * 1024 * 1024 || !mimeInfo[mime]?.valid(bytes)) {
-    return res.status(400).json({ error: 'Adjunte una foto JPG, PNG o WebP de hasta 5 MB' });
+  if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > maxPhotoBytes || !mimeInfo[mime]?.valid(bytes)) {
+    return res.status(400).json({ error: `Adjunte una foto JPG, PNG o WebP de hasta ${photoLimitLabel}` });
   }
   const compra = await prisma.compras.findUnique({ where: { id_compra: id }, select: { id_compra: true, fecha_obtencion: true } });
   if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });

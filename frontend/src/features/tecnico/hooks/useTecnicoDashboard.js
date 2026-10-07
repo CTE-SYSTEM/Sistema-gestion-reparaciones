@@ -29,6 +29,7 @@ export const useTecnicoDashboard = (user, { activeTab, page, search, periodo, gr
     actions: {
       reload: () => { if (activeTab !== 'resumen') list.refetch(); summary.refetch(); }, invalidate,
       iniciarDiagnostico: (id) => mutate('patch', '/tecnicos/diagnosticos/' + id + '/iniciar'),
+      reabrirDiagnostico: (id, motivo) => mutate('patch', '/tecnicos/diagnosticos/' + id + '/correccion', { tipo: 'REABRIR', motivo }),
       guardarDiagnostico: (id, data) => mutate('put', '/tecnicos/diagnosticos/' + id, {
         diagnostico_real: data.diagnostico, solucion_propuesta: data.solucion, presupuesto_estimado: data.presupuesto,
         moneda_presupuesto: data.moneda_presupuesto,

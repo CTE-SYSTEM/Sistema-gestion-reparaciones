@@ -30,7 +30,7 @@ const toWork = (r, tipo) => {
   const d = tipo === 'orden' ? r.diagnostico : r, e = d.equipo;
   const last = [r.fecha_borrador, r.avances_tecnicos[0]?.fecha_hora, r.historial_estados[0]?.fecha_hora, r.fecha_asignacion, r.fecha_inicio_reparacion || r.fecha_inicio, r.fecha_ingreso || r.fecha_hora].filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0];
   const isActive = active(tipo, r), billed = Boolean(r.facturas?.length);
-  return { key: `${tipo}-${r.id_orden || r.id_diagnostico}`, tipo, id: r.id_orden || r.id_diagnostico, equipo_nombre: [e.marca, e.modelo].filter(Boolean).join(' ') || e.tipo || 'Equipo', cliente_nombre: e.cliente.nombre, tecnico: r.tecnico, estado: r.estado || r.estado_del_diagnostico, prioridad: r.prioridad || 'Normal', activo: isActive, ultimo_avance: last, horas_sin_avance: last ? Math.max(0, (Date.now() - new Date(last)) / 3600000) : 0, irreparable_estado: r.irreparable_estado, justificacion_irreparable: r.justificacion_irreparable, tiene_factura: billed, puede_asignar: isActive && !r.tecnico_id && !billed && r.estado !== 'IRREPARABLE', puede_intervenir: isActive && Boolean(r.tecnico_id) && !billed && r.estado !== 'IRREPARABLE' };
+  return { key: `${tipo}-${r.id_orden || r.id_diagnostico}`, tipo, id: r.id_orden || r.id_diagnostico, diagnostico_id: tipo === 'orden' ? r.diagnostico_id : null, equipo_nombre: [e.marca, e.modelo].filter(Boolean).join(' ') || e.tipo || 'Equipo', cliente_nombre: e.cliente.nombre, tecnico: r.tecnico, estado: r.estado || r.estado_del_diagnostico, prioridad: r.prioridad || 'Normal', activo: isActive, fecha_finalizacion: r.fecha_finalizacion || r.fecha_completado, ultimo_avance: last, horas_sin_avance: last ? Math.max(0, (Date.now() - new Date(last)) / 3600000) : 0, irreparable_estado: r.irreparable_estado, justificacion_irreparable: r.justificacion_irreparable, tiene_factura: billed, puede_asignar: isActive && !r.tecnico_id && !billed && r.estado !== 'IRREPARABLE', puede_intervenir: isActive && Boolean(r.tecnico_id) && !billed && r.estado !== 'IRREPARABLE' };
 };
 export const resumen = async () => {
   const [diagnosticos, ordenes, techs, pieces, catalogo, intervenciones] = await Promise.all([
@@ -61,13 +61,14 @@ export const detalle = async (tipo, value) => {
   const id = idValue(value), { model, key, include } = entity(tipo), whereHistory = tipo === 'orden' ? { orden_id: id } : { diagnostico_id: id };
   const r = await prisma[model].findUnique({ where: { [key]: id }, include });
   if (!r) fail(404, 'Trabajo no encontrado');
-  const [historial, asignaciones, intervenciones, avances] = await Promise.all([
+  const [historial, asignaciones, intervenciones, avances, intervencionesDiagnostico] = await Promise.all([
     prisma[tipo === 'orden' ? 'historialOrdenes' : 'historialDiagnosticos'].findMany({ where: whereHistory, include: { usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }),
     prisma.historialAsignaciones.findMany({ where: whereHistory, include: { tecnico_anterior: true, tecnico_nuevo: true, usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }),
     prisma.intervencionesTecnicas.findMany({ where: whereHistory, include: { usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }),
     prisma.bitacoraTecnica.findMany({ where: whereHistory, include: { usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }),
+    tipo === 'orden' ? prisma.intervencionesTecnicas.findMany({ where: { diagnostico_id: r.diagnostico_id }, include: { usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }) : Promise.resolve([]),
   ]);
-  return { registro: r, historial_estados: historial, asignaciones, intervenciones, avances };
+  return { registro: r, historial_estados: historial, asignaciones, intervenciones, intervenciones_diagnostico: intervencionesDiagnostico, avances };
 };
 const editable = async (tx, tipo, id) => {
   await lockTrabajo(tx, tipo, id);

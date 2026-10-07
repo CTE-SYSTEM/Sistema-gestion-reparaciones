@@ -8,8 +8,9 @@ import { hasPermission, PERMISSIONS } from '../../utils/permissions.js';
 import { normalizeRole } from '../../utils/roles.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { cierreCorregible, validarCorreccionCierre } from '../../utils/correccionCierre.js';
-import { assertTrabajoPropio, auditMotivo, fail, lockTrabajo } from '../../utils/tecnicoWorkflow.js';
+import { assertTrabajoPropio, auditMotivo, fail, lockTrabajo, motivoObligatorio } from '../../utils/tecnicoWorkflow.js';
 import { getBusinessSettings } from '../../services/adminSettingsService.js';
+import { maxPhotoBytes, photoLimitLabel } from '../../utils/photoLimit.js';
 import { borrarFoto, guardarFoto, isR2Key, leerFoto, r2Configured, r2ServiceKey } from '../../services/Secretaria/fotoStorage.js';
 
 const uploadRoot = path.resolve(process.env.SERVICE_UPLOAD_DIR || 'uploads/servicios');
@@ -133,8 +134,8 @@ export const subirArchivo = (kind) => async (req, res) => {
     return res.status(403).json({ error: 'El técnico solo puede agregar fotos del diagnóstico o reparación asignados' });
   }
   const bytes = req.body;
-  if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > 5 * 1024 * 1024 || !mimeInfo[tipo_mime]?.valid(bytes)) {
-    return res.status(400).json({ error: 'Adjunte una imagen JPG, PNG o WebP de hasta 5 MB' });
+  if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > maxPhotoBytes || !mimeInfo[tipo_mime]?.valid(bytes)) {
+    return res.status(400).json({ error: `Adjunte una imagen JPG, PNG o WebP de hasta ${photoLimitLabel}` });
   }
   const servicio = kind === 'diagnostico'
     ? await prisma.diagnosticos.findUnique({
@@ -293,17 +294,35 @@ export const descargarArchivo = async (req, res) => {
 
 export const revisarVisibilidadTecnica = async (req, res) => {
   const allowed = hasPermission(req.user?.rol, PERMISSIONS.DIAGNOSTICOS_GESTIONAR)
-    || hasPermission(req.user?.rol, PERMISSIONS.JEFE_TECNICO_VER);
-  if (!allowed) return res.status(403).json({ error: 'Solo recepción o supervisión pueden autorizar fotografías' });
+    || hasPermission(req.user?.rol, PERMISSIONS.JEFE_TECNICO_APROBAR);
+  if (!allowed) return res.status(403).json({ error: 'Solo recepción, jefatura técnica o administración pueden revisar fotografías' });
   const id = parsePositiveId(req.params.id);
   if (!id || typeof req.body.visible_tecnico !== 'boolean') return res.status(400).json({ error: 'Revisión de fotografía no válida' });
   if (req.body.visible_tecnico && req.body.sin_datos_cliente !== true) return res.status(400).json({ error: 'Confirme que la imagen no contiene identidad ni contacto del cliente' });
-  const r = await prisma.archivosServicio.findUnique({ where: { id_archivo: id } });
-  if (!r) return res.status(404).json({ error: 'Fotografía no encontrada' });
-  if (!['FOTO_RECEPCION', 'FOTO_DIAGNOSTICO', 'FOTO_REPARACION'].includes(r.tipo_archivo)) {
-    return res.status(409).json({ error: 'Las fotografías de entrega y retiro son documentación administrativa' });
+  try {
+    const motivo = motivoObligatorio(req.body.motivo);
+    const result = await withAuditUser(req.user, async (tx) => {
+      await tx.$queryRaw`SELECT id_archivo FROM "ArchivosServicio" WHERE id_archivo = ${id} FOR UPDATE`;
+      const r = await tx.archivosServicio.findUnique({ where: { id_archivo: id } });
+      if (!r) fail(404, 'Fotografía no encontrada');
+      if (!['FOTO_RECEPCION', 'FOTO_DIAGNOSTICO', 'FOTO_REPARACION'].includes(r.tipo_archivo)) {
+        fail(409, 'Las fotografías de entrega y retiro son documentación administrativa');
+      }
+      if (r.visible_tecnico === req.body.visible_tecnico) fail(409, 'La fotografía ya tiene esa visibilidad');
+      await auditMotivo(tx, motivo);
+      await tx.archivosServicio.update({ where: { id_archivo: id }, data: { visible_tecnico: req.body.visible_tecnico } });
+      await tx.intervencionesTecnicas.create({ data: {
+        diagnostico_id: r.diagnostico_id, orden_id: r.orden_id, tipo: 'REVISION_FOTO_TECNICA',
+        motivo, usuario_id: req.user.id,
+        datos_anteriores: { id_archivo: id, tipo_archivo: r.tipo_archivo, visible_tecnico: r.visible_tecnico },
+        datos_nuevos: { id_archivo: id, tipo_archivo: r.tipo_archivo, visible_tecnico: req.body.visible_tecnico },
+      } });
+      return { id_archivo: id, visible_tecnico: req.body.visible_tecnico };
+    });
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ data: result });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
   }
-  await withAuditUser(req.user, (tx) => tx.archivosServicio.update({ where: { id_archivo: id }, data: { visible_tecnico: req.body.visible_tecnico } }));
-  res.set('Cache-Control', 'private, no-store');
-  return res.json({ data: { id_archivo: id, visible_tecnico: req.body.visible_tecnico } });
 };

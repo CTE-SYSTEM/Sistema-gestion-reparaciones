@@ -546,6 +546,19 @@ textarea {
   padding-inline: 0.5rem;
 }
 
+@media (min-width: 64rem) {
+  .app-sidebar.is-collapsed .sidebar-nav-label,
+  .app-sidebar.is-collapsed .sidebar-nav-chevron {
+    display: none;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-nav-link,
+  .app-sidebar.is-collapsed .sidebar-group-toggle {
+    justify-content: center;
+    padding-inline: 0.5rem;
+  }
+}
+
 .app-sidebar > nav {
   min-height: 0;
   overflow-x: hidden;

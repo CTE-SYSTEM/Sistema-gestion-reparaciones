@@ -3,7 +3,7 @@ import { Search, X } from 'lucide-react';
 import MetricBarChart from '../components/MetricBarChart';
 import Table from '../../../components/Table';
 import useResponsiveLayout from '../../responsive/useResponsiveLayout';
-import { downloadJsonCsv, downloadJsonPdf, downloadSectionedPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf, downloadSectionedPdf } from '../utils/csvExport';
 import { gananciasAdminService } from '../services';
 import { ExportActions, ExportButton } from '../components';
 
@@ -494,7 +494,7 @@ export default function Ganancias() {
     setDownloading(true);
     setError('');
     try {
-      downloadJsonCsv(detail, detailColumns, `${reportFilename}.csv`);
+      await downloadJsonExcel(detail, detailColumns, `${reportFilename}.xlsx`);
     } catch {
       setError('No se pudo descargar el reporte de ganancias.');
     } finally {
@@ -502,12 +502,12 @@ export default function Ganancias() {
     }
   };
 
-  const exportSection = (rows, columns, filename, title, format = 'csv') => {
+  const exportSection = async (rows, columns, filename, title, format = 'excel') => {
     setDownloading(true);
     setError('');
     try {
       if (format === 'pdf') downloadJsonPdf(rows, columns, `${filename}.pdf`, title);
-      else downloadJsonCsv(rows, columns, `${filename}.csv`);
+      else await downloadJsonExcel(rows, columns, `${filename}.xlsx`);
     } catch {
       setError(`No se pudo exportar ${title.toLowerCase()}.`);
     } finally {
@@ -627,7 +627,7 @@ export default function Ganancias() {
 
           <div className="grid grid-cols-3 gap-2 w-full md:w-auto min-w-[280px]">
             <button type="button" onClick={() => fetchGanancias()} disabled={loading} className="rounded-xl bg-indigo-600 py-2.5 px-4 text-xs font-bold text-white hover:bg-indigo-700 transition shadow-sm disabled:bg-slate-300 text-center whitespace-nowrap">Consultar</button>
-            <ExportButton format="csv" onClick={downloadGananciasCsv} disabled={downloading || loading || detail.length === 0}>Excel</ExportButton>
+            <ExportButton format="excel" onClick={downloadGananciasCsv} disabled={downloading || loading || detail.length === 0}>Excel</ExportButton>
             <ExportButton format="pdf" onClick={downloadGananciasPdf} disabled={downloading || loading || detail.length === 0}>PDF</ExportButton>
           </div>
         </div>
@@ -790,7 +790,7 @@ export default function Ganancias() {
                 </div>
                 <ExportActions
                   disabled={downloading || gainSources.length === 0}
-                  onCsv={() => exportSection(gainSources, gainSourceColumns, `${reportFilename}_fuentes_ganancia`, 'Fuentes de Ganancia')}
+                  onExcel={() => exportSection(gainSources, gainSourceColumns, `${reportFilename}_fuentes_ganancia`, 'Fuentes de Ganancia')}
                   onPdf={() => exportSection(gainSources, gainSourceColumns, `${reportFilename}_fuentes_ganancia`, 'Fuentes de Ganancia', 'pdf')}
                 />
               </div>
@@ -811,7 +811,7 @@ export default function Ganancias() {
                 </div>
                 <ExportActions
                   disabled={downloading || lossSources.length === 0}
-                  onCsv={() => exportSection(lossSources, lossSourceColumns, `${reportFilename}_fuentes_perdida`, 'Fuentes de Perdida')}
+                  onExcel={() => exportSection(lossSources, lossSourceColumns, `${reportFilename}_fuentes_perdida`, 'Fuentes de Perdida')}
                   onPdf={() => exportSection(lossSources, lossSourceColumns, `${reportFilename}_fuentes_perdida`, 'Fuentes de Perdida', 'pdf')}
                 />
               </div>
@@ -833,7 +833,7 @@ export default function Ganancias() {
               </div>
               <ExportActions
                 disabled={downloading || orderMargins.length === 0}
-                onCsv={() => exportSection(orderMargins, orderMarginColumns, `${reportFilename}_ordenes`, 'Margen por Orden')}
+                onExcel={() => exportSection(orderMargins, orderMarginColumns, `${reportFilename}_ordenes`, 'Margen por Orden')}
                 onPdf={() => exportSection(orderMargins, orderMarginColumns, `${reportFilename}_ordenes`, 'Margen por Orden', 'pdf')}
               />
             </div>
@@ -854,7 +854,7 @@ export default function Ganancias() {
               </div>
               <ExportActions
                 disabled={downloading || assetCards.length === 0}
-                onCsv={() => exportSection(assetCards, assetColumns, `${reportFilename}_activos`, 'Control de Activos')}
+                onExcel={() => exportSection(assetCards, assetColumns, `${reportFilename}_activos`, 'Control de Activos')}
                 onPdf={() => exportSection(assetCards, assetColumns, `${reportFilename}_activos`, 'Control de Activos', 'pdf')}
               />
             </div>
@@ -877,7 +877,7 @@ export default function Ganancias() {
                 </div>
                 <ExportActions
                   disabled={downloading || losses.length === 0}
-                  onCsv={() => exportSection(losses, lossColumns, `${reportFilename}_perdidas`, 'Costos y Perdidas')}
+                  onExcel={() => exportSection(losses, lossColumns, `${reportFilename}_perdidas`, 'Costos y Perdidas')}
                   onPdf={() => exportSection(losses, lossColumns, `${reportFilename}_perdidas`, 'Costos y Perdidas', 'pdf')}
                 />
               </div>
@@ -898,7 +898,7 @@ export default function Ganancias() {
                 </div>
                 <ExportActions
                   disabled={downloading || profitability.length === 0}
-                  onCsv={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad_${activePeriod}`, 'Rentabilidad por Etapa')}
+                  onExcel={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad_${activePeriod}`, 'Rentabilidad por Etapa')}
                   onPdf={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad_${activePeriod}`, 'Rentabilidad por Etapa', 'pdf')}
                 />
               </div>

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { AlertCircle, CheckCircle2, ImagePlus, Loader2, Trash2, UploadCloud, X, ZoomIn } from 'lucide-react';
 import { formatPhotoSize } from './photoQueue';
+import RemotePhotoBridge from './RemotePhotoBridge';
 
 export default function FotosPendientes({
   photos, selectionMessages = [], onAdd, onRemove, onClear,
@@ -9,6 +10,7 @@ export default function FotosPendientes({
   contextLabel = '', readOnly = false, title = 'Fotografías de recepción',
 }) {
   const inputRef = useRef(null);
+  const cameraRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
   const [previewId, setPreviewId] = useState(null);
   const preview = photos.find((photo) => photo.id === previewId);
@@ -51,12 +53,15 @@ export default function FotosPendientes({
             aria-label="Seleccionar fotografías" className="sr-only" tabIndex={-1}
             onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }}
           />
-          <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed">
+          <input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} aria-label="Tomar foto con cámara" className="sr-only" tabIndex={-1} onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed">
             {isPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
             {isPreparing ? 'Revisando imágenes...' : photos.length ? 'Agregar más fotos' : 'Seleccionar fotos'}
-          </button>
+          </button><button type="button" disabled={busy} onClick={() => cameraRef.current?.click()} className="rounded-lg border px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50">Tomar foto</button></div>
         </div>
       )}
+
+      {!readOnly && <RemotePhotoBridge onAdd={onAdd} disabled={busy} />}
 
       {selectionMessages.length > 0 && <div className="space-y-1" aria-live="polite">
         {selectionMessages.map((message, index) => <p key={`${index}-${message.text}`} className={`text-xs ${message.type === 'error' ? 'text-red-700' : 'text-slate-600'}`} role={message.type === 'error' ? 'alert' : undefined}>{message.text}</p>)}

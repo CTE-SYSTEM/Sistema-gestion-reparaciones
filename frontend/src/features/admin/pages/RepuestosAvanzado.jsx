@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonCsv, downloadJsonPdf } from '../utils/csvExport';
+import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 
 // Estructura de columnas fija extraída fuera de la función del componente
 const columns = [
@@ -56,7 +56,7 @@ export default function RepuestosAvanzado() {
   const downloadReportCsv = async () => {
     setDownloading(true);
     try {
-      downloadJsonCsv(report, columns, `repuestos_usados_${fromDate || 'desde'}_${toDate || 'hasta'}.csv`);
+      await downloadJsonExcel(report, columns, `repuestos_usados_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {

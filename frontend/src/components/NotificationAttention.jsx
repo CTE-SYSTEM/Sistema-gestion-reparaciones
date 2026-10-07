@@ -2,12 +2,13 @@ import { BellRing, ChevronRight, X } from 'lucide-react';
 import { notificationActionLabel } from '../utils/notificationInbox';
 
 export function NotificationBell({ count = 0, connected, expanded, onClick }) {
+  const polling = import.meta.env.VITE_NOTIFICATIONS_MODE === 'poll';
   return <button type="button" onClick={onClick} aria-label="Abrir notificaciones" aria-expanded={expanded}
-    title={connected ? 'Avisos guardados y conexión en vivo activa' : 'Avisos guardados; reconectando el servicio en vivo'}
+    title={polling ? 'Avisos guardados; actualización periódica activa' : connected ? 'Avisos guardados y conexión en vivo activa' : 'Avisos guardados; reconectando el servicio en vivo'}
     className={`relative inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${count ? 'border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
     <BellRing size={19} /><span className="hidden sm:inline">{count ? 'Avisos pendientes' : 'Notificaciones'}</span>
     {count > 0 && <span className="min-w-6 rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-extrabold text-white">{count}</span>}
-    <span aria-hidden="true" className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-white ${connected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+    <span aria-hidden="true" className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-white ${connected || polling ? 'bg-emerald-500' : 'bg-slate-400'}`} />
   </button>;
 }
 

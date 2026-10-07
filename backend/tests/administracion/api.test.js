@@ -153,6 +153,36 @@ if (!databaseName) {
     await api('/admin_pro/reportes/diagnosticos_detalle?fecha_inicio=2026-02-30', { status: 400 });
     await api('/admin_pro/reportes/historial_equipo?equipo_id=1%20OR%201=1', { status: 400 });
   });
+  test('Descargas de diagnósticos y repuestos entregan Excel real con datos legibles', async () => {
+    const fresh = await fixture({ presupuesto_estimado: 125.5 });
+    await prisma.clientes.update({ where: { id_cliente: fresh.cliente.id_cliente }, data: { telefono: '00123456' } });
+    const category = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Categoría exportación' } });
+    const piece = await prisma.repuestos.create({ data: { nombre: '=2+3', tipo_repuesto_id: category.id_tipo_repuesto, costo_individual: 35.5 } });
+    const detail = await prisma.ordenes_Repuestos.create({ data: { orden_id: fresh.orden.id_orden, repuesto_id: piece.id_repuesto, cantidad_usada: 2, estado_aprobacion: 'APROBADO' } });
+
+    const checkWorkbook = async (route, filename) => {
+      const { data, response } = await request(route);
+      assert.equal(response.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      assert.match(response.headers.get('content-disposition'), new RegExp(filename.replace('.', '\\.')));
+      assert.equal(data.subarray(0, 2).toString(), 'PK');
+      const book = new ExcelJS.Workbook();
+      await book.xlsx.load(data);
+      assert.equal(book.worksheets[0].views[0].ySplit, 4);
+      return book.worksheets[0];
+    };
+
+    const diagnoses = await checkWorkbook('/admin_pro/diagnosticos/reporte', 'diagnosticos-reporte.xlsx');
+    const diagnosisRow = diagnoses.getRows(5, diagnoses.rowCount - 4).find((row) => row.getCell(1).value === fresh.diagnostico.id_diagnostico);
+    assert.equal(diagnosisRow.getCell(4).value, '00123456');
+    assert.equal(diagnosisRow.getCell(10).value, 125.5);
+
+    const parts = await checkWorkbook(`/admin_pro/ordenes/${fresh.orden.id_orden}/repuestos/reporte`, `repuestos-orden-${fresh.orden.id_orden}.xlsx`);
+    const partRow = parts.getRows(5, parts.rowCount - 4).find((row) => row.getCell(4).value === detail.id_detalle_repuesto);
+    assert.equal(partRow.getCell(5).value, '=2+3');
+    assert.equal(partRow.getCell(5).type, ExcelJS.ValueType.String);
+    assert.equal(partRow.getCell(10).value, 35.5);
+    await api('/admin_pro/ordenes/invalid/repuestos/reporte', { status: 400 });
+  });
   test('Inventario usa stock físico y reservas; salidas son solamente entregas reales', async () => {
     const category = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Reserva de prueba' } });
     const piece = await prisma.repuestos.create({ data: { nombre: 'Reserva verificable', tipo_repuesto_id: category.id_tipo_repuesto, stock_actual: 8, stock_minimo: 5, costo_individual: 50 } });
@@ -181,6 +211,16 @@ if (!databaseName) {
     const response = await api('/admin_pro/backups/manual', { method: 'POST' });
     const job = response.data.latestBackup; assert.equal(job.estado, 'COMPLETO');
     const dump = job.archivos.find((f) => f.tipo === 'BASE_COMPLETA'); assert.ok(dump);
+    const inventoryExcel = job.archivos.find((f) => f.tipo === 'INVENTARIO_EXCEL'); assert.ok(inventoryExcel);
+    const inventoryPdf = job.archivos.find((f) => f.tipo === 'INVENTARIO_PDF'); assert.ok(inventoryPdf);
+    const excelDownload = await request(`/admin_pro/backups/${job.month}/${inventoryExcel.nombre}/descargar`);
+    assert.equal(excelDownload.data.subarray(0, 2).toString(), 'PK');
+    const inventoryBook = new ExcelJS.Workbook(); await inventoryBook.xlsx.load(excelDownload.data);
+    assert.equal(inventoryBook.worksheets[0].getCell('A1').value, 'Inventario de repuestos');
+    assert.equal(inventoryBook.worksheets[0].views[0].ySplit, 4);
+    assert.equal(typeof inventoryBook.worksheets[0].getCell('F5').value, 'number');
+    const pdfDownload = await request(`/admin_pro/backups/${job.month}/${inventoryPdf.nombre}/descargar`);
+    assert.equal(pdfDownload.data.subarray(0, 5).toString(), '%PDF-');
     await api(`/admin_pro/backups/${job.month}/${job.manifest}/verificar`, { method: 'POST' });
     const download = await request(`/admin_pro/backups/${job.month}/${dump.nombre}/descargar`);
     assert.equal(download.data.subarray(0, 5).toString(), 'PGDMP');

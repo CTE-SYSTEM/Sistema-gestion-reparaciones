@@ -16,6 +16,7 @@ import './App.css';
 
 // Las páginas se cargan bajo demanda para no inflar el JavaScript inicial.
 const Login = lazy(() => import('./pages/Auth/Login'));
+const FotoTemporal = lazy(() => import('./features/secretaria/pages/FotoTemporal'));
 
 const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
 const Administracion = lazy(() => import('./features/admin/pages/Administracion'));
@@ -150,6 +151,7 @@ const router = createBrowserRouter(
       ),
       children: [
         { path: 'login', element: <Page><Login /></Page> },
+        { path: 'foto-temporal/:token', element: <Suspense fallback={<RouteFallback />}><FotoTemporal /></Suspense> },
 
         // 1. RUTAS CON SIDEBAR Y NAVBAR GLOBAL
         {
@@ -203,7 +205,7 @@ const router = createBrowserRouter(
         // Los dashboards tecnicos ya traen su propio Header integrado
         {
           path: 'tecnico',
-          element: <RequireAuth><Page><TecnicoDashboard /></Page></RequireAuth>
+          element: <RequireAuth><Page fullWidth><TecnicoDashboard /></Page></RequireAuth>
         },
         {
           path: 'tecnico-jefe',

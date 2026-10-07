@@ -10,6 +10,7 @@ import {
   getMisOrdenes as getMisOrdenesService,
   solicitarRepuesto as solicitarRepuestoService,
   buscarCatalogo, detalleTecnico, guardarBorrador, misSolicitudes, registrarAvance, resumenTecnico,
+  corregirDiagnostico, corregirAvance, corregirSolicitud, corregirIrreparable,
 } from '../../services/Tecnico/tecnicoService.js';
 
 const sendControllerError = (res, error, fallbackMessage = 'Error interno del servidor') => {
@@ -159,3 +160,31 @@ export const getCatalogoTecnico = responder((req) => buscarCatalogo(req.query), 
 export const getDetalleTecnico = (kind) => responder((req) => detalleTecnico(kind, req.params.id, req.user));
 export const postAvanceTecnico = (kind) => responder((req) => registrarAvance(kind, req.params.id, req.body, req.user));
 export const putBorradorTecnico = responder((req) => guardarBorrador(req.params.id, req.body, req.user));
+export const patchDiagnosticoTecnico = async (req, res) => {
+  try {
+    const diagnostico = await corregirDiagnostico(req.params.id, req.body, req.user);
+    if (req.body.tipo === 'REABRIR') await notifyRole('Secretaria', { type: 'diagnostico_reabierto',
+      title: 'Diagnóstico devuelto a revisión', message: `El técnico reabrió el diagnóstico #${diagnostico.id_diagnostico}.`,
+      entity: { kind: 'diagnostico', id: diagnostico.id_diagnostico } });
+    res.json({ data: diagnostico });
+  } catch (error) { sendControllerError(res, error); }
+};
+export const patchAvanceTecnico = (kind) => responder((req) => corregirAvance(kind, req.params.id, req.params.avanceId, req.body, req.user));
+export const patchIrreparableTecnico = async (req, res) => {
+  try {
+    const orden = await corregirIrreparable(req.params.id, req.body, req.user);
+    await notifyJefeTecnico({ type: 'irreparable_rectificado', title: 'Informe de irreparabilidad actualizado',
+      message: `El técnico ${req.body.tipo === 'RETIRAR' ? 'retiró' : 'corrigió'} el informe de la orden #${orden.id_orden}.`,
+      entity: { kind: 'orden', id: orden.id_orden } });
+    res.json({ data: orden });
+  } catch (error) { sendControllerError(res, error); }
+};
+export const patchSolicitudTecnico = async (req, res) => {
+  try {
+    const result = await corregirSolicitud(req.params.id, req.body, req.user);
+    await notifyJefeTecnico({ type: 'solicitud_rectificada', title: 'Solicitud de pieza actualizada',
+      message: `El técnico ${result.tipo === 'RETIRAR' ? 'retiró' : 'corrigió'} la solicitud #${result.id_detalle_repuesto} de la orden #${result.orden_id}.`,
+      entity: { kind: 'orden', id: result.orden_id } });
+    res.json({ data: result });
+  } catch (error) { sendControllerError(res, error); }
+};

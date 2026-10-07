@@ -4,10 +4,12 @@ import { HelpCircle, Loader2, Plus, Search } from 'lucide-react';
 import { GuidedTour, tourHighlightClass } from '../components/shared/GuidedTour';
 import { createCompra, getCompras, subirFotoCompra } from '../services/comprasService';
 import FotosCompra from '../components/FotosCompra';
+import RemotePhotoBridge from '../components/shared/RemotePhotoBridge';
 import { useQueryClient } from '@tanstack/react-query';
 import { getProveedores } from '../services/proveedoresService';
 import { getRepuestos } from '../services/repuestosService';
 import { useInfiniteSecretariaList } from '../hooks/useInfiniteSecretariaList';
+import { MAX_PHOTO_BYTES, PHOTO_LIMIT_LABEL } from '../components/shared/photoQueue';
 
 const normalizeText = (value = '') => String(value).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
 const money = (value) => `C$ ${Number(value || 0).toFixed(2)}`;
@@ -35,6 +37,12 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
   });
   const [formError, setFormError] = useState('');
   const [ticketFotos, setTicketFotos] = useState([]);
+  const addTicketFotos = (files) => {
+    const valid = files.filter((file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size > 0 && file.size <= MAX_PHOTO_BYTES);
+    if (valid.length !== files.length) setFormError(`Cada foto debe ser JPG, PNG o WebP y medir hasta ${PHOTO_LIMIT_LABEL}.`);
+    if (valid.length) setTicketFotos((previous) => [...previous, ...valid]);
+    return valid.length > 0;
+  };
 
   const selectedRepuesto = repuestos.find((repuesto) => String(repuesto.id_repuesto) === String(formData.repuesto_id));
   const subtotal = Number(formData.cantidad || 0) * Number(formData.costo_unitario || 0);
@@ -131,7 +139,11 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
         )}
         {selectedRepuesto && <div className="mt-1 text-xs">Stock actual: {selectedRepuesto.stock_actual ?? 0} · Stock mínimo: {selectedRepuesto.stock_minimo ?? 0} · Ubicación: {selectedRepuesto.ubicacion_fisica || 'No registrada'} (se editan en Repuestos).</div>}
       </div>
-      <label className="block text-sm font-medium text-gray-700">Fotos del ticket o recibo<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { setTicketFotos(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /><span className="mt-1 block text-xs font-normal text-slate-500">Opcional. JPG, PNG o WebP, hasta 5 MB por foto. {ticketFotos.length ? `${ticketFotos.length} seleccionada(s).` : ''}</span></label>
+      <div className="space-y-2"><label className="block text-sm font-medium text-gray-700">Fotos del ticket o recibo<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { addTicketFotos(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /><span className="mt-1 block text-xs font-normal text-slate-500">Opcional. JPG, PNG o WebP, hasta 5 MB por foto.</span></label>
+        <label className="inline-block rounded border px-3 py-2 text-xs font-semibold text-indigo-700">Tomar foto<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(e) => { addTicketFotos(Array.from(e.target.files || [])); e.target.value = ''; }} className="sr-only" /></label>
+        <RemotePhotoBridge onAdd={addTicketFotos} />
+        {ticketFotos.length > 0 && <ul className="space-y-1 text-xs">{ticketFotos.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded border bg-white p-2"><span className="truncate">{file.name}</span><button type="button" onClick={() => setTicketFotos((previous) => previous.filter((_, i) => i !== index))} className="text-red-700 underline">Quitar</button></li>)}</ul>}
+      </div>
 
       {formError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
 

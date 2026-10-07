@@ -35,7 +35,7 @@ export const usePhotoQueue = () => {
   }, []);
 
   const addPhotos = useCallback(async (files) => {
-    if (busyRef.current || !files.length) return;
+    if (busyRef.current || !files.length) return false;
     busyRef.current = true;
     setIsPreparing(true);
     const { accepted, rejected, duplicates } = selectNewPhotos(files, photosRef.current);
@@ -59,6 +59,7 @@ export const usePhotoQueue = () => {
         ...rejected.map(({ name, error }) => ({ type: 'error', text: `${name}: ${error}` })),
         ...(duplicates ? [{ type: 'info', text: `${duplicates} archivo${duplicates === 1 ? '' : 's'} ya estaba${duplicates === 1 ? '' : 'n'} en la selección; ${duplicates === 1 ? 'no se volvió a agregar' : 'no se volvieron a agregar'}.` }] : []),
       ]);
+      return prepared.length > 0;
     } finally {
       busyRef.current = false;
       if (mountedRef.current) setIsPreparing(false);

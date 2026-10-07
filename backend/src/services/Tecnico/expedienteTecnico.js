@@ -34,6 +34,17 @@ export const diagnosticoTecnico = (record) => {
   if (!record) return null;
   const cliente = record.equipo?.cliente;
   const safe = pick(record, diagnosisFields);
+  if (Array.isArray(record.ordenes)) {
+    safe.motivo_reapertura = record.ordenes.length && record.factura_diagnostico
+      ? 'Ya tiene orden y factura asociadas. Puede añadir una aclaración en el expediente.'
+      : record.ordenes.length ? 'Ya tiene una orden asociada. Puede añadir una aclaración en el expediente.'
+        : record.factura_diagnostico ? 'Ya tiene una factura asociada. Puede añadir una aclaración en el expediente.'
+          : record.estado_del_diagnostico !== 'COMPLETADO'
+            ? `Estado ${record.estado_del_diagnostico.toLowerCase()}: no puede volver a revisión; puede añadir una aclaración.`
+            : record.fecha_envio_documento || record.estado_contacto !== 'PENDIENTE_CONTACTAR'
+              ? 'Ya se registró comunicación con el cliente. Puede añadir una aclaración.' : null;
+    safe.puede_reabrir_diagnostico = safe.motivo_reapertura === null;
+  }
   safe.moneda_presupuesto = record.moneda_presupuesto === 'USD' ? 'USD' : 'NIO';
   for (const key of diagnosisFields) if (typeof safe[key] === 'string') safe[key] = textoTecnico(safe[key], cliente);
   Object.assign(safe, avanceFields(record));
