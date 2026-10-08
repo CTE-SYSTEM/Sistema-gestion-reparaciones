@@ -19,7 +19,7 @@ Mi cuenta exige la contraseña actual para guardar el perfil, cambiar contraseñ
 
 No se puede desactivar la cuenta propia ni cambiar su rol. Los cambios de acceso se serializan para conservar al menos un administrador activo incluso con solicitudes simultáneas. Usuarios permite crear Secretaría, Técnico y Jefe técnico; conserva los administradores existentes y no permite elevar nuevas cuentas a administrador desde ese formulario. Crear un técnico genera su perfil vinculado. La acción **Contraseña** de cada usuario pide la nueva contraseña, su confirmación y la contraseña del administrador; al guardarla invalida las sesiones anteriores de ese usuario.
 
-El correo del perfil es un dato de contacto. La recuperación mediante correo o SMS todavía requiere una implementación y credenciales del proveedor; estos cambios no crean cuentas de prueba ni envían códigos.
+El correo del perfil permite recibir un código de recuperación desde **¿Olvidaste tu contraseña?** en el inicio de sesión, cuando la API tiene Brevo configurado con una clave y un remitente verificado. El código vence en diez minutos y su uso invalida las sesiones anteriores. La recuperación por SMS no está implementada. Consulte [Parámetros y elementos genéricos de SGR](parametros-genericos-sgr.md#4-usuarios-perfiles-y-correos) para configurar el envío.
 
 ## Configuración y reglas
 

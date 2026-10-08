@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isR2Key, PHOTO_STORAGE_STAGES, r2EquipmentFolderFromKey, r2ServiceKey } from '../../src/services/Secretaria/fotoStorage.js';
+import { isR2Key, PHOTO_STORAGE_STAGES, r2EquipmentFolderFromKey, r2ServiceKey } from '../../src/services/archivos/fotoStorage.js';
 
 const equipo = { id_equipo: 42, tipo: 'Monitor', marca: 'Sámsung', modelo: 'Odyssey / G5' };
 

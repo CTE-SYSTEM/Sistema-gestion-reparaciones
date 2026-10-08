@@ -8,7 +8,7 @@ import pg from 'pg';
 
 const backendRoot = fileURLToPath(new URL('../../', import.meta.url));
 const suite = process.argv[2] || 'secretaria';
-if (!['secretaria', 'jefeTecnico', 'tecnico', 'administracion', 'notificaciones'].includes(suite)) throw new Error('Suite de integración no reconocida.');
+if (!['secretaria', 'jefeTecnico', 'tecnico', 'administracion', 'notificaciones', 'areas'].includes(suite)) throw new Error('Suite de integración no reconocida.');
 const databaseName = `cte_${suite.toLowerCase()}_test_${randomUUID().replaceAll('-', '')}`;
 const localHosts = new Set(['db', 'localhost', '127.0.0.1', '[::1]']);
 const sourceUrl = process.env.CTE_TEST_DATABASE_ADMIN_URL || process.env.SQL_DATABASE_URL || process.env.DATABASE_URL;
@@ -24,7 +24,7 @@ const testUrl = new URL(adminUrl);
 testUrl.pathname = `/${databaseName}`;
 const testEnv = {
   ...process.env, NODE_ENV: 'test', DATABASE_URL: testUrl.href, SQL_DATABASE_URL: testUrl.href,
-  [{ secretaria: 'CTE_SECRETARIA_TEST_DATABASE', jefeTecnico: 'CTE_JEFE_TEST_DATABASE', tecnico: 'CTE_TECNICO_TEST_DATABASE', administracion: 'CTE_ADMIN_TEST_DATABASE', notificaciones: 'CTE_NOTIFICACIONES_TEST_DATABASE' }[suite]]: databaseName,
+  [{ secretaria: 'CTE_SECRETARIA_TEST_DATABASE', jefeTecnico: 'CTE_JEFE_TEST_DATABASE', tecnico: 'CTE_TECNICO_TEST_DATABASE', administracion: 'CTE_ADMIN_TEST_DATABASE', notificaciones: 'CTE_NOTIFICACIONES_TEST_DATABASE', areas: 'CTE_AREAS_TEST_DATABASE' }[suite]]: databaseName,
   JWT_SECRET: randomUUID(), CHECKPOINT_DISABLE: '1',
 };
 const runNode = (args) => new Promise((resolve, reject) => {
@@ -81,7 +81,7 @@ try {
 } finally {
   try {
     if (created) {
-      if (!/^cte_(secretaria|jefetecnico|tecnico|administracion|notificaciones)_test_[0-9a-f]{32}$/.test(databaseName)) throw new Error('Nombre de limpieza inválido.');
+      if (!/^cte_(secretaria|jefetecnico|tecnico|administracion|notificaciones|areas)_test_[0-9a-f]{32}$/.test(databaseName)) throw new Error('Nombre de limpieza inválido.');
       await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
       console.log(`Base temporal eliminada: ${databaseName}`);
     }

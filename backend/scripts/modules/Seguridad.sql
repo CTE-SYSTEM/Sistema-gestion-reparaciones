@@ -79,11 +79,10 @@ BEGIN
       CHECK (metodo_pago IS NULL OR metodo_pago IN ('Efectivo', 'Transferencia', 'Tarjeta'));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_facturas_metodo_pago') THEN
-    ALTER TABLE "Facturas"
-      ADD CONSTRAINT chk_facturas_metodo_pago
-      CHECK (metodo_pago IS NULL OR metodo_pago IN ('Efectivo', 'Transferencia', 'Tarjeta'));
-  END IF;
+  ALTER TABLE "Facturas" DROP CONSTRAINT IF EXISTS chk_facturas_metodo_pago;
+  ALTER TABLE "Facturas"
+    ADD CONSTRAINT chk_facturas_metodo_pago
+    CHECK (metodo_pago IS NULL OR metodo_pago IN ('Efectivo', 'Transferencia', 'Tarjeta', 'Pendiente', 'GARANTIA'));
 
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_garantias_duracion') THEN
     ALTER TABLE "Garantias"

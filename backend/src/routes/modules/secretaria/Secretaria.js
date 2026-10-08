@@ -4,13 +4,13 @@ import express from 'express';
 const router = express.Router();
 
 // Importamos las rutas específicas de Secretaría
-import clientesRoutes from './Clientes.js';
-import equiposRoutes from './Equipos.js';
-import comprasRoutes from './Compras.js';
-import facturasRoutes from './facturas.js';
-import garantiasRoutes from './garantias.js';
-import diagnosticoRoutes from './Diagnostico.js';
-import NuevaOrden from './NuevaOrden.js';
+import clientesRoutes from '../recepcion/Clientes.js';
+import equiposRoutes from '../recepcion/Equipos.js';
+import comprasRoutes from '../bodega/Compras.js';
+import facturasRoutes from '../contabilidad/facturas.js';
+import garantiasRoutes from '../garantias/garantias.js';
+import diagnosticoRoutes from '../recepcion/Diagnostico.js';
+import NuevaOrden from '../recepcion/NuevaOrden.js';
 
 // Usamos las rutas específicas de Secretaría
 router.use('/clientes', clientesRoutes);

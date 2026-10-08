@@ -4,7 +4,7 @@ import api from '../../../services/api';
 import { RecepcionTecnica } from './ExpedienteTecnico';
 import { X } from 'lucide-react';
 import { EstadoBadge } from './TecnicoBadges';
-import FotosServicio from '../../secretaria/components/shared/FotosServicio';
+import FotosServicio from '../../shared/components/FotosServicio';
 import { pruebasSalidaPorTipo } from '../utils/pruebasSalida';
 
 const cleanCurrencyInput = (value = '') => String(value).replace(/[^\d.]/g, '');

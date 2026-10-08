@@ -31,8 +31,25 @@ model Usuarios {
   intervenciones_tecnicas IntervencionesTecnicas[]
   avances_tecnicos BitacoraTecnica[]
   notificaciones Notificaciones[]
+  recuperacion_password RecuperacionPassword?
+  reclamos_abiertos Reclamos[] @relation("ReclamoAbiertoPor")
+  reclamos_analizados Reclamos[] @relation("ReclamoAnalizadoPor")
+  reclamos_decididos Reclamos[] @relation("ReclamoDecididoPor")
+  revisiones_calidad RevisionesCalidad[]
+  movimientos_contables MovimientosContables[]
 
   @@map("Usuarios")
+}
+
+model RecuperacionPassword {
+  usuario_id     Int      @id
+  codigo_hash    String
+  expira_en      DateTime @db.Timestamptz(3)
+  solicitado_en  DateTime @default(now()) @db.Timestamptz(3)
+  intentos       Int      @default(0)
+  usuario        Usuarios @relation(fields: [usuario_id], references: [id_usuario], onDelete: Cascade)
+
+  @@map("RecuperacionPassword")
 }
 
 model Notificaciones {
@@ -188,6 +205,10 @@ model Ordenes {
   usuario_revisor_irreparable_id Int?
   fecha_revision_irreparable DateTime?
   motivo_revision_irreparable String?
+  es_garantia             Boolean   @default(false)
+  calidad_estado          String    @default("NO_REQUERIDO")
+  calidad_observacion     String?
+  calidad_revisada_en     DateTime?
   
   // Relaciones
   diagnostico             Diagnosticos @relation(fields: [diagnostico_id], references: [id_diagnostico])
@@ -202,6 +223,9 @@ model Ordenes {
   intervenciones IntervencionesTecnicas[]
   avances_tecnicos BitacoraTecnica[]
   revisor_irreparable Usuarios? @relation("RevisorIrreparable", fields: [usuario_revisor_irreparable_id], references: [id_usuario], onDelete: SetNull)
+  reclamos_originales Reclamos[] @relation("ReclamoOrdenOriginal")
+  reclamo_reingreso Reclamos? @relation("ReclamoOrdenReingreso")
+  revisiones_calidad RevisionesCalidad[]
 
   @@map("Ordenes")
 }
@@ -255,6 +279,7 @@ model Ordenes_Repuestos {
   tecnico_solicitante_id Int?
   usuario_aprobador_id Int?
   usuario_entregador_id Int?
+  compra_id            Int?
   precio_unitario_facturado Decimal? @db.Decimal(18, 2)
   total_facturado     Decimal? @db.Decimal(18, 2)
   fecha_facturacion   DateTime?
@@ -267,6 +292,7 @@ model Ordenes_Repuestos {
   tecnico_solicitante Tecnicos? @relation("SolicitanteRepuesto", fields: [tecnico_solicitante_id], references: [id_tecnico], onDelete: SetNull)
   usuario_aprobador Usuarios? @relation("AprobadorRepuesto", fields: [usuario_aprobador_id], references: [id_usuario], onDelete: SetNull)
   usuario_entregador Usuarios? @relation("EntregadorRepuesto", fields: [usuario_entregador_id], references: [id_usuario], onDelete: SetNull)
+  compra              Compras? @relation(fields: [compra_id], references: [id_compra], onDelete: SetNull)
 
   @@map("Ordenes_Repuestos")
 }
@@ -303,6 +329,8 @@ model Compras {
   proveedor        Proveedores @relation(fields: [proveedor_id], references: [id_proveedor])
   repuesto         Repuestos   @relation(fields: [repuesto_id], references: [id_repuesto])
   archivos         ArchivosCompra[]
+  salidas_asignadas Ordenes_Repuestos[]
+  reclamos        Reclamos[]
 
   @@map("Compras")
 }
@@ -326,6 +354,7 @@ model Facturas {
   orden         Ordenes?   @relation(fields: [orden_id], references: [id_orden])
   diagnostico   Diagnosticos? @relation(fields: [diagnostico_id], references: [id_diagnostico])
   garantias     Garantias[]
+  movimientos_contables MovimientosContables[]
 
   @@map("Facturas")
 }
@@ -458,8 +487,79 @@ model Garantias {
   fecha_inicio      DateTime? 
   fecha_vencimiento DateTime? 
   factura           Facturas  @relation(fields: [factura_id], references: [id_factura])
+  reclamos          Reclamos[]
 
   @@map("Garantias")
+}
+
+model Reclamos {
+  id_reclamo             Int       @id @default(autoincrement())
+  orden_original_id      Int
+  garantia_id            Int?
+  orden_reingreso_id     Int?      @unique
+  compra_id              Int?
+  descripcion            String
+  estado                 String    @default("ABIERTO")
+  responsable_tipo       String?
+  analisis               String?
+  resolucion             String?
+  cobertura              String    @default("PENDIENTE")
+  motivo_cobertura       String?
+  costo_estimado         Decimal?  @db.Decimal(18, 2)
+  abierto_por_id         Int
+  analizado_por_id       Int?
+  decidido_por_id        Int?
+  fecha_apertura         DateTime  @default(now())
+  fecha_analisis         DateTime?
+  fecha_decision         DateTime?
+  fecha_cierre           DateTime?
+  orden_original         Ordenes   @relation("ReclamoOrdenOriginal", fields: [orden_original_id], references: [id_orden])
+  orden_reingreso        Ordenes?  @relation("ReclamoOrdenReingreso", fields: [orden_reingreso_id], references: [id_orden])
+  garantia               Garantias? @relation(fields: [garantia_id], references: [id_garantia])
+  compra                 Compras? @relation(fields: [compra_id], references: [id_compra])
+  abierto_por            Usuarios @relation("ReclamoAbiertoPor", fields: [abierto_por_id], references: [id_usuario])
+  analizado_por          Usuarios? @relation("ReclamoAnalizadoPor", fields: [analizado_por_id], references: [id_usuario])
+  decidido_por           Usuarios? @relation("ReclamoDecididoPor", fields: [decidido_por_id], references: [id_usuario])
+  movimientos_contables  MovimientosContables[]
+
+  @@index([estado, fecha_apertura(sort: Desc)])
+  @@index([orden_original_id])
+  @@map("Reclamos")
+}
+
+model RevisionesCalidad {
+  id_revision     Int      @id @default(autoincrement())
+  orden_id        Int
+  usuario_id      Int
+  decision        String
+  observacion     String
+  pruebas         Json?
+  fecha_revision  DateTime @default(now())
+  orden           Ordenes  @relation(fields: [orden_id], references: [id_orden])
+  usuario         Usuarios @relation(fields: [usuario_id], references: [id_usuario])
+
+  @@index([orden_id, fecha_revision(sort: Desc)])
+  @@map("RevisionesCalidad")
+}
+
+model MovimientosContables {
+  id_movimiento  Int      @id @default(autoincrement())
+  factura_id     Int?
+  reclamo_id     Int?
+  usuario_id     Int
+  tipo           String
+  monto          Decimal  @db.Decimal(18, 2)
+  metodo         String?
+  referencia     String?
+  motivo         String
+  fecha_registro DateTime @default(now())
+  factura        Facturas? @relation(fields: [factura_id], references: [id_factura])
+  reclamo        Reclamos? @relation(fields: [reclamo_id], references: [id_reclamo])
+  usuario        Usuarios  @relation(fields: [usuario_id], references: [id_usuario])
+
+  @@index([factura_id, fecha_registro(sort: Desc)])
+  @@index([reclamo_id, fecha_registro(sort: Desc)])
+  @@map("MovimientosContables")
 }
 
 model Auditoria_Movimientos {

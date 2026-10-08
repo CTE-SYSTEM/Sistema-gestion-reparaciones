@@ -23,6 +23,11 @@ router.get('/', async (req, res) => {
       WHERE o.id_orden::text = (n.contenido #>> '{entity,id}')
         AND o.tecnico_id IS NULL AND o.estado NOT IN ('FINALIZADO', 'ENTREGADO', 'CANCELADO', 'IRREPARABLE')
     )) OR
+    (n.contenido->>'type' = 'calidad_rechazada' AND EXISTS (
+      SELECT 1 FROM "Ordenes" o
+      WHERE o.id_orden::text = (n.contenido #>> '{entity,id}')
+        AND o.estado = 'EN_REPARACION' AND o.calidad_estado = 'RECHAZADO'
+    )) OR
     (n.contenido->>'type' = 'repuesto_solicitado' AND EXISTS (
       SELECT 1 FROM "Ordenes_Repuestos" p JOIN "Ordenes" o ON o.id_orden = p.orden_id
       WHERE ((n.contenido #>> '{entity,kind}') = 'repuesto' AND p.id_detalle_repuesto::text = (n.contenido #>> '{entity,id}')

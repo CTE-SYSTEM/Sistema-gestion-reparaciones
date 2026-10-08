@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepararAprobacionOrden } from '../../src/features/secretaria/utils/aprobacionOrden.js';
+import { prepararAprobacionOrden } from '../../src/features/recepcion/utils/aprobacionOrden.js';
 
 const diagnostico = {
   id_diagnostico: 30,

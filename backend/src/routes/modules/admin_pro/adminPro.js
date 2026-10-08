@@ -61,7 +61,7 @@ router.get('/ordenes/:id/repuestos', getRepuestosPorOrdenAdmin);
 router.get('/ordenes/:id/repuestos/reporte', downloadRepuestosPorOrdenAdmin);
 router.post('/ordenes/crear', async (req, res, next) => {
   try {
-    const { createOrden } = await import('../../../controllers/Secretaria/nuevaOrdenController.js');
+    const { createOrden } = await import('../../../controllers/recepcion/nuevaOrdenController.js');
     return createOrden(req, res);
   } catch (error) {
     next(error);

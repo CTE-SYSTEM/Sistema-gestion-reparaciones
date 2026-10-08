@@ -14,7 +14,7 @@ export const RESULTADOS_ORDEN = ['REPARADO', 'IRREPARABLE'];
 export const REPUESTO_ESTADOS = ['PENDIENTE', 'APROBADO', 'DENEGADO'];
 export const ENTREGA_REPUESTO_ESTADOS = ['PENDIENTE', 'ENTREGADO'];
 export const PRIORIDADES = ['Normal', 'Alta', 'Urgente', 'NORMAL', 'ALTA', 'URGENTE'];
-export const METODOS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
+export const METODOS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta', 'Pendiente'];
 
 export const normalizeOptionalText = (value) => {
   const normalized = String(value ?? '').trim();

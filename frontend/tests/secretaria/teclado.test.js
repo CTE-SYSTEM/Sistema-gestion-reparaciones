@@ -1,6 +1,6 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { handleFormNavigationKeyDown } from '../../src/features/secretaria/components/shared/formKeyboardNavigation.js';
+import { handleFormNavigationKeyDown } from '../../src/features/shared/components/formKeyboardNavigation.js';
 
 const originalWindow = globalThis.window;
 afterEach(() => {

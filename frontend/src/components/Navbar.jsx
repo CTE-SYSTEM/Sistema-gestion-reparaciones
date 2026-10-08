@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useContext, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, UserRound } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { NotificationTray } from './NotificationTray';
@@ -15,11 +15,10 @@ const normalizeRole = (role) => String(role || '')
 const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
-  const location = useLocation();
   const [showNotifications, setShowNotifications] = useState(false);
-  const isSecretaria = normalizeRole(user?.rol) === 'secretaria';
+  const isSecretaria = ['secretaria', 'recepcion'].includes(normalizeRole(user?.rol));
   const isAdmin = ['administrador', 'adminpro', 'admin'].includes(normalizeRole(user?.rol));
-  const hasInbox = isSecretaria || isAdmin;
+  const hasInbox = ['secretaria', 'recepcion', 'bodega', 'calidad', 'reclamos', 'garantias', 'contabilidad'].includes(normalizeRole(user?.rol)) || isAdmin;
   const {
     notifications,
     connected: socketConnected,
@@ -30,19 +29,27 @@ const Navbar = ({ onToggleSidebar }) => {
     enabled: hasInbox,
     persistent: true,
     onRefresh: (notification) => {
-      if (isSecretaria) window.dispatchEvent(new CustomEvent('secretaria:notificacion', { detail: notification }));
+      if (isSecretaria) window.dispatchEvent(new CustomEvent('recepcion:notificacion', { detail: notification }));
     },
     refreshIntervalMs: 0,
   });
 
-  useEffect(() => {
-    if (!hasInbox) setShowNotifications(false);
-  }, [hasInbox]);
-
   const reviewNotices = () => { reloadNotifications(); setShowNotifications(true); dismissLatest(); };
   const openNotice = (item) => {
-    const adminPaths = { diagnostico: '/admin/diagnosticos', orden: '/admin/ordenes', repuesto: '/admin/inventario' };
-    navigate(isAdmin ? (adminPaths[item.entity?.kind] || '/admin') : ['orden_finalizada', 'irreparable_confirmado'].includes(item.type) ? '/secretaria/facturacion' : '/secretaria/nueva-orden');
+    const adminPaths = { diagnostico: '/admin/diagnosticos', orden: '/admin/ordenes', repuesto: '/admin/inventario', reclamo: '/reclamos' };
+    const role = normalizeRole(user?.rol);
+    const target = isAdmin ? (adminPaths[item.entity?.kind] || '/admin')
+      : role === 'bodega' ? (item.entity?.kind === 'compra' ? '/bodega/compras' : item.entity?.kind === 'repuesto' ? '/bodega/entregas' : '/bodega/repuestos')
+        : role === 'calidad' ? '/calidad'
+          : role === 'reclamos' ? '/reclamos'
+            : role === 'garantias' ? (item.entity?.kind === 'reclamo' ? '/garantias/reclamos' : '/garantias')
+              : role === 'contabilidad' ? (item.type === 'movimiento_contable' ? '/contabilidad/movimientos' : '/contabilidad/facturacion')
+                : role === 'recepcion' ? (item.entity?.kind === 'reclamo' ? '/recepcion/reclamos'
+                  : item.type === 'diagnostico_completado' ? '/recepcion/nueva-orden'
+                    : item.type === 'factura_creada' || item.type === 'calidad_aprobada' ? '/recepcion/entregas' : '/recepcion/flujo-atencion')
+                : (['orden_finalizada', 'irreparable_confirmado', 'factura_creada', 'garantia_registrada', 'equipo_entregado'].includes(item.type)) && role === 'secretaria'
+                  ? '/secretaria/facturacion' : '/secretaria/nueva-orden';
+    navigate(target);
     setShowNotifications(false); dismissLatest();
   };
 
@@ -85,7 +92,7 @@ const Navbar = ({ onToggleSidebar }) => {
               </div>
             )}
 
-            <Link to={isAdmin ? '/admin/mi-cuenta' : location.pathname} aria-label={isAdmin ? 'Abrir Mi cuenta' : 'Cuenta actual'} className="flex items-center gap-3 rounded-xl p-1 transition hover:bg-slate-50">
+            <Link to="/mi-cuenta" aria-label="Abrir Mi cuenta" className="flex items-center gap-3 rounded-xl p-1 transition hover:bg-slate-50">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-black text-white">
                 {user.username?.charAt(0).toUpperCase() || <UserRound className="h-5 w-5" />}
               </div>

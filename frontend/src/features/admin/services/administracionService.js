@@ -2,10 +2,10 @@ import api from '../../../services/api';
 
 const root = '/admin_pro';
 export const administracionService = {
-  getCuenta: () => api.get(`${root}/mi-cuenta`, { cache: false }),
-  updateCuenta: (body) => api.put(`${root}/mi-cuenta`, body),
-  changePassword: (body) => api.put(`${root}/mi-cuenta/password`, body),
-  closeSessions: (body) => api.post(`${root}/mi-cuenta/cerrar-sesiones`, body),
+  getCuenta: () => api.get('/auth/mi-cuenta', { cache: false }),
+  updateCuenta: (body) => api.put('/auth/mi-cuenta', body),
+  changePassword: (body) => api.put('/auth/mi-cuenta/password', body),
+  closeSessions: (body) => api.post('/auth/mi-cuenta/cerrar-sesiones', body),
   getConfiguracion: () => api.get(`${root}/configuracion`, { cache: false }),
   saveConfiguracion: (body) => api.put(`${root}/configuracion`, body),
   getReglas: () => api.get(`${root}/reglas`, { cache: false }),

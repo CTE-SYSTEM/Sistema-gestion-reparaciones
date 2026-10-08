@@ -63,6 +63,7 @@ const technicalTitles = {
   orden_cerrada: 'Finalización registrada', irreparable_revisado: 'Irreparabilidad revisada',
   repuesto_aprobar: 'Pieza aprobada', repuesto_rechazar: 'Pieza rechazada',
   repuesto_entregar: 'Pieza entregada', repuesto_corregir: 'Solicitud de pieza actualizada',
+  calidad_rechazada: 'Control de calidad solicita corrección',
   'repuesto_retirar-aprobacion': 'Aprobación de pieza retirada', repuesto_reabrir: 'Solicitud de pieza en revisión',
   'repuesto_corregir-entrega': 'Entrega de pieza corregida', repuesto_devolver: 'Devolución de pieza registrada',
 };
@@ -109,6 +110,7 @@ const deliver = async (role, payload, userId) => {
 };
 
 export const notifyRole = (role, payload) => deliver(role, payload);
+export const notifyRoles = async (roles, payload) => Promise.all(roles.map((role) => notifyRole(role, payload)));
 export const notifyJefeTecnico = (payload) => notifyRole('TecnicoJefe', payload);
 export const notifyTecnico = (tecnico, payload) => {
   if (!Number.isSafeInteger(tecnico?.usuario_id) || tecnico.usuario_id < 1) return Promise.resolve(null);

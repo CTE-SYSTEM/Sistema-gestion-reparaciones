@@ -33,7 +33,7 @@ ALTER TABLE "ArchivosServicio" ADD CONSTRAINT chk_archivos_servicio_tipo CHECK
   ((diagnostico_id IS NOT NULL AND tipo_archivo IN ('FOTO_RECEPCION', 'FOTO_DIAGNOSTICO', 'FOTO_SALIDA_SIN_REPARAR'))
    OR (orden_id IS NOT NULL AND tipo_archivo IN ('FOTO_REPARACION', 'FOTO_ENTREGA')));
 ALTER TABLE "Ordenes" DROP CONSTRAINT IF EXISTS chk_ordenes_monto_autorizado;
-ALTER TABLE "Ordenes" ADD CONSTRAINT chk_ordenes_monto_autorizado CHECK (monto_autorizado IS NULL OR monto_autorizado > 0);
+ALTER TABLE "Ordenes" ADD CONSTRAINT chk_ordenes_monto_autorizado CHECK (monto_autorizado IS NULL OR monto_autorizado > 0 OR (es_garantia = true AND monto_autorizado = 0));
 ALTER TABLE "Ordenes" DROP CONSTRAINT IF EXISTS chk_ordenes_cancelacion_motivo;
 ALTER TABLE "Ordenes" ADD CONSTRAINT chk_ordenes_cancelacion_motivo CHECK
   (estado IS DISTINCT FROM 'CANCELADO' OR NULLIF(BTRIM(motivo_cancelacion), '') IS NOT NULL);

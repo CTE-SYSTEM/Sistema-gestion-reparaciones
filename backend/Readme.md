@@ -38,23 +38,32 @@ backend/
       auth/                 Inicio de sesión.
       health.js             Comprobación de conexión con PostgreSQL.
       modules/
-        secretaria/         Recepción, catálogos, órdenes, fotos y facturación.
+        secretaria/         Dashboard y compatibilidad del perfil heredado.
+        recepcion/          Clientes, equipos, diagnósticos, órdenes y flujo de atención.
+        bodega/             Repuestos, tipos, compras y proveedores.
+        contabilidad/       Facturación.
+        calidad/            Pruebas de salida.
+        garantias/          Registro y consulta de garantías.
+        servicios/          Archivos de servicio.
         Tecnico/            Trabajo asignado y solicitudes de repuestos.
         JefeTecnico/        Coordinación, aprobaciones y correcciones.
         admin_pro/          Gestión avanzada, reportes y respaldos.
-        flujoAtencion.js    Seguimiento global de equipos.
     controllers/
       auth/                 Validación de acceso y emisión del token.
-      Secretaria/           Operaciones administrativas y recepción.
+      Secretaria/           Dashboard del perfil heredado.
+      recepcion/            Recepción y seguimiento del servicio.
+      bodega/               Inventario y compras.
+      contabilidad/         Facturación.
+      garantias/            Gestión de garantías.
+      servicios/            Archivos de servicio.
       Tecnico/              Trabajo propio del técnico.
       JefeTecnico/          Coordinación técnica.
       admin_pro/            Operación administrativa avanzada.
-      flujoAtencionController.js
     services/
-      Secretaria/           Reglas reutilizables de equipos, diagnósticos y órdenes.
+      recepcion/            Reglas de equipos, diagnósticos, órdenes y flujo de atención.
+      archivos/             Almacenamiento de fotos.
       Tecnico/              Consultas y operaciones del técnico.
       backupService.js      Copias y exportaciones de inventario.
-      flujoAtencionService.js
       healthService.js
       notifications.js      Socket.IO.
     utils/                  Validación, roles, permisos, paginación y auditoría.
@@ -107,19 +116,19 @@ La autorización de fotos verifica la relación con el diagnóstico u orden; con
 | Área | Archivo o carpeta de entrada | Responsabilidad |
 | --- | --- | --- |
 | Acceso | [authController.js](src/controllers/auth/authController.js), [permissions.js](src/utils/permissions.js), [roles.js](src/utils/roles.js). | Credenciales, roles normalizados y capacidades. |
-| Clientes | [clientesController.js](src/controllers/Secretaria/clientesController.js). | Datos de cliente, búsqueda y paginación. |
-| Equipos | [equiposController.js](src/controllers/Secretaria/equiposController.js), [equipoService.js](src/services/Secretaria/equipoService.js). | Asociación a cliente, tipo, marca, modelo y serie. |
-| Diagnóstico | [diagnosticoController.js](src/controllers/Secretaria/diagnosticoController.js), [diagnosticoService.js](src/services/Secretaria/diagnosticoService.js). | Recepción, edición, filtros y estado técnico. |
-| Órdenes | [nuevaOrdenController.js](src/controllers/Secretaria/nuevaOrdenController.js), [ordenService.js](src/services/Secretaria/ordenService.js). | Diagnósticos listos, creación, monto autorizado y órdenes. |
-| Contacto y salida | [flujoServicioController.js](src/controllers/Secretaria/flujoServicioController.js). | PDF, contacto, historial, retiro, entrega y cancelación. |
-| Fotos | [archivosServicioController.js](src/controllers/Secretaria/archivosServicioController.js), [fotoStorage.js](src/services/Secretaria/fotoStorage.js). | Permisos, MIME, R2/local, nombres, escritura y lectura. |
-| Inventario | [repuestoController.js](src/controllers/Secretaria/repuestoController.js), [tipoRepuestoController.js](src/controllers/Secretaria/tipoRepuestoController.js). | Catálogo, categorías y disponibilidad. |
-| Compras | [comprasController.js](src/controllers/Secretaria/comprasController.js), [proveedoresController.js](src/controllers/Secretaria/proveedoresController.js). | Abastecimiento y proveedores. |
-| Facturas y garantías | [facturacionController.js](src/controllers/Secretaria/facturacionController.js), [garantiasController.js](src/controllers/Secretaria/garantiasController.js). | Órdenes facturables, importes y garantía. |
+| Clientes | [clientesController.js](src/controllers/recepcion/clientesController.js). | Datos de cliente, búsqueda y paginación. |
+| Equipos | [equiposController.js](src/controllers/recepcion/equiposController.js), [equipoService.js](src/services/recepcion/equipoService.js). | Asociación a cliente, tipo, marca, modelo y serie. |
+| Diagnóstico | [diagnosticoController.js](src/controllers/recepcion/diagnosticoController.js), [diagnosticoService.js](src/services/recepcion/diagnosticoService.js). | Recepción, edición, filtros y estado técnico. |
+| Órdenes | [nuevaOrdenController.js](src/controllers/recepcion/nuevaOrdenController.js), [ordenService.js](src/services/recepcion/ordenService.js). | Diagnósticos listos, creación, monto autorizado y órdenes. |
+| Contacto y salida | [flujoServicioController.js](src/controllers/recepcion/flujoServicioController.js). | PDF, contacto, historial, retiro, entrega y cancelación. |
+| Fotos | [archivosServicioController.js](src/controllers/servicios/archivosServicioController.js), [fotoStorage.js](src/services/archivos/fotoStorage.js). | Permisos, MIME, R2/local, nombres, escritura y lectura. |
+| Inventario | [repuestoController.js](src/controllers/bodega/repuestoController.js), [tipoRepuestoController.js](src/controllers/bodega/tipoRepuestoController.js). | Catálogo, categorías y disponibilidad. |
+| Compras | [comprasController.js](src/controllers/bodega/comprasController.js), [proveedoresController.js](src/controllers/bodega/proveedoresController.js). | Abastecimiento y proveedores. |
+| Facturas y garantías | [facturacionController.js](src/controllers/contabilidad/facturacionController.js), [garantiasController.js](src/controllers/garantias/garantiasController.js). | Órdenes facturables, importes y garantía. |
 | Técnico | [tecnicosController.js](src/controllers/Tecnico/tecnicosController.js), [tecnicoService.js](src/services/Tecnico/tecnicoService.js). | Trabajo asignado y solicitudes de repuestos. |
 | Técnico Jefe | [supervisionController.js](src/controllers/JefeTecnico/supervisionController.js), [supervisionService.js](src/services/JefeTecnico/supervisionService.js). | Supervisión, asignación, aprobación y entrega de piezas, irreparables y excepciones justificadas. |
 | Administración | [controllers/admin_pro](src/controllers/admin_pro), [adminPro.js](src/routes/modules/admin_pro/adminPro.js). | Usuarios, reportes, indicadores, historiales y respaldos. |
-| Flujo global | [flujoAtencionService.js](src/services/flujoAtencionService.js). | Consulta consolidada de etapas de atención. |
+| Flujo global | [flujoAtencionService.js](src/services/recepcion/flujoAtencionService.js). | Consulta consolidada de etapas de atención. |
 | Validación | [domainValidation.js](src/utils/domainValidation.js), [receptionRequirements.js](src/utils/receptionRequirements.js). | Valores permitidos, importes, IDs y aplicabilidad por tipo de equipo. |
 
 Dentro de `controllers/admin_pro/`, los controladores se separan por usuarios, equipos, repuestos, diagnósticos, órdenes, facturas, garantías, historial, analítica, reportes, dashboard y backups. [accessController.js](src/controllers/admin_pro/accessController.js) restringe esas rutas; comprobar su lista de roles además del mapa general de permisos.
@@ -131,22 +140,22 @@ Los prefijos se montan en [app.js](src/app/app.js). Consulta los archivos de rut
 | Prefijo | Función | Ruta fuente |
 | --- | --- | --- |
 | `/api/auth` | Login. | [auth.js](src/routes/auth/auth.js). |
-| `/api/clientes` | Consulta y gestión de clientes. | [Clientes.js](src/routes/modules/secretaria/Clientes.js). |
-| `/api/equipos` | Consulta y gestión de equipos. | [Equipos.js](src/routes/modules/secretaria/Equipos.js). |
-| `/api/secretaria/diagnostico` | Recepción, edición, estados, contacto, PDF y retiro. | [Diagnostico.js](src/routes/modules/secretaria/Diagnostico.js). |
-| `/api/ordenes` | Diagnósticos listos, órdenes, entrega, cancelación e historial. | [NuevaOrden.js](src/routes/modules/secretaria/NuevaOrden.js). |
-| `/api/archivos-servicio` | Fotografías y descarga autenticada. | [ArchivosServicio.js](src/routes/modules/secretaria/ArchivosServicio.js). |
+| `/api/clientes` | Consulta y gestión de clientes. | [Clientes.js](src/routes/modules/recepcion/Clientes.js). |
+| `/api/equipos` | Consulta y gestión de equipos. | [Equipos.js](src/routes/modules/recepcion/Equipos.js). |
+| `/api/recepcion/diagnostico` (alias `/api/secretaria/diagnostico`) | Recepción, edición, estados, contacto, PDF y retiro. | [Diagnostico.js](src/routes/modules/recepcion/Diagnostico.js). |
+| `/api/ordenes` | Diagnósticos listos, órdenes, entrega, cancelación e historial. | [NuevaOrden.js](src/routes/modules/recepcion/NuevaOrden.js). |
+| `/api/archivos-servicio` | Fotografías y descarga autenticada. | [ArchivosServicio.js](src/routes/modules/servicios/ArchivosServicio.js). |
 | `/api/tecnicos` | Catálogo y trabajo asignado a técnicos. | [tecnicos.js](src/routes/modules/Tecnico/tecnicos.js). |
 | `/api/jefe-tecnico` | Supervisión, asignaciones, prioridades, disponibilidad, repuestos y excepciones. | [Supervision.js](src/routes/modules/JefeTecnico/Supervision.js). |
 | `/api/diagnosticos` | Compatibilidad con las rutas anteriores del jefe; comparte las nuevas reglas. | [Diagnostico.js](src/routes/modules/JefeTecnico/Diagnostico.js). |
-| `/api/repuestos` | Repuestos. | [Repuesto.js](src/routes/modules/secretaria/Repuesto.js). |
-| `/api/tipos-repuesto` | Categorías de repuestos. | [TipoRepuesto.js](src/routes/modules/secretaria/TipoRepuesto.js). |
-| `/api/proveedores` | Proveedores. | [Proveedores.js](src/routes/modules/secretaria/Proveedores.js). |
-| `/api/compras` | Compras. | [Compras.js](src/routes/modules/secretaria/Compras.js). |
-| `/api/facturas` | Facturación y órdenes disponibles. | [facturas.js](src/routes/modules/secretaria/facturas.js). |
-| `/api/garantias` | Garantías. | [garantias.js](src/routes/modules/secretaria/garantias.js). |
+| `/api/repuestos` | Repuestos. | [Repuesto.js](src/routes/modules/bodega/Repuesto.js). |
+| `/api/tipos-repuesto` | Categorías de repuestos. | [TipoRepuesto.js](src/routes/modules/bodega/TipoRepuesto.js). |
+| `/api/proveedores` | Proveedores. | [Proveedores.js](src/routes/modules/bodega/Proveedores.js). |
+| `/api/compras` | Compras. | [Compras.js](src/routes/modules/bodega/Compras.js). |
+| `/api/facturas` | Facturación y órdenes disponibles. | [facturas.js](src/routes/modules/contabilidad/facturas.js). |
+| `/api/garantias` | Garantías. | [garantias.js](src/routes/modules/garantias/garantias.js). |
 | `/api/secretaria/dashboard` | Indicadores de recepción. | [Dashboard.js](src/routes/modules/secretaria/Dashboard.js). |
-| `/api/flujo-atencion` | Seguimiento filtrado de equipos. | [flujoAtencion.js](src/routes/modules/flujoAtencion.js). |
+| `/api/flujo-atencion` | Seguimiento filtrado de equipos. | [FlujoAtencion.js](src/routes/modules/recepcion/FlujoAtencion.js). |
 | `/api/admin_pro` | Administración, reportes, historiales y backups. | [adminPro.js](src/routes/modules/admin_pro/adminPro.js). |
 | `/health`, `/api/health` | Conexión PostgreSQL mediante `SELECT 1`. | [health.js](src/routes/health.js). |
 
@@ -154,13 +163,13 @@ Los prefijos se montan en [app.js](src/app/app.js). Consulta los archivos de rut
 
 | Método y ruta | Acción |
 | --- | --- |
-| `POST /api/secretaria/diagnostico/create` | Crear recepción. |
-| `PUT /api/secretaria/diagnostico/:id` | Editar diagnóstico. |
-| `PATCH /api/secretaria/diagnostico/:id/estado` | Cambiar estado técnico. |
-| `GET /api/secretaria/diagnostico/:id/documento` | Generar informe PDF. |
-| `GET /api/secretaria/diagnostico/:id/historial` | Leer historial de diagnóstico. |
-| `PATCH /api/secretaria/diagnostico/:id/contacto` | Registrar contacto o rechazo. |
-| `PATCH /api/secretaria/diagnostico/:id/retiro` | Registrar retiro sin reparar. |
+| `POST /api/recepcion/diagnostico/create` | Crear recepción. |
+| `PUT /api/recepcion/diagnostico/:id` | Editar diagnóstico. |
+| `PATCH /api/recepcion/diagnostico/:id/estado` | Cambiar estado técnico. |
+| `GET /api/recepcion/diagnostico/:id/documento` | Generar informe PDF. |
+| `GET /api/recepcion/diagnostico/:id/historial` | Leer historial de diagnóstico. |
+| `PATCH /api/recepcion/diagnostico/:id/contacto` | Registrar contacto o rechazo. |
+| `PATCH /api/recepcion/diagnostico/:id/retiro` | Registrar retiro sin reparar. |
 | `GET /api/ordenes/diagnosticos-listos` | Buscar diagnósticos disponibles, por páginas. |
 | `POST /api/ordenes` o `/api/ordenes/create` | Crear orden y registrar autorización. |
 | `GET /api/ordenes/:id/historial` | Leer historial de orden. |
@@ -184,6 +193,8 @@ Usa [.env.example](.env.example) como plantilla. Los secretos y conexiones reale
 | `JWT_SECRET` | Firma de tokens. Producción rechaza el secreto de ejemplo. |
 | `CORS_ORIGIN`, `FRONTEND_URL` | Orígenes permitidos; se admiten listas separadas por comas. |
 | `REQUEST_BODY_LIMIT` | Límite de JSON/formularios; predeterminado `1mb`. Las fotos tienen su propio límite. |
+| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | Clave privada y remitente verificado para correos transaccionales, incluida la recuperación de contraseña. |
+| `BREVO_SENDER_NAME`, `BREVO_REPLY_TO_EMAIL` | Nombre visible del remitente y dirección opcional para respuestas. |
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Configuración completa de almacenamiento R2. |
 | `R2_ENDPOINT` | Endpoint S3 opcional de la cuenta, sin ruta de bucket ni parámetros. |
 | `SERVICE_UPLOAD_DIR` | Destino local de fotografías; predeterminado `uploads/servicios`. |
@@ -191,6 +202,8 @@ Usa [.env.example](.env.example) como plantilla. Los secretos y conexiones reale
 | `BACKUP_DISPLAY_ROOT` | Ruta mostrada al usuario, útil cuando Docker y Windows usan nombres distintos. |
 
 [env.js](src/config/env.js) centraliza HTTP, CORS y JWT. Prisma, SQL, R2 y respaldos leen sus variables correspondientes. `server.js` carga el archivo `.env`; para scripts independientes desde Node puede usarse `node --env-file=.env ...`. Las variables de Compose prevalecen sobre las del archivo para claves definidas en ambos lugares.
+
+El envío reutilizable de correos está en [mailService.js](src/services/mailService.js); los contenidos del sistema, en [mailTemplates.js](src/services/mailTemplates.js). La recuperación por código se implementa en [passwordRecovery.js](src/services/passwordRecovery.js). El inventario completo de elementos adaptables está en [Parámetros genéricos de SGR](../docs/parametros-genericos-sgr.md).
 
 ## Base de datos y SQL
 
@@ -489,7 +502,7 @@ Al mover o eliminar objetos ya referenciados, sincroniza `ArchivosServicio.ruta_
 
 Socket.IO consulta la cuenta activa y su rol vigente, igual que la API. Los avisos dirigidos a Secretaría se guardan en `Notificaciones` por cuenta, incluso sin conexiones abiertas. `GET /api/notificaciones` recupera los últimos 25 pendientes; `PATCH /api/notificaciones/leidas` marca los identificadores mostrados como leídos únicamente para la cuenta autenticada. Ambos requieren rol Secretaría y desactivan la caché. Finalizar una reparación también genera el aviso para facturación.
 
-El informe administrativo usa [diagnosticoPdf.js](src/services/Secretaria/diagnosticoPdf.js), con encabezado, datos de recepción, hallazgos, solución, presupuesto en su moneda, condiciones y páginas numeradas. El técnico sigue sin acceso al PDF que contiene datos del cliente. La modalidad sin repuestos corresponde al informe y autorización del cliente; no puede desactivarse con solicitudes de piezas vigentes ni cambiarse sobre una orden cerrada.
+El informe administrativo usa [diagnosticoPdf.js](src/services/recepcion/diagnosticoPdf.js), con encabezado, datos de recepción, hallazgos, solución, presupuesto en su moneda, condiciones y páginas numeradas. El técnico sigue sin acceso al PDF que contiene datos del cliente. La modalidad sin repuestos corresponde al informe y autorización del cliente; no puede desactivarse con solicitudes de piezas vigentes ni cambiarse sobre una orden cerrada.
 
 ## Respaldos
 

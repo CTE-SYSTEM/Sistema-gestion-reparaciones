@@ -18,6 +18,7 @@
     "db:generate": "prisma generate",
     "db:sync": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:profiles:local": "node scripts/create-local-profiles.js",
     "studio": "prisma studio --port 5555",
     "db:functions": "node -r dotenv/config scripts/apply-local-functions.js",
     "db:auditoria": "psql -v ON_ERROR_STOP=1 \"$SQL_DATABASE_URL\" -f scripts/modules/Auditoria.sql",
@@ -28,7 +29,8 @@
     "db:check:users": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT id_usuario, nombre_usuario, rol, activo FROM \\\"Usuarios\\\" ORDER BY id_usuario;\"",
     "db:check:clientes": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT * FROM \\\"Clientes\\\";\"",
     "db:check:tecnicos": "docker exec postgres_cte psql -U User_admin -d Centro_Tecnico_Electronico -c \"SELECT * FROM \\\"Tecnicos\\\";\"",
-    "test:notificaciones:integracion": "node tests/secretaria/run-integration.js notificaciones"
+    "test:notificaciones:integracion": "node tests/secretaria/run-integration.js notificaciones",
+    "test:areas:integracion": "node tests/secretaria/run-integration.js areas"
   },
   "prisma": {
     "seed": "node prisma/Seed.js"

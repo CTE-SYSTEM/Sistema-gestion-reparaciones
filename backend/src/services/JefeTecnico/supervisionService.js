@@ -8,7 +8,7 @@ const userSelect = { id_usuario: true, nombre_usuario: true };
 const techInclude = { usuario: { select: { id_usuario: true, nombre_usuario: true, rol: true, activo: true } } };
 const diagInclude = { equipo: { include: { cliente: true } }, tecnico: true, historial_estados: { orderBy: { fecha_hora: 'desc' }, take: 1 }, avances_tecnicos: { orderBy: { fecha_hora: 'desc' }, take: 1 } };
 const orderInclude = { tecnico: true, diagnostico: { include: diagInclude }, repuestos_usados: { include: { repuesto: true } }, facturas: { select: { id_factura: true } }, historial_estados: { orderBy: { fecha_hora: 'desc' }, take: 1 }, avances_tecnicos: { orderBy: { fecha_hora: 'desc' }, take: 1 } };
-const pieceInclude = { repuesto: true, tecnico_solicitante: true, usuario_aprobador: { select: userSelect }, usuario_entregador: { select: userSelect }, orden: { include: { tecnico: true, facturas: { select: { id_factura: true } }, diagnostico: { select: { falla_reportada: true, diagnostico_real: true, equipo: { select: { tipo: true, marca: true, modelo: true } } } } } } };
+const pieceInclude = { repuesto: true, compra: { include: { proveedor: true } }, tecnico_solicitante: true, usuario_aprobador: { select: userSelect }, usuario_entregador: { select: userSelect }, orden: { include: { tecnico: true, facturas: { select: { id_factura: true } }, diagnostico: { select: { falla_reportada: true, diagnostico_real: true, equipo: { select: { tipo: true, marca: true, modelo: true } } } } } } };
 const idValue = (value) => parsePositiveId(value) || fail(400, 'La referencia seleccionada no es válida');
 const entity = (tipo) => tipo === 'orden' ? { model: 'ordenes', key: 'id_orden', include: orderInclude } : { model: 'diagnosticos', key: 'id_diagnostico', include: diagInclude };
 const active = (tipo, r) => tipo === 'orden' ? ordenActiva(r) : diagnosticoActivo(r);
@@ -16,7 +16,7 @@ const snapshot = (r) => JSON.parse(JSON.stringify({ tecnico_id: r.tecnico_id, fe
 const pieceSnapshot = (r) => JSON.parse(JSON.stringify(Object.fromEntries([
   'id_detalle_repuesto', 'orden_id', 'repuesto_id', 'pieza_solicitada', 'cantidad_usada',
   'estado_aprobacion', 'estado_entrega', 'fecha_aprobacion', 'fecha_rechazo', 'motivo_rechazo',
-  'usuario_aprobador_id', 'fecha_entrega', 'usuario_entregador_id',
+  'usuario_aprobador_id', 'fecha_entrega', 'usuario_entregador_id', 'compra_id',
 ].map((key) => [key, r[key]]))));
 const correctionTypes = {
   corregir: 'CORRECCION_REPUESTO', 'retirar-aprobacion': 'RETIRAR_APROBACION',
@@ -112,7 +112,7 @@ export const intervenir = (tipo, value, payload, user) => withAuditUser(user, as
     const observacion = String(payload.observacion_final || '').trim();
     if (!observacion || observacion.length > 4000) fail(400, 'Registre el resultado comprobado de la reparación, hasta 4000 caracteres');
     if (![true, false, 'true', 'false'].includes(payload.enciende_salida) || ![true, false, 'true', 'false'].includes(payload.usa_corriente_ac_salida)) fail(400, 'Registre las comprobaciones de salida');
-    changes = { estado: 'FINALIZADO', resultado_final: 'REPARADO', observacion_final: observacion, enciende_salida: payload.enciende_salida === true || payload.enciende_salida === 'true', usa_corriente_ac_salida: payload.usa_corriente_ac_salida === true || payload.usa_corriente_ac_salida === 'true', fecha_finalizacion: new Date(), fecha_cierre: new Date() };
+    changes = { estado: 'FINALIZADO', resultado_final: 'REPARADO', observacion_final: observacion, enciende_salida: payload.enciende_salida === true || payload.enciende_salida === 'true', usa_corriente_ac_salida: payload.usa_corriente_ac_salida === true || payload.usa_corriente_ac_salida === 'true', fecha_finalizacion: new Date(), fecha_cierre: new Date(), calidad_estado: 'PENDIENTE', calidad_observacion: null, calidad_revisada_en: null };
   }
   const updated = await tx[model].update({ where: { [key]: id }, data: changes, include: tipo === 'orden' ? orderInclude : diagInclude });
   await tx.intervencionesTecnicas.create({ data: { [tipo === 'orden' ? 'orden_id' : 'diagnostico_id']: id, tipo: payload.tipo, motivo, usuario_id: user.id, datos_anteriores: snapshot(r), datos_nuevos: snapshot(updated) } });
@@ -164,7 +164,7 @@ export const accionRepuesto = (value, accion, payload, user) => withAuditUser(us
     if (accion === 'corregir-entrega' && payload.entrega_no_realizada !== true) fail(400, 'Confirme que la pieza nunca fue entregada físicamente al técnico');
     if (accion === 'devolver' && (payload.devolucion_total_confirmada !== true || !r.repuesto_id)) fail(400, 'Confirme la recepción de todas las unidades en condiciones de volver al almacén');
     await lockRepuestos(tx, [r.repuesto_id]);
-    const changes = { estado_entrega: 'PENDIENTE', fecha_entrega: null, usuario_entregador_id: null };
+    const changes = { estado_entrega: 'PENDIENTE', fecha_entrega: null, usuario_entregador_id: null, compra_id: null };
     if (accion !== 'corregir-entrega') Object.assign(changes, {
       estado_aprobacion: 'PENDIENTE', fecha_aprobacion: null, fecha_rechazo: null,
       motivo_rechazo: null, usuario_aprobador_id: null,
@@ -173,7 +173,16 @@ export const accionRepuesto = (value, accion, payload, user) => withAuditUser(us
   }
   if (accion === 'entregar') {
     if (r.estado_aprobacion !== 'APROBADO' || r.estado_entrega === 'ENTREGADO' || !r.repuesto_id) fail(409, 'Solo se pueden entregar piezas del catálogo aprobadas y pendientes de entrega');
-    return finish({ estado_entrega: 'ENTREGADO', fecha_entrega: new Date(), usuario_entregador_id: user.id }, 'Entrega física de repuesto al técnico');
+    const compraId = payload.compra_id ? idValue(payload.compra_id) : null;
+    if (compraId) {
+      await lockRepuestos(tx, [r.repuesto_id]);
+      const compra = await tx.compras.findUnique({ where: { id_compra: compraId } });
+      if (!compra || compra.repuesto_id !== r.repuesto_id) fail(409, 'La compra seleccionada no corresponde al repuesto aprobado');
+      const asignadas = await tx.ordenes_Repuestos.aggregate({ where: { compra_id: compraId, estado_entrega: 'ENTREGADO' }, _sum: { cantidad_usada: true } });
+      if (Number(compra.cantidad || 0) - Number(asignadas._sum.cantidad_usada || 0) < Number(r.cantidad_usada || 0)) fail(409, 'La compra no tiene suficientes unidades sin asignar');
+      if (await stockDisponible(tx, r.repuesto_id, id) < Number(r.cantidad_usada || 0)) fail(409, 'Stock físico insuficiente para la entrega');
+    }
+    return finish({ estado_entrega: 'ENTREGADO', fecha_entrega: new Date(), usuario_entregador_id: user.id, compra_id: compraId }, 'Entrega física de repuesto al técnico');
   }
   if (accion === 'rechazar') {
     if (r.estado_aprobacion !== 'PENDIENTE') fail(409, 'La solicitud ya fue revisada');

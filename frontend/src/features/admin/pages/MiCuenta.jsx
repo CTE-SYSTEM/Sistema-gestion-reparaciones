@@ -32,7 +32,7 @@ export default function MiCuenta() {
       }
     } catch (e) { setError(await errorText(e)); } finally { setBusy(''); }
   };
-  return <AdminPage title="Mi cuenta" description="Actualiza tus datos y controla el acceso a tu cuenta de administrador.">
+  return <AdminPage title="Mi cuenta" description="Actualiza tus datos y controla el acceso a tu cuenta.">
     <AdminNotice error message={error} /><AdminNotice message={message} />
     {!account ? !error && <p className="text-sm text-slate-500">Cargando cuenta…</p> : <>
       <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-indigo-950 p-5 text-white"><UserRound size={32} /><div><p className="text-lg font-bold">{account.nombre_usuario}</p><p className="text-sm text-indigo-200">{account.rol} · Cuenta creada el {formatAdminDate(account.fecha_creacion)}</p></div><span className="ml-auto flex items-center gap-2 rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-bold text-emerald-200"><ShieldCheck size={14} />Cuenta activa</span></div>

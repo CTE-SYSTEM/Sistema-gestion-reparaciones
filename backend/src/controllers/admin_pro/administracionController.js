@@ -56,6 +56,7 @@ export const changeMyPassword = async (req, res) => {
       const user = await confirmPassword(tx, req.user.id, req.body.password_actual);
       if (await bcrypt.compare(password, user.contrasena_hash)) fail(400, 'Elija una contraseña diferente a la actual.');
       await tx.usuarios.update({ where: { id_usuario: req.user.id }, data: { contrasena_hash: await bcrypt.hash(password, 10) } });
+      await tx.recuperacionPassword.deleteMany({ where: { usuario_id: req.user.id } });
       await tx.$executeRaw`UPDATE "Usuarios" SET sesion_version = sesion_version + 1 WHERE id_usuario = ${req.user.id}`;
       await recordAdminAction(req.user, 'Usuarios', 'CAMBIO_PASSWORD', null, { id_usuario: req.user.id }, 'Cambio de contraseña propia; sesiones invalidadas.', tx);
     });

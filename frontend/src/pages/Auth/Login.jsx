@@ -1,6 +1,6 @@
 ﻿import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react'; 
 
 // Importacion directa del SVG
@@ -56,6 +56,12 @@ const Login = () => {
         case 'Secretaria':
           targetPath = '/secretaria';
           break;
+        case 'Recepcion': targetPath = '/recepcion/clientes'; break;
+        case 'Bodega': targetPath = '/bodega/repuestos'; break;
+        case 'Calidad': targetPath = '/calidad'; break;
+        case 'Reclamos': targetPath = '/reclamos'; break;
+        case 'Garantias': targetPath = '/garantias'; break;
+        case 'Contabilidad': targetPath = '/contabilidad/facturacion'; break;
         case 'TecnicoJefe':
           targetPath = '/tecnico-jefe'; 
           break;
@@ -232,6 +238,7 @@ const Login = () => {
             )}
           </button>
         </form>
+        <Link to="/recuperar-password" className="mt-4 block text-center text-xs font-semibold text-blue-700 hover:underline">¿Olvidaste tu contraseña?</Link>
       </div>
 
       <p className="absolute bottom-6 text-center text-gray-400 text-[11px] uppercase tracking-widest font-medium">

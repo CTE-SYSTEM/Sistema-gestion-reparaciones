@@ -119,50 +119,50 @@ Un 401 fuera del login limpia la sesión, vacía la caché HTTP y emite `auth:un
 | `/admin/tecnicos`, `/ganancias` bajo `/admin` | Rendimiento y finanzas. |
 | `/admin/historial-equipo`, `/historial-repuesto` bajo `/admin` | Trazabilidad administrativa. |
 | `/secretaria` | `features/secretaria/pages/SecretariaDashboard.jsx`. |
-| `/secretaria/clientes`, `/equipos` bajo `/secretaria` | Recepción y asociación cliente/equipo. |
-| `/secretaria/diagnostico`, `/nueva-orden` bajo `/secretaria` | Diagnósticos de recepción y creación de órdenes. |
-| `/secretaria/repuestos`, `/tipos-repuesto`, `/compras`, `/proveedores` bajo `/secretaria` | Catálogos y abastecimiento. |
-| `/secretaria/facturacion` | Facturación, garantías y entrega. |
-| `/admin/flujo-atencion`, `/secretaria/flujo-atencion` | [FlujoAtencion.jsx](src/pages/FlujoAtencion.jsx), compartida. |
+| `/recepcion/clientes`, `/equipos`, `/diagnostico`, `/nueva-orden`, `/entregas` y `/flujo-atencion` | Recepción y atención al cliente. |
+| `/bodega/repuestos`, `/tipos-repuesto`, `/compras`, `/proveedores` | Inventario y abastecimiento. |
+| `/contabilidad/facturacion` | Emisión y consulta de facturas. |
+| `/calidad`, `/garantias` | Control de calidad y gestión de garantías. |
+| `/admin/flujo-atencion`, `/recepcion/flujo-atencion` | [FlujoAtencion.jsx](src/features/recepcion/pages/FlujoAtencion.jsx), compartida. |
 | `/tecnico` | Dashboard de trabajo asignado. |
 | `/tecnico-jefe` | Supervisión del taller, asignaciones, repuestos e intervenciones. |
 
 Las secciones de los dashboards técnicos se distribuyen en archivos internos; no todas requieren una ruta HTTP de frontend independiente.
 
-## Secretaría
+## Áreas operativas
 
 ### Pantallas y servicios
 
-Todos los caminos de esta tabla parten de `src/features/secretaria/`.
+Cada pantalla y servicio está en la carpeta de su área. `features/secretaria/` conserva solo el dashboard y entradas heredadas.
 
 | Función | Pantalla | Servicio HTTP |
 | --- | --- | --- |
 | Dashboard | [SecretariaDashboard.jsx](src/features/secretaria/pages/SecretariaDashboard.jsx) | [dashboardService.js](src/features/secretaria/services/dashboardService.js). |
-| Clientes | [Clientes.jsx](src/features/secretaria/pages/Clientes.jsx) | [clientesService.js](src/features/secretaria/services/clientesService.js). |
-| Equipos | [Equipos.jsx](src/features/secretaria/pages/Equipos.jsx) | [equiposService.js](src/features/secretaria/services/equiposService.js). |
-| Diagnóstico | [Diagnostico.jsx](src/features/secretaria/pages/Diagnostico.jsx) | [diagnosticoService.js](src/features/secretaria/services/diagnosticoService.js). |
-| Órdenes | [NuevaOrden.jsx](src/features/secretaria/pages/NuevaOrden.jsx) | [ordenesService.js](src/features/secretaria/services/ordenesService.js). |
-| Repuestos | [Repuestos.jsx](src/features/secretaria/pages/Repuestos.jsx) | [repuestosService.js](src/features/secretaria/services/repuestosService.js). |
-| Tipos de repuesto | [TiposRepuesto.jsx](src/features/secretaria/pages/TiposRepuesto.jsx) | [tiposRepuestoService.js](src/features/secretaria/services/tiposRepuestoService.js). |
-| Proveedores | [Proveedores.jsx](src/features/secretaria/pages/Proveedores.jsx) | [proveedoresService.js](src/features/secretaria/services/proveedoresService.js). |
-| Compras | [Compras.jsx](src/features/secretaria/pages/Compras.jsx) | [comprasService.js](src/features/secretaria/services/comprasService.js). |
-| Facturación | [Facturacion.jsx](src/features/secretaria/pages/Facturacion.jsx) | [facturasService.js](src/features/secretaria/services/facturasService.js), [garantiasService.js](src/features/secretaria/services/garantiasService.js). |
+| Clientes | [Clientes.jsx](src/features/recepcion/pages/Clientes.jsx) | [clientesService.js](src/features/recepcion/services/clientesService.js). |
+| Equipos | [Equipos.jsx](src/features/recepcion/pages/Equipos.jsx) | [equiposService.js](src/features/recepcion/services/equiposService.js). |
+| Diagnóstico | [Diagnostico.jsx](src/features/recepcion/pages/Diagnostico.jsx) | [diagnosticoService.js](src/features/recepcion/services/diagnosticoService.js). |
+| Órdenes | [NuevaOrden.jsx](src/features/recepcion/pages/NuevaOrden.jsx) | [ordenesService.js](src/features/recepcion/services/ordenesService.js). |
+| Repuestos | [Repuestos.jsx](src/features/bodega/pages/Repuestos.jsx) | [repuestosService.js](src/features/bodega/services/repuestosService.js). |
+| Tipos de repuesto | [TiposRepuesto.jsx](src/features/bodega/pages/TiposRepuesto.jsx) | [tiposRepuestoService.js](src/features/bodega/services/tiposRepuestoService.js). |
+| Proveedores | [Proveedores.jsx](src/features/bodega/pages/Proveedores.jsx) | [proveedoresService.js](src/features/bodega/services/proveedoresService.js). |
+| Compras | [Compras.jsx](src/features/bodega/pages/Compras.jsx) | [comprasService.js](src/features/bodega/services/comprasService.js). |
+| Facturación | [Facturacion.jsx](src/features/contabilidad/pages/Facturacion.jsx) | [facturasService.js](src/features/contabilidad/services/facturasService.js), [garantiasService.js](src/features/garantias/services/garantiasService.js). |
 
-`services/tecnicosService.js` sirve para seleccionar técnicos dentro de funciones administrativas de Secretaría. La carpeta `legacy/` conserva versiones previas de Clientes, Equipos y Facturación; las entradas actuales de `App.jsx` apuntan a `pages/`.
+`features/recepcion/services/tecnicosService.js` sirve para seleccionar técnicos al crear órdenes. La carpeta `features/secretaria/legacy/` conserva versiones anteriores; las entradas actuales de `App.jsx` apuntan a las carpetas por área.
 
 ### Componentes y hooks importantes
 
 | Archivo | Responsabilidad |
 | --- | --- |
-| [DiagnosticoForm.jsx](src/features/secretaria/components/Diagnostico/DiagnosticoForm.jsx) | Datos del diagnóstico y controles de recepción. |
-| [DiagnosticosTable.jsx](src/features/secretaria/components/Diagnostico/DiagnosticosTable.jsx) | Presentación y acciones de la lista. |
-| [constants.jsx](src/features/secretaria/components/Diagnostico/constants.jsx), [helpers.js](src/features/secretaria/components/Diagnostico/helpers.js), [badges.jsx](src/features/secretaria/components/Diagnostico/badges.jsx) | Estados, datos auxiliares y presentación. |
-| [receptionRequirements.js](src/features/secretaria/components/Diagnostico/receptionRequirements.js) | Determina si cargador y acceso aplican al tipo de electrónico. |
-| [useInfiniteSecretariaList.js](src/features/secretaria/hooks/useInfiniteSecretariaList.js) | Páginas de 20 registros, búsqueda diferida y acumulación de páginas. |
-| [Autocomplete.jsx](src/features/secretaria/components/shared/Autocomplete.jsx) | Selección, filtrado local o resultados del servidor y navegación por teclado. |
-| [formKeyboardNavigation.js](src/features/secretaria/components/shared/formKeyboardNavigation.js) | Movimiento entre campos de clientes, equipos y diagnóstico. |
-| [HistorialEstados.jsx](src/features/secretaria/components/shared/HistorialEstados.jsx) | Historial del servicio. |
-| [GuidedTour.jsx](src/features/secretaria/components/shared/GuidedTour.jsx) | Ayuda guiada del módulo. |
+| [DiagnosticoForm.jsx](src/features/recepcion/components/Diagnostico/DiagnosticoForm.jsx) | Datos del diagnóstico y controles de recepción. |
+| [DiagnosticosTable.jsx](src/features/recepcion/components/Diagnostico/DiagnosticosTable.jsx) | Presentación y acciones de la lista. |
+| [constants.jsx](src/features/recepcion/components/Diagnostico/constants.jsx), [helpers.js](src/features/recepcion/components/Diagnostico/helpers.js), [badges.jsx](src/features/recepcion/components/Diagnostico/badges.jsx) | Estados, datos auxiliares y presentación. |
+| [receptionRequirements.js](src/features/recepcion/components/Diagnostico/receptionRequirements.js) | Determina si cargador y acceso aplican al tipo de electrónico. |
+| [useInfiniteAreaList.js](src/features/shared/hooks/useInfiniteAreaList.js) | Paginación, búsqueda diferida y acumulación de páginas. |
+| [Autocomplete.jsx](src/features/shared/components/Autocomplete.jsx) | Selección, filtrado local o resultados del servidor y navegación por teclado. |
+| [formKeyboardNavigation.js](src/features/shared/components/formKeyboardNavigation.js) | Movimiento entre campos de clientes, equipos y diagnóstico. |
+| [HistorialEstados.jsx](src/features/shared/components/HistorialEstados.jsx) | Historial del servicio. |
+| [GuidedTour.jsx](src/features/shared/components/GuidedTour.jsx) | Ayuda guiada del módulo. |
 
 El perfil de recepción conserva las etiquetas de equipos existentes. Para un monitor, por ejemplo, cargador y acceso no aplican. El backend también valida esta clasificación y utiliza sus valores correspondientes; al cambiar familias, mantener los dos archivos `receptionRequirements.js` coordinados.
 
@@ -178,11 +178,11 @@ Nueva Orden carga los diagnósticos disponibles por páginas de 20 y permite bus
 
 | Archivo | Papel en el proceso |
 | --- | --- |
-| [FotosPendientes.jsx](src/features/secretaria/components/shared/FotosPendientes.jsx) | Selección múltiple, arrastre, miniaturas, ampliación, retiro y estado de cada foto. |
-| [usePhotoQueue.js](src/features/secretaria/hooks/usePhotoQueue.js) | Prepara imágenes, administra previews y estado, libera URL temporales. |
-| [photoQueue.js](src/features/secretaria/components/shared/photoQueue.js) | Valida formatos/tamaño, evita repetir el mismo archivo seleccionado y coordina reintentos. |
-| [archivosServicioService.js](src/features/secretaria/services/archivosServicioService.js) | Sube bytes, comunica progreso y descarga contenido autenticado. |
-| [FotosServicio.jsx](src/features/secretaria/components/shared/FotosServicio.jsx) | Muestra fotos ya guardadas del diagnóstico u orden. |
+| [FotosPendientes.jsx](src/features/shared/components/FotosPendientes.jsx) | Selección múltiple, arrastre, miniaturas, ampliación, retiro y estado de cada foto. |
+| [usePhotoQueue.js](src/features/shared/hooks/usePhotoQueue.js) | Prepara imágenes, administra previews y estado, libera URL temporales. |
+| [photoQueue.js](src/features/shared/components/photoQueue.js) | Valida formatos/tamaño, evita repetir el mismo archivo seleccionado y coordina reintentos. |
+| [archivosServicioService.js](src/features/shared/services/archivosServicioService.js) | Sube bytes, comunica progreso y descarga contenido autenticado. |
+| [FotosServicio.jsx](src/features/shared/components/FotosServicio.jsx) | Muestra fotos ya guardadas del diagnóstico u orden. |
 
 Recorrido de creación o actualización:
 
@@ -192,7 +192,7 @@ Recorrido de creación o actualización:
 4. Mostrar resultado por imagen. Un fallo no impide intentar las demás.
 5. Reintentar las fotos pendientes o fallidas; las confirmadas se omiten. La página conserva el ID guardado para que el reintento de fotos no cree otro diagnóstico.
 
-Se admiten JPG, PNG y WebP de hasta 5 MB. La fecha y nombre internos de R2 los genera el backend. La interfaz nunca recibe las credenciales de Cloudflare. Los contratos, tipos y carpetas están en [la sección R2 del backend](../backend/Readme.md#fotografías-y-cloudflare-r2).
+Se admiten JPG, PNG y WebP hasta el límite configurado para la selección directa (5 MB por defecto). En la sesión temporal del teléfono, las imágenes grandes se reducen a un máximo de 4 MB para poder pasar por la API publicada en Vercel. La PC incorpora las fotos recibidas por tanda a la selección; después se guardan en el servicio. Una foto que falla en el teléfono no detiene las siguientes. La fecha y nombre internos de R2 los genera el backend. La interfaz nunca recibe las credenciales de Cloudflare. Los contratos, tipos y carpetas están en [la sección R2 del backend](../backend/Readme.md#fotografías-y-cloudflare-r2).
 
 ### Teclado de formularios
 
@@ -236,7 +236,7 @@ El presupuesto estimado permite elegir **Córdobas (NIO)** o **Dólares (USD)**.
 
 Los listados y el catálogo se consultan por páginas de 20 en el servidor. Los filtros de período utilizan asignación para activos, finalización para cerrados y solicitud para piezas, hora de Managua. La búsqueda se ejecuta tras 300 ms y cancela solicitudes anteriores; solo carga la sección activa. El catálogo permite buscar más allá de la primera página, comprobar la cantidad disponible y solicitar expresamente una pieza no registrada. Se presentan aprobación y entrega física como etapas distintas.
 
-La regla de privacidad se aplica en el servidor: el frontend no recibe el objeto cliente, IDs de cliente, serie, observaciones administrativas, nombres originales de archivos ni claves R2. El expediente usa información técnica e historial sin motivos administrativos libres. Las fotos nuevas o existentes permanecen ocultas hasta su revisión por secretaría o el jefe; el técnico ve el registro de sus subidas pendientes, pero no las descarga antes de la autorización. [FotosServicio.jsx](src/features/secretaria/components/shared/FotosServicio.jsx) comparte la cola con previsualización, cámara, retiro, progreso y reintento de pendientes. La persona que autoriza abre la foto y confirma que no contiene datos identificadores.
+La regla de privacidad se aplica en el servidor: el frontend no recibe el objeto cliente, IDs de cliente, serie, observaciones administrativas, nombres originales de archivos ni claves R2. El expediente usa información técnica e historial sin motivos administrativos libres. Las fotos nuevas o existentes permanecen ocultas hasta su revisión por secretaría o el jefe; el técnico ve el registro de sus subidas pendientes, pero no las descarga antes de la autorización. [FotosServicio.jsx](src/features/shared/components/FotosServicio.jsx) comparte la cola con previsualización, cámara, retiro, progreso y reintento de pendientes. La persona que autoriza abre la foto y confirma que no contiene datos identificadores.
 
 Las consultas TanStack se identifican por cuenta, sección y filtros. Al guardar se invalidan las del técnico actual; al cerrar o cambiar sesión se cancelan consultas y se vacían las cachés HTTP y TanStack. Los avisos abren el expediente correspondiente y refrescan los datos; mientras Socket.IO está conectado se evita el polling periódico, y en desconexión solo se consulta con la pestaña visible. Los errores conservan los datos de la consulta actual y ofrecen reintento.
 
@@ -273,7 +273,7 @@ En Seguimiento, “Corregir asignación” permite seleccionar el nuevo responsa
 | [NotificationTray.jsx](src/components/NotificationTray.jsx) | Presentación de avisos. |
 | [useRealtimeNotifications.js](src/hooks/useRealtimeNotifications.js) | Recepción y estado de notificaciones en tiempo real. |
 | [notificationsSocket.js](src/services/notificationsSocket.js) | Conexión Socket.IO con token. |
-| [flujoAtencionService.js](src/services/flujoAtencionService.js) | Consulta del seguimiento global. |
+| [flujoAtencionService.js](src/features/recepcion/services/flujoAtencionService.js) | Consulta del seguimiento global. |
 | [features/personalizacion](src/features/personalizacion) | Contexto, hook, control y CSS de tema claro/oscuro. |
 | [useResponsiveLayout.js](src/features/responsive/useResponsiveLayout.js) | Clases y comportamiento del layout por pantalla. |
 | [assets](src/assets) | Iconos, logo y recursos estáticos; las fotos de equipos se leen por API. |
@@ -326,6 +326,7 @@ npm run test:secretaria
 | Archivo | Casos |
 | --- | --- |
 | [photoQueue.test.js](tests/photoQueue.test.js) | Selección acumulada, duplicados, formatos, tamaños, fallo parcial y reintento sin repetir fotos guardadas. |
+| [temporaryPhotos.test.js](tests/temporaryPhotos.test.js) | Recepción de varias fotos del teléfono, reintento de descarga y continuación tras un fallo de envío. |
 | [recepcion.test.js](tests/secretaria/recepcion.test.js) | Perfiles de equipo y concordancia entre formulario y servidor. |
 | [teclado.test.js](tests/secretaria/teclado.test.js) | Enter, Shift+Enter, flechas, textarea, autocompletado y campos ocultos o deshabilitados. |
 

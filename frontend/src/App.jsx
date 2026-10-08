@@ -16,7 +16,8 @@ import './App.css';
 
 // Las páginas se cargan bajo demanda para no inflar el JavaScript inicial.
 const Login = lazy(() => import('./pages/Auth/Login'));
-const FotoTemporal = lazy(() => import('./features/secretaria/pages/FotoTemporal'));
+const RecuperarPassword = lazy(() => import('./pages/Auth/RecuperarPassword'));
+const FotoTemporal = lazy(() => import('./features/shared/pages/FotoTemporal'));
 
 const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
 const Administracion = lazy(() => import('./features/admin/pages/Administracion'));
@@ -41,21 +42,27 @@ const OrdenesEstadoAvanzado = lazy(() => import('./features/admin/pages/OrdenesE
 const DiagnosticosEstadoAvanzado = lazy(() => import('./features/admin/pages/DiagnosticosEstadoAvanzado'));
 const ClientesAvanzado = lazy(() => import('./features/admin/pages/ClientesAvanzado'));
 const Ganancias = lazy(() => import('./features/admin/pages/Ganancias'));
-const FlujoAtencion = lazy(() => import('./pages/FlujoAtencion'));
+const FlujoAtencion = lazy(() => import('./features/recepcion/pages/FlujoAtencion'));
 
 const SecretariaDashboard = lazy(() => import('./features/secretaria/pages/SecretariaDashboard'));
-const ClientesSecretaria = lazy(() => import('./features/secretaria/pages/Clientes'));
-const EquiposSecretaria = lazy(() => import('./features/secretaria/pages/Equipos'));
-const ProveedoresSecretaria = lazy(() => import('./features/secretaria/pages/Proveedores'));
-const RepuestosSecretaria = lazy(() => import('./features/secretaria/pages/Repuestos'));
-const TiposRepuestoSecretaria = lazy(() => import('./features/secretaria/pages/TiposRepuesto'));
-const ComprasSecretaria = lazy(() => import('./features/secretaria/pages/Compras'));
-const FacturacionSecretaria = lazy(() => import('./features/secretaria/pages/Facturacion'));
-const Diagnostico = lazy(() => import('./features/secretaria/pages/Diagnostico'));
-const NuevaOrden = lazy(() => import('./features/secretaria/pages/NuevaOrden'));
+const ClientesRecepcion = lazy(() => import('./features/recepcion/pages/Clientes'));
+const EquiposRecepcion = lazy(() => import('./features/recepcion/pages/Equipos'));
+const ProveedoresBodega = lazy(() => import('./features/bodega/pages/Proveedores'));
+const RepuestosBodega = lazy(() => import('./features/bodega/pages/Repuestos'));
+const TiposRepuestoBodega = lazy(() => import('./features/bodega/pages/TiposRepuesto'));
+const ComprasBodega = lazy(() => import('./features/bodega/pages/Compras'));
+const FacturacionContabilidad = lazy(() => import('./features/contabilidad/pages/Facturacion'));
+const Diagnostico = lazy(() => import('./features/recepcion/pages/Diagnostico'));
+const NuevaOrden = lazy(() => import('./features/recepcion/pages/NuevaOrden'));
+const Entregas = lazy(() => import('./features/recepcion/pages/Entregas'));
 
 const TecnicoDashboard = lazy(() => import('./features/tecnico/pages/TecnicoDashboard'));
 const JefeDashboard = lazy(() => import('./features/tecnicoJefe/pages/TecnicoJefeDashboard'));
+const CalidadPage = lazy(() => import('./features/calidad/pages/CalidadPage'));
+const GarantiasPage = lazy(() => import('./features/garantias/pages/GarantiasPage'));
+const ReclamosPage = lazy(() => import('./features/reclamos/pages/ReclamosPage'));
+const MovimientosPage = lazy(() => import('./features/contabilidad/pages/MovimientosPage'));
+const TrazabilidadPage = lazy(() => import('./features/bodega/pages/TrazabilidadPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,7 +81,9 @@ function MainLayout() {
   });
   const location = useLocation();
   const isAdminRoute = location.pathname === '/' || location.pathname.startsWith('/admin');
-  const isSecretariaRoute = location.pathname.startsWith('/secretaria');
+  const isAreaRoute = ['/secretaria', '/recepcion', '/bodega', '/contabilidad'].some(
+    (area) => location.pathname === area || location.pathname.startsWith(`${area}/`),
+  );
 
   useEffect(() => {
     window.localStorage.setItem('sidebar-collapsed', String(sidebarCollapsed));
@@ -111,9 +120,9 @@ function MainLayout() {
       )}
       <div className="app-shell-main">
         <Navbar onToggleSidebar={toggleSidebar} />
-        <main className={`app-main-scroll flex-1 overflow-auto ${isAdminRoute ? 'admin-main' : ''} ${isSecretariaRoute ? 'secretaria-main' : ''}`}>
-          <div className={`mx-auto w-full ${isAdminRoute ? 'admin-content' : ''} ${isSecretariaRoute ? 'secretaria-content' : ''}`}>
-            {!isSecretariaRoute && <PageHelp />}
+        <main className={`app-main-scroll flex-1 overflow-auto ${isAdminRoute ? 'admin-main' : ''} ${isAreaRoute ? 'secretaria-main' : ''}`}>
+          <div className={`mx-auto w-full ${isAdminRoute ? 'admin-content' : ''} ${isAreaRoute ? 'secretaria-content' : ''}`}>
+            {!isAreaRoute && <PageHelp />}
             <Outlet />
           </div>
         </main>
@@ -151,12 +160,14 @@ const router = createBrowserRouter(
       ),
       children: [
         { path: 'login', element: <Page><Login /></Page> },
+        { path: 'recuperar-password', element: <Page><RecuperarPassword /></Page> },
         { path: 'foto-temporal/:token', element: <Suspense fallback={<RouteFallback />}><FotoTemporal /></Suspense> },
 
         // 1. RUTAS CON SIDEBAR Y NAVBAR GLOBAL
         {
           element: <MainLayout />,
           children: [
+            { path: 'mi-cuenta', element: <RequireAuth><Page><MiCuenta /></Page></RequireAuth> },
             // Admin
             { index: true, element: <RequireAuth><Page><AdminDashboard /></Page></RequireAuth> },
             { path: 'admin', element: <RequireAuth><Page><AdminDashboard /></Page></RequireAuth> },
@@ -185,19 +196,39 @@ const router = createBrowserRouter(
             { path: 'admin/historial-repuesto', element: <RequireAuth><Page><HistorialRepuesto /></Page></RequireAuth> },
             { path: 'admin/flujo-atencion', element: <RequireAuth><Page><FlujoAtencion /></Page></RequireAuth> },
 
-            // Secretaria
+            // Direcciones heredadas de Secretaria.
             { path: 'secretaria', element: <RequireAuth><Page><SecretariaDashboard /></Page></RequireAuth> },
-            { path: 'secretaria/clientes', element: <RequireAuth><Page><ClientesSecretaria /></Page></RequireAuth> },
-            { path: 'secretaria/equipos', element: <RequireAuth><Page><EquiposSecretaria /></Page></RequireAuth> },
-            { path: 'secretaria/proveedores', element: <RequireAuth><Page><ProveedoresSecretaria /></Page></RequireAuth> },
-            { path: 'secretaria/repuestos', element: <RequireAuth><Page><RepuestosSecretaria /></Page></RequireAuth> },
-            { path: 'secretaria/tipos-repuesto', element: <RequireAuth><Page><TiposRepuestoSecretaria /></Page></RequireAuth> },
-            { path: 'secretaria/compras', element: <RequireAuth><Page><ComprasSecretaria /></Page></RequireAuth> },
+            { path: 'secretaria/clientes', element: <RequireAuth><Page><ClientesRecepcion /></Page></RequireAuth> },
+            { path: 'secretaria/equipos', element: <RequireAuth><Page><EquiposRecepcion /></Page></RequireAuth> },
+            { path: 'secretaria/proveedores', element: <RequireAuth><Page><ProveedoresBodega /></Page></RequireAuth> },
+            { path: 'secretaria/repuestos', element: <RequireAuth><Page><RepuestosBodega /></Page></RequireAuth> },
+            { path: 'secretaria/tipos-repuesto', element: <RequireAuth><Page><TiposRepuestoBodega /></Page></RequireAuth> },
+            { path: 'secretaria/compras', element: <RequireAuth><Page><ComprasBodega /></Page></RequireAuth> },
             { path: 'secretaria/fotos', element: <RequireAuth><Navigate to="/secretaria/compras" replace /></RequireAuth> },
-            { path: 'secretaria/facturacion', element: <RequireAuth><Page><FacturacionSecretaria /></Page></RequireAuth> },
+            { path: 'secretaria/facturacion', element: <RequireAuth><Page><FacturacionContabilidad /></Page></RequireAuth> },
             { path: 'secretaria/nueva-orden', element: <RequireAuth><Page><NuevaOrden /></Page></RequireAuth> },
+            { path: 'secretaria/entregas', element: <RequireAuth><Page><Entregas /></Page></RequireAuth> },
             { path: 'secretaria/diagnostico', element: <RequireAuth><Page><Diagnostico /></Page></RequireAuth> },
             { path: 'secretaria/flujo-atencion', element: <RequireAuth><Page><FlujoAtencion /></Page></RequireAuth> },
+            // Direcciones propias de cada area.
+            { path: 'recepcion/clientes', element: <RequireAuth><Page><ClientesRecepcion /></Page></RequireAuth> },
+            { path: 'recepcion/equipos', element: <RequireAuth><Page><EquiposRecepcion /></Page></RequireAuth> },
+            { path: 'recepcion/diagnostico', element: <RequireAuth><Page><Diagnostico /></Page></RequireAuth> },
+            { path: 'recepcion/nueva-orden', element: <RequireAuth><Page><NuevaOrden /></Page></RequireAuth> },
+            { path: 'recepcion/entregas', element: <RequireAuth><Page><Entregas /></Page></RequireAuth> },
+            { path: 'recepcion/flujo-atencion', element: <RequireAuth><Page><FlujoAtencion /></Page></RequireAuth> },
+            { path: 'recepcion/reclamos', element: <RequireAuth><Page><ReclamosPage /></Page></RequireAuth> },
+            { path: 'bodega/repuestos', element: <RequireAuth><Page><RepuestosBodega /></Page></RequireAuth> },
+            { path: 'bodega/tipos-repuesto', element: <RequireAuth><Page><TiposRepuestoBodega /></Page></RequireAuth> },
+            { path: 'bodega/compras', element: <RequireAuth><Page><ComprasBodega /></Page></RequireAuth> },
+            { path: 'bodega/proveedores', element: <RequireAuth><Page><ProveedoresBodega /></Page></RequireAuth> },
+            { path: 'bodega/entregas', element: <RequireAuth><Page><TrazabilidadPage /></Page></RequireAuth> },
+            { path: 'contabilidad/facturacion', element: <RequireAuth><Page><FacturacionContabilidad /></Page></RequireAuth> },
+            { path: 'contabilidad/movimientos', element: <RequireAuth><Page><MovimientosPage /></Page></RequireAuth> },
+            { path: 'calidad', element: <RequireAuth><Page><CalidadPage /></Page></RequireAuth> },
+            { path: 'garantias', element: <RequireAuth><Page><GarantiasPage /></Page></RequireAuth> },
+            { path: 'garantias/reclamos', element: <RequireAuth><Page><ReclamosPage /></Page></RequireAuth> },
+            { path: 'reclamos', element: <RequireAuth><Page><ReclamosPage /></Page></RequireAuth> },
           ],
         },
 
@@ -231,10 +262,20 @@ function RequireAuth({ children }) {
   const { user } = useContext(AuthContext);
   const { pathname } = useLocation();
   if (!user) return <Navigate to="/login" replace />;
-  if ((pathname === '/' || pathname.startsWith('/admin')) && !['Administrador', 'admin_pro', 'Admin'].includes(user.rol)) {
-    const home = { Secretaria: '/secretaria', TecnicoJefe: '/tecnico-jefe', Tecnico: '/tecnico' }[user.rol] || '/login';
-    return <Navigate to={home} replace />;
-  }
+  const home = { Secretaria: '/secretaria', Recepcion: '/recepcion/clientes', Bodega: '/bodega/repuestos',
+    Calidad: '/calidad', Reclamos: '/reclamos', Garantias: '/garantias', Contabilidad: '/contabilidad/facturacion',
+    TecnicoJefe: '/tecnico-jefe', Tecnico: '/tecnico', Administrador: '/admin', admin_pro: '/admin', Admin: '/admin' }[user.rol] || '/login';
+  const isAdmin = ['Administrador', 'admin_pro', 'Admin'].includes(user.rol);
+  if (isAdmin) return children;
+  if (pathname === '/mi-cuenta') return children;
+  const sections = {
+    Secretaria: ['/secretaria', '/recepcion', '/bodega', '/contabilidad', '/reclamos', '/calidad', '/garantias'],
+    Recepcion: ['/recepcion/clientes', '/recepcion/equipos', '/recepcion/diagnostico', '/recepcion/nueva-orden', '/recepcion/entregas', '/recepcion/flujo-atencion', '/recepcion/reclamos'],
+    Bodega: ['/bodega/repuestos', '/bodega/tipos-repuesto', '/bodega/proveedores', '/bodega/compras', '/bodega/entregas'],
+    Calidad: ['/calidad'], Reclamos: ['/reclamos'], Garantias: ['/garantias'], Contabilidad: ['/contabilidad/facturacion', '/contabilidad/movimientos'],
+    TecnicoJefe: ['/tecnico-jefe'], Tecnico: ['/tecnico'],
+  };
+  if (!(sections[user.rol] || []).some((path) => pathname === path || pathname.startsWith(`${path}/`))) return <Navigate to={home} replace />;
   return children;
 }
 

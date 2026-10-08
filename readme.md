@@ -4,13 +4,14 @@ Sistema para recibir equipos electrónicos, coordinar diagnósticos y reparacion
 
 ## Cómo usar esta documentación
 
-La documentación se mantiene junto al código, en tres niveles:
+La documentación se mantiene junto al código en las siguientes guías:
 
 | Guía | Contenido |
 | --- | --- |
 | Este README | Mapa general, instalación, responsabilidades, flujo del negocio y catálogo de funciones. |
 | [Frontend](frontend/README.md) | Carpetas de la interfaz, pantallas, componentes, hooks, servicios y navegación. |
 | [Backend](backend/Readme.md) | API, permisos, Prisma, SQL, estados, fotografías R2, respaldos y pruebas. |
+| [Parámetros genéricos de SGR](docs/parametros-genericos-sgr.md) | Inventario de todo lo configurable: negocio, reglas, usuarios, correos, infraestructura y elementos que requieren código. |
 
 Empieza por el mapa general y abre la guía del módulo que vayas a modificar. Las tablas enlazan los archivos de entrada; el código define los detalles de cada operación.
 
@@ -59,7 +60,7 @@ sistema-gestion-reparaciones/
 
 `node_modules/` también existe dentro de frontend y backend. `dist/` se genera al compilar. Las fotos locales, cuando R2 está desactivado, se guardan en `backend/uploads/servicios` o en el directorio configurado mediante `SERVICE_UPLOAD_DIR`.
 
-La documentación funcional y técnica anteriormente separada en carpetas `docs/` está integrada en estos README.
+Los README son el mapa general; `docs/` contiene guías detalladas de administración, despliegue y parámetros modificables.
 
 ## Qué incluye un clon
 
@@ -76,7 +77,7 @@ El nombre interno de la base local y algunos nombres de contenedores siguen usan
 | Interfaz | React, Vite, React Router, TanStack Query/Table, Axios y Tailwind. | [frontend/src/main.jsx](frontend/src/main.jsx), [App.jsx](frontend/src/App.jsx). |
 | API | Express: autenticación, permisos, validación y operaciones del sistema. | [backend/src/server.js](backend/src/server.js), [app.js](backend/src/app/app.js). |
 | Persistencia | PostgreSQL; Prisma para consultas y transacciones, SQL para reglas y reportes. | [schema.prisma](backend/prisma/schema.prisma), [load_functions.sql](backend/scripts/load_functions.sql). |
-| Fotografías | Objetos privados en R2 y referencias en `ArchivosServicio`; lectura autenticada por la API. | [fotoStorage.js](backend/src/services/Secretaria/fotoStorage.js). |
+| Fotografías | Objetos privados en R2 y referencias en `ArchivosServicio`; lectura autenticada por la API. | [fotoStorage.js](backend/src/services/archivos/fotoStorage.js). |
 | Avisos | Socket.IO con autenticación y salas por usuario o rol. | [notifications.js](backend/src/services/notifications.js). |
 | Respaldos | Copias de la base de datos y exportaciones de inventario. | [backupService.js](backend/src/services/backupService.js). |
 
@@ -175,6 +176,7 @@ Las cuentas iniciales y datos de demostración están definidos en [Seed.js](bac
 | Componente | Variables principales | Referencia |
 | --- | --- | --- |
 | Backend | `DATABASE_URL`, `SQL_DATABASE_URL`, `PORT`, `JWT_SECRET`, `NODE_ENV`, `CORS_ORIGIN`, `FRONTEND_URL`. | [Configuración del backend](backend/Readme.md#configuración). |
+| Correo transaccional | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, y opcionalmente `BREVO_SENDER_NAME`, `BREVO_REPLY_TO_EMAIL`. | [Envío y recuperación](docs/parametros-genericos-sgr.md#4-usuarios-perfiles-y-correos). |
 | R2 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` y, opcionalmente, `R2_ENDPOINT`. | [Fotografías R2](backend/Readme.md#fotografías-y-cloudflare-r2). |
 | Respaldos | `BACKUP_ROOT`, `BACKUP_DISPLAY_ROOT`. | [Respaldos](backend/Readme.md#respaldos). |
 | Frontend | `VITE_API_URL`, `VITE_PROXY_TARGET`, opcionalmente `VITE_SOCKET_URL`. | [Configuración del frontend](frontend/README.md#configuración-y-despliegue). |
@@ -287,11 +289,11 @@ Funciones transversales: tema claro/oscuro persistido en `localStorage`, ajustes
 
 | Cambio | Frontend | Backend / base de datos |
 | --- | --- | --- |
-| Clientes y búsqueda | `src/features/secretaria/pages/Clientes.jsx`, `Equipos.jsx`, `services/clientesService.js`. | `src/controllers/Secretaria/clientesController.js`. |
-| Equipos | `src/features/secretaria/pages/Equipos.jsx`, `services/equiposService.js`. | `src/services/Secretaria/equipoService.js`, modelo `Equipos`. |
-| Recepción y diagnóstico | `src/features/secretaria/pages/Diagnostico.jsx`, `components/Diagnostico/`. | `src/services/Secretaria/diagnosticoService.js`, `utils/receptionRequirements.js`. |
+| Clientes y búsqueda | `src/features/recepcion/pages/Clientes.jsx`, `Equipos.jsx`, `services/clientesService.js`. | `src/controllers/recepcion/clientesController.js`. |
+| Equipos | `src/features/recepcion/pages/Equipos.jsx`, `services/equiposService.js`. | `src/services/recepcion/equipoService.js`, modelo `Equipos`. |
+| Recepción y diagnóstico | `src/features/recepcion/pages/Diagnostico.jsx`, `components/Diagnostico/`. | `src/services/recepcion/diagnosticoService.js`, `utils/receptionRequirements.js`. |
 | Fotografías | `components/shared/FotosPendientes.jsx`, `FotosServicio.jsx`, `hooks/usePhotoQueue.js`. | `archivosServicioController.js`, `fotoStorage.js`, modelo `ArchivosServicio`. |
-| Órdenes y entrega | `src/features/secretaria/pages/NuevaOrden.jsx`, `Facturacion.jsx`. | `ordenService.js`, `flujoServicioController.js`, `FlujoEstados.sql`. |
+| Órdenes y entrega | `src/features/recepcion/pages/NuevaOrden.jsx`, `Facturacion.jsx`. | `ordenService.js`, `flujoServicioController.js`, `FlujoEstados.sql`. |
 | Trabajo técnico y asignaciones | `src/features/tecnico/`, `src/features/tecnicoJefe/`. | `controllers/Tecnico/`, `controllers/JefeTecnico/`, rutas correspondientes. |
 | Inventario, compras y facturación | Módulos de Secretaría y administración. | Controladores de Secretaría y SQL de inventario, facturación y garantías. |
 | Reportes y usuarios | `src/features/admin/`. | `src/controllers/admin_pro/`, SQL administrativo. |

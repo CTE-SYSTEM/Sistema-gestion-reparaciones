@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { ClipboardList, FileCheck, Home, LogOut, Menu, Package, RefreshCw, Wrench } from 'lucide-react';
+import { ClipboardList, FileCheck, Home, LogOut, Menu, Package, RefreshCw, UserRound, Wrench } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 import { useRealtimeNotifications } from '../../../hooks/useRealtimeNotifications';
 import BrandLogo from '../../../components/BrandLogo';
@@ -64,7 +65,7 @@ export default function TecnicoDashboard() {
     <aside className={'jefe-sidebar ' + (mobile ? 'open' : '')} aria-label="Navegación del técnico">
       <div className="jefe-brand"><BrandLogo className="h-9 w-9" /><div><strong>SGR · Taller</strong><small>Área técnica</small></div></div>
       <div className="jefe-nav-caption">Mis trabajos asignados</div><nav className="jefe-nav">{tabs.map((t) => <button key={t.id} aria-current={activeTab === t.id ? 'page' : undefined} onClick={() => go(t.id)}><t.icon size={17} /><span>{t.title}</span>{stats[t.count] > 0 && <span className="jefe-nav-count">{stats[t.count]}</span>}</button>)}</nav>
-      <div className="jefe-sidebar-footer"><p>{user?.username}</p><small>Técnico · Ejecución y pruebas</small><button onClick={logout}><LogOut size={15} /> Cerrar sesión</button></div>
+      <div className="jefe-sidebar-footer"><p>{user?.username}</p><small>Técnico · Ejecución y pruebas</small><Link to="/mi-cuenta" className="mt-3 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-200 hover:bg-indigo-500/20 hover:text-white"><UserRound size={15} /> Mi cuenta</Link><button onClick={logout}><LogOut size={15} /> Cerrar sesión</button></div>
     </aside>
     <div className="jefe-workspace">
       <header className="jefe-topbar"><div className="jefe-topbar-left"><button className="jefe-icon-btn jefe-mobile-menu" aria-label="Abrir navegación" aria-expanded={mobile} onClick={() => setMobile(!mobile)}><Menu size={18} /></button><span>Panel técnico</span><strong>{section.title}</strong></div>

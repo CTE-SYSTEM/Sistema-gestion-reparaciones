@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { EstadoBadge, PrioridadBadge } from './TecnicoBadges';
-import FotosServicio from '../../secretaria/components/shared/FotosServicio';
+import FotosServicio from '../../shared/components/FotosServicio';
 import AvancesOrden from './AvancesOrden';
 import CorreccionOrden from './CorreccionOrden';
 

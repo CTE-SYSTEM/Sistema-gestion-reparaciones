@@ -38,6 +38,10 @@ No configure `VITE_SOCKET_URL` para esta modalidad. Ninguna contraseña, URL de 
 | `DATABASE_URL` | URL **agrupada** de Neon (`-pooler`), base `sgr_produccion_2026`, con TLS. |
 | `SQL_DATABASE_URL` | URL **directa** de la misma base Neon, con TLS. |
 | `JWT_SECRET` | Secreto largo y aleatorio, diferente del ejemplo local. |
+| `BREVO_API_KEY` | Clave de la API de Brevo para correos transaccionales; solo en el proyecto API. |
+| `BREVO_SENDER_EMAIL` | Dirección de un remitente verificado en Brevo. |
+| `BREVO_SENDER_NAME` | Nombre visible del remitente; predeterminado: `SGR Taller`. |
+| `BREVO_REPLY_TO_EMAIL` | Opcional: dirección para respuestas. |
 | `NODE_ENV` | `production` |
 | `CORS_ORIGIN` | Origen exacto del proyecto Interfaz, por ejemplo `https://TU-INTERFAZ.vercel.app`. Varios orígenes separados por comas. |
 | `BACKUP_STORAGE` | `r2` |
@@ -46,6 +50,8 @@ No configure `VITE_SOCKET_URL` para esta modalidad. Ninguna contraseña, URL de 
 | `NEON_API_KEY` | Token de administración de Neon autorizado para instantáneas. |
 | `NEON_PROJECT_ID`, `NEON_BRANCH_ID` | Identificadores del proyecto y rama de la base publicada. La instantánea abarca la **rama**, incluida cualquier otra base de esa rama. |
 | `CRON_SECRET` | Secreto aleatorio de al menos 16 caracteres; Vercel lo envía a la ruta interna de programación. |
+
+Para habilitar **¿Olvidaste tu contraseña?**, configure `BREVO_API_KEY` y `BREVO_SENDER_EMAIL` en la API y vuelva a desplegarla. El correo de cada usuario debe estar registrado en **Mi cuenta**. La tabla `RecuperacionPassword` se crea con el esquema Prisma; para una base ya publicada también puede aplicarse [la migración puntual](../backend/scripts/modules/auth/01_password_recovery.sql) antes de publicar la nueva API. Los códigos vencen en diez minutos, admiten cinco intentos y cambian la contraseña cerrando todas las sesiones. El inventario de elementos modificables está en [Parámetros genéricos de SGR](parametros-genericos-sgr.md).
 
 `PORT`, `BACKUP_ROOT` y `VITE_SOCKET_URL` no hacen falta en los proyectos de Vercel. Cree `NEON_API_KEY` e identifique la rama en la consola de Neon; esos tres valores **no están** en `backend/.env`. Su plan de Neon debe permitir crear instantáneas mediante la API. Si faltan, Administración generará solo una exportación parcial y la señalará como tal. Un archivo `neon_snapshot_*.json` es una referencia a la instantánea **dentro de Neon**, no un `.dump` independiente; la restauración se hace desde Neon y debe probarse en una rama nueva antes de afectar producción.
 

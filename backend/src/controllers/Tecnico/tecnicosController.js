@@ -1,4 +1,4 @@
-import { notifyJefeTecnico, notifyRole } from '../../services/notifications.js';
+import { notifyJefeTecnico, notifyRoles } from '../../services/notifications.js';
 import {
   actualizarEstadoOrden as actualizarEstadoOrdenService,
   corregirCierreOrden,
@@ -72,7 +72,7 @@ export const actualizarDiagnosticoAsignado = async (req, res) => {
   try {
     const diagnostico = await completarDiagnostico(req.params.id, req.body, req.user);
 
-    await notifyRole('Secretaria', {
+    await notifyRoles(['Secretaria', 'Recepcion'], {
       type: 'diagnostico_completado',
       title: 'Diagnóstico listo para nueva orden',
       message: `El diagnóstico #${req.params.id} ya está listo para crear una orden`,
@@ -98,8 +98,8 @@ export const actualizarEstadoOrden = async (req, res) => {
     const estadoNuevo = String(orden.estado || '').toUpperCase();
     const estadoCierre = estadoNuevo === 'FINALIZADO';
     const estadoIrreparable = estadoNuevo === 'IRREPARABLE';
-    if (estadoCierre) await notifyRole('Secretaria', {
-      type: 'orden_finalizada', title: 'Orden lista para facturar', message: `La orden #${orden.id_orden} quedó finalizada.`,
+    if (estadoCierre) await notifyRoles(['Secretaria', 'Recepcion', 'Contabilidad', 'Calidad'], {
+      type: 'orden_finalizada', title: 'Orden finalizada', message: `La orden #${orden.id_orden} quedó finalizada.`,
       severity: 'success', entity: { kind: 'orden', id: orden.id_orden },
     });
 
@@ -121,7 +121,7 @@ export const actualizarEstadoOrden = async (req, res) => {
 export const corregirCierre = async (req, res) => {
   try {
     const orden = await corregirCierreOrden(req.params.id, req.body, req.user);
-    await notifyRole('Secretaria', { type: 'orden_cierre_corregido', title: 'Corrección del cierre técnico',
+    await notifyRoles(['Secretaria', 'Recepcion', 'Contabilidad', 'Calidad'], { type: 'orden_cierre_corregido', title: 'Corrección del cierre técnico',
       message: `El técnico ${req.body.tipo === 'REABRIR' ? 'reabrió la reparación' : req.body.tipo === 'ACLARAR' ? 'registró una aclaración' : 'corrigió el informe'} de la orden #${orden.id_orden}.`,
       entity: { kind: 'orden', id: orden.id_orden } });
     res.json({ data: orden });
@@ -163,7 +163,7 @@ export const putBorradorTecnico = responder((req) => guardarBorrador(req.params.
 export const patchDiagnosticoTecnico = async (req, res) => {
   try {
     const diagnostico = await corregirDiagnostico(req.params.id, req.body, req.user);
-    if (req.body.tipo === 'REABRIR') await notifyRole('Secretaria', { type: 'diagnostico_reabierto',
+    if (req.body.tipo === 'REABRIR') await notifyRoles(['Secretaria', 'Recepcion'], { type: 'diagnostico_reabierto',
       title: 'Diagnóstico devuelto a revisión', message: `El técnico reabrió el diagnóstico #${diagnostico.id_diagnostico}.`,
       entity: { kind: 'diagnostico', id: diagnostico.id_diagnostico } });
     res.json({ data: diagnostico });

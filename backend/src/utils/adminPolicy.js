@@ -2,7 +2,7 @@ import { normalizeRole } from './roles.js';
 
 export const isAdminRole = (role) => ['administrador', 'adminpro', 'admin'].includes(normalizeRole(role));
 export const ADMIN_ROLES = ['Administrador', 'admin_pro', 'Admin'];
-export const ASSIGNABLE_ROLES = ['Secretaria', 'TecnicoJefe', 'Tecnico'];
+export const ASSIGNABLE_ROLES = ['Recepcion', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad', 'TecnicoJefe', 'Tecnico'];
 export const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 
 export const DEFAULT_ADMIN_SETTINGS = {

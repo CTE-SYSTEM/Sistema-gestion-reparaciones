@@ -49,6 +49,9 @@ export const updateOrdenAdmin = async (req, res) => {
     if (observacion_final !== undefined) data.observacion_final = String(observacion_final).trim() || null;
     if (data.estado === 'FINALIZADO') {
       data.fecha_cierre = new Date();
+      data.calidad_estado = 'PENDIENTE';
+      data.calidad_observacion = null;
+      data.calidad_revisada_en = null;
     }
 
     if (Object.keys(data).length === 0) {

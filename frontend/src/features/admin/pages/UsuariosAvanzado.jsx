@@ -6,7 +6,7 @@ import { Plus, X } from 'lucide-react';
 import { downloadJsonPdf } from '../utils/csvExport';
 import { usuariosService } from '../services';
 
-const ASSIGNABLE_ROLES = ['Secretaria', 'TecnicoJefe', 'Tecnico'];
+const ASSIGNABLE_ROLES = ['Recepcion', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad', 'TecnicoJefe', 'Tecnico'];
 const PASSWORD_ADMIN_ROLES = ['admin_pro', 'Administrador', 'Admin'];
 
 export default function UsuariosAvanzado() {
@@ -31,7 +31,7 @@ export default function UsuariosAvanzado() {
     nombre_usuario: '',
     correo_electronico: '',
     password: '',
-    rol: 'Secretaria',
+    rol: 'Recepcion',
     activo: true,
     especialidad: '',
     horario: '',
@@ -187,7 +187,7 @@ export default function UsuariosAvanzado() {
           nombre_usuario: '',
           correo_electronico: '',
           password: '',
-          rol: 'Secretaria',
+          rol: 'Recepcion',
           activo: true,
           especialidad: '',
           horario: '',
@@ -382,7 +382,12 @@ export default function UsuariosAvanzado() {
                   onChange={handleInputChange}
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
                 >
-                  <option value="Secretaria">Secretaria</option>
+                  <option value="Recepcion">Recepción y atención</option>
+                  <option value="Bodega">Bodega</option>
+                  <option value="Calidad">Control de calidad</option>
+                  <option value="Reclamos">Reclamos</option>
+                  <option value="Garantias">Garantías</option>
+                  <option value="Contabilidad">Contabilidad y facturación</option>
                   <option value="TecnicoJefe">Tecnico Jefe</option>
                   <option value="Tecnico">Tecnico</option>
                 </select>
@@ -519,7 +524,12 @@ export default function UsuariosAvanzado() {
                   {!ASSIGNABLE_ROLES.includes(selectedUsuario.rol) && (
                     <option value={selectedUsuario.rol} disabled>{selectedUsuario.rol} (no asignable)</option>
                   )}
-                  <option value="Secretaria">Secretaria</option>
+                  <option value="Recepcion">Recepción y atención</option>
+                  <option value="Bodega">Bodega</option>
+                  <option value="Calidad">Control de calidad</option>
+                  <option value="Reclamos">Reclamos</option>
+                  <option value="Garantias">Garantías</option>
+                  <option value="Contabilidad">Contabilidad y facturación</option>
                   <option value="TecnicoJefe">Tecnico Jefe</option>
                   <option value="Tecnico">Tecnico</option>
                 </select>

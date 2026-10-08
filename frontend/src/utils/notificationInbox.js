@@ -6,6 +6,9 @@ export const reconcileNotifications = (history, arrivals, readIds = new Set(), l
   mergeNotifications([...history, ...arrivals].filter((item) => !readIds.has(item.id)), [], limit);
 
 export const notificationActionLabel = (item) => {
+  if (item?.entity?.kind === 'factura') return 'Ver factura';
+  if (item?.entity?.kind === 'compra') return 'Ver compra';
+  if (item?.entity?.kind === 'garantia') return 'Ver garantía';
   if (['diagnostico_creado', 'orden_creada'].includes(item?.type)) return 'Asignar técnico';
   if (item?.type === 'repuesto_solicitado') return 'Revisar solicitud';
   if (item?.type === 'orden_irreparable_pendiente') return 'Revisar irreparabilidad';

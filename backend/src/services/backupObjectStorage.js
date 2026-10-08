@@ -4,7 +4,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { getR2Storage } from './Secretaria/fotoStorage.js';
+import { getR2Storage } from './archivos/fotoStorage.js';
 
 export const remoteBackups = () => process.env.BACKUP_STORAGE === 'r2' || process.env.VERCEL === '1';
 const prefix = 'backups/';

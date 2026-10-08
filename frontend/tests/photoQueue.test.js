@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_PHOTO_BYTES, selectNewPhotos, uploadPhotoBatch } from '../src/features/secretaria/components/shared/photoQueue.js';
+import { MAX_PHOTO_BYTES, selectNewPhotos, uploadPhotoBatch } from '../src/features/shared/components/photoQueue.js';
 
 const file = (name, overrides = {}) => ({ name, size: 1024, type: 'image/jpeg', lastModified: 10, ...overrides });
 

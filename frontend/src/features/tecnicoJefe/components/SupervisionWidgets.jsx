@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, ClipboardList, Eye, PackageCheck, SlidersHorizontal, X } from 'lucide-react';
-import FotosServicio from '../../secretaria/components/shared/FotosServicio';
+import FotosServicio from '../../shared/components/FotosServicio';
 import { formatoPresupuesto } from '../../../utils/monedaPresupuesto';
 
 export const label = (v) => ({ EN_REVISION: 'En diagnóstico', EN_REPARACION: 'En reparación', ESPERANDO_PIEZA: 'Esperando pieza', NO_SOLICITADO: 'Sin solicitud', NO_DISPONIBLE: 'No disponible', DIAGNOSTICADO: 'Completado', DENEGADO: 'Rechazado' }[v] || String(v || 'Pendiente').toLowerCase().replaceAll('_', ' ').replace(/^./, (s) => s.toUpperCase()));

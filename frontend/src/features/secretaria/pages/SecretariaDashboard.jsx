@@ -13,7 +13,7 @@ import {
   Truck,
   Users,
 } from 'lucide-react';
-import { GuidedTour, tourHighlightClass } from '../components/shared/GuidedTour';
+import { GuidedTour, tourHighlightClass } from '../../shared/components/GuidedTour';
 import { getSecretariaDashboard } from '../services/dashboardService';
 
 const EMPTY_STATS = {

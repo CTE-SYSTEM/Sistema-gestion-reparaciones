@@ -45,7 +45,7 @@ export const createUsuario = async (req, res) => {
   try {
     const data = profile(req.body);
     if (!data.nombre_usuario) fail(400, 'El nombre de usuario es obligatorio.');
-    if (!ASSIGNABLE_ROLES.includes(req.body.rol)) fail(400, 'Seleccione Secretaría, Técnico o Jefe técnico.');
+    if (!ASSIGNABLE_ROLES.includes(req.body.rol)) fail(400, 'Seleccione un perfil operativo válido.');
     const minimum = (await getBusinessSettings()).reglas.password_minimo;
     const hash = await bcrypt.hash(validateNewPassword(req.body.password, minimum), 10);
     const result = await withAuditUser(req.user, async (tx) => {
@@ -103,6 +103,7 @@ export const updateUsuarioPassword = async (req, res) => {
       const actor = await tx.usuarios.findUnique({ where: { id_usuario: req.user.id } });
       if (typeof req.body.admin_password !== 'string' || !await bcrypt.compare(req.body.admin_password, actor.contrasena_hash)) fail(403, 'La contraseña del administrador no es correcta.');
       await tx.usuarios.update({ where: { id_usuario: id }, data: { contrasena_hash: await bcrypt.hash(password, 10) } });
+      await tx.recuperacionPassword.deleteMany({ where: { usuario_id: id } });
       await tx.$executeRaw`UPDATE "Usuarios" SET sesion_version = sesion_version + 1 WHERE id_usuario = ${id}`;
       await recordAdminAction(req.user, 'Usuarios', 'CAMBIO_PASSWORD', null, { id_usuario: id }, 'Cambio administrativo de contraseña; sesiones invalidadas.', tx);
     });

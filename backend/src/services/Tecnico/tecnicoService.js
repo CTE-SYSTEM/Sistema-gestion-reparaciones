@@ -241,6 +241,8 @@ export const actualizarEstadoOrden = async (ordenId, payload, user) => {
         pruebas_salida: estadoCierre ? pruebasSalida : actual.pruebas_salida,
         fecha_cierre: estadoCierre ? new Date() : actual.fecha_cierre,
         fecha_finalizacion: estadoCierre ? new Date() : actual.fecha_finalizacion,
+        calidad_estado: estadoCierre ? 'PENDIENTE' : actual.calidad_estado,
+        ...(estadoCierre ? { calidad_observacion: null, calidad_revisada_en: null } : {}),
         justificacion_irreparable: estadoIrreparable ? observacion : actual.justificacion_irreparable,
         irreparable_estado: estadoIrreparable ? 'PENDIENTE' : actual.irreparable_estado,
         ...(estadoIrreparable ? { usuario_revisor_irreparable_id: null, fecha_revision_irreparable: null, motivo_revision_irreparable: null } : {}),
@@ -411,9 +413,10 @@ export const corregirCierreOrden = (value, payload, user) => withAuditUser(user,
     if (!observacion || observacion.length > 4000) fail(400, 'Registre el informe final corregido, hasta 4000 caracteres');
     if (typeof payload.enciende_salida !== 'boolean' || typeof payload.usa_corriente_ac_salida !== 'boolean') fail(400, 'Registre ambas comprobaciones de salida');
     const pruebas = validarPruebas(payload.pruebas_salida, orden.diagnostico.equipo.tipo);
-    const nuevo = { observacion_final: observacion, enciende_salida: payload.enciende_salida,
+    const nuevoInforme = { observacion_final: observacion, enciende_salida: payload.enciende_salida,
       usa_corriente_ac_salida: payload.usa_corriente_ac_salida, pruebas_salida: pruebas };
-    if (JSON.stringify(anterior) === JSON.stringify(nuevo)) fail(400, 'Modifique al menos un dato del informe');
+    if (JSON.stringify(anterior) === JSON.stringify(nuevoInforme)) fail(400, 'Modifique al menos un dato del informe');
+    const nuevo = { ...nuevoInforme, calidad_estado: 'PENDIENTE', calidad_observacion: null, calidad_revisada_en: null };
     await auditMotivo(tx, correccion.motivo, correccion.es_excepcion);
     actualizado = await tx.ordenes.update({ where: { id_orden: id }, data: nuevo, include: ordenInclude });
   } else if (tipo === 'REABRIR') {
@@ -422,6 +425,7 @@ export const corregirCierreOrden = (value, payload, user) => withAuditUser(user,
       estado: 'EN_REPARACION', resultado_final: null, observacion_final: null,
       enciende_salida: null, usa_corriente_ac_salida: null, pruebas_salida: Prisma.DbNull,
       fecha_finalizacion: null, fecha_cierre: null,
+      calidad_estado: 'NO_REQUERIDO', calidad_observacion: null, calidad_revisada_en: null,
     }, include: ordenInclude });
   } else {
     aclaracion = String(payload.aclaracion || '').trim();

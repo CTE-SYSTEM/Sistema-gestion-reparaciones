@@ -2,7 +2,7 @@ import express from 'express';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import authMiddleware from '../../middlewares/authMiddleware.js';
-import { getR2Storage } from '../../services/Secretaria/fotoStorage.js';
+import { getR2Storage } from '../../services/archivos/fotoStorage.js';
 
 const router = express.Router();
 const SESSION_MS = 20 * 60 * 1000;

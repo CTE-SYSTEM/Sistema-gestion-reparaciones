@@ -32,7 +32,7 @@ router.patch('/ordenes/:id/avances/:avanceId', requireRole('Tecnico'), patchAvan
 router.patch('/ordenes/:id/irreparable', requireRole('Tecnico'), patchIrreparableTecnico);
 router.patch('/solicitudes/:id', requireRole('Tecnico'), patchSolicitudTecnico);
 
-router.get('/', requireRole('Secretaria', 'TecnicoJefe', 'Administrador', 'admin_pro'), getTecnicos);
+router.get('/', requireRole('Secretaria', 'Recepcion', 'TecnicoJefe', 'Administrador', 'admin_pro'), getTecnicos);
 router.get('/mis-diagnosticos/:username', requireRole('Tecnico'), getMisDiagnosticos);
 router.get('/mis-ordenes/:username', requireRole('Tecnico'), getMisOrdenes);
 router.put('/diagnosticos/:id', requireRole('Tecnico'), actualizarDiagnosticoAsignado);

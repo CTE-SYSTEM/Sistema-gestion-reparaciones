@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getReceptionProfile as frontendProfile } from '../../src/features/secretaria/components/Diagnostico/receptionRequirements.js';
+import { getReceptionProfile as frontendProfile } from '../../src/features/recepcion/components/Diagnostico/receptionRequirements.js';
 import { getReceptionProfile as backendProfile } from '../../../backend/src/utils/receptionRequirements.js';
 
 test('Secretaría usa las mismas restricciones de recepción en formulario y servidor', () => {
