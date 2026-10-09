@@ -8,7 +8,7 @@ import { photoBodyLimit } from '../../../utils/photoLimit.js';
 const router = Router();
 
 router.use(authMiddleware, requirePermission(PERMISSIONS.COMPRAS_GESTIONAR));
-const photoBody = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: photoBodyLimit });
+const photoBody = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], limit: photoBodyLimit });
 
 router.get('/fotos', listarFotosCompra);
 router.get('/fotos/:id/contenido', descargarFotoCompra);

@@ -1,7 +1,7 @@
 // backend/src/controllers/Secretaria/diagnosticosController.js
 import prisma from '../../app/prismaClient.js';
 import diagnosticoService from '../../services/recepcion/diagnosticoService.js';
-import { notifyJefeTecnico, notifyTecnico } from '../../services/notifications.js';
+import { notifyJefeTecnico, notifyRoles, notifyTecnico } from '../../services/notifications.js';
 
 export const getDiagnosticos = async (req, res) => {
   try {
@@ -50,6 +50,13 @@ export const createDiagnostico = async (req, res) => {
     const diagnosticoId = diagnostico.id_diagnostico;
     const equipoNombre = [diagnostico.equipo?.tipo, diagnostico.equipo?.marca, diagnostico.equipo?.modelo].filter(Boolean).join(' ') || 'Equipo recibido';
     const clienteNombre = diagnostico.cliente?.nombre || 'Cliente del taller';
+    await notifyRoles(['ServicioCliente'], {
+      type: 'equipo_recibido',
+      title: 'Equipo recibido en recepción',
+      message: `Diagnóstico #${diagnosticoId} · ${equipoNombre} · ${clienteNombre}. Podrás contactar al cliente cuando termine la revisión técnica.`,
+      severity: 'info',
+      entity: { kind: 'diagnostico', id: diagnosticoId },
+    });
     if (!diagnostico.tecnico_id && ['PENDIENTE', 'INGRESADO', 'ASIGNADO', 'EN_REVISION'].includes(diagnostico.estado_del_diagnostico)) await notifyJefeTecnico({
       type: 'diagnostico_creado',
       title: 'Nuevo diagnóstico recibido',
@@ -141,6 +148,7 @@ export const updateDiagnostico = async (req, res) => {
   } catch (error) {
     console.error('Error en updateDiagnostico:', error.message);
     console.error('Stack:', error.stack);
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Diagnostico no encontrado' });
     }

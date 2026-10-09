@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import Table from '../../../components/Table';
-import { downloadJsonPdf } from '../utils/csvExport';
 import { ordenesAdminService, tecnicosAdminService } from '../services';
 
 // Columnas principales de la tabla de órdenes maestras
@@ -85,7 +84,6 @@ export default function OrdenesAvanzado() {
   const [repuestosOrden, setRepuestosOrden] = useState([]);
   const [repuestoLoading, setRepuestoLoading] = useState(false);
   const [repuestoError, setRepuestoError] = useState('');
-  const [downloading, setDownloading] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   const editSectionRef = useRef(null);
@@ -123,31 +121,6 @@ export default function OrdenesAvanzado() {
     }, 50);
   };
 
-  const handleDownloadRepuestosReport = async () => {
-    if (!selectedOrden) return;
-    setDownloading(true);
-    setMessage('');
-    try {
-      const response = await ordenesAdminService.getRepuestosReporte(selectedOrden.id_orden, {
-        responseType: 'blob',
-      });
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `repuestos-orden-${selectedOrden.id_orden}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setMessage('Reporte descargado correctamente.');
-    } catch (err) {
-      setMessage(err.response?.data?.error || 'No se pudo generar el reporte.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   const handleUpdateOrden = async () => {
     if (!selectedOrden) return;
     setSaving(true);
@@ -183,11 +156,6 @@ export default function OrdenesAvanzado() {
     ].some((field) => String(field || '').toLowerCase().includes(term)));
   }, [ordenes, searchText]);
 
-  const reportColumns = columns.filter((column) => column.accessor !== 'acciones');
-  const downloadGeneralReport = () => {
-    downloadJsonPdf(filteredOrdenes, reportColumns, 'ordenes_general.pdf', 'Reporte General de Ordenes');
-  };
-
   const ordenesWithActions = useMemo(() => (
     filteredOrdenes.map((orden) => ({
       ...orden,
@@ -210,14 +178,6 @@ export default function OrdenesAvanzado() {
           <h1 className="text-2xl font-bold text-slate-800">Gestión avanzada de órdenes</h1>
           <p className="text-gray-400 text-sm mt-0.5">Supervisa el estado de órdenes en taller, técnicos asignados y repuestos vinculados.</p>
         </div>
-        <button
-          type="button"
-          onClick={downloadGeneralReport}
-          disabled={filteredOrdenes.length === 0}
-          className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
-        >
-          Generar Reporte General
-        </button>
       </div>
 
       {/* Grid de KPIs Superiores */}
@@ -329,14 +289,6 @@ export default function OrdenesAvanzado() {
                 {saving ? 'Guardando...' : 'Aplicar Cambios'}
               </button>
               
-              <button
-                type="button"
-                onClick={handleDownloadRepuestosReport}
-                disabled={downloading}
-                className="w-full rounded-xl bg-slate-100 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
-              >
-                {downloading ? 'Exportando...' : 'Exportar Excel de repuestos'}
-              </button>
             </div>
 
             {message && (

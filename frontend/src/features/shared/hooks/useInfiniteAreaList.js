@@ -1,7 +1,7 @@
 import { useDeferredValue } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-export const AREA_PAGE_SIZE = 50;
+export const AREA_PAGE_SIZE = 20;
 
 export const useInfiniteAreaList = ({
   queryKey,

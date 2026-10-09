@@ -11,12 +11,16 @@ if (process.env.NODE_ENV === 'production' || process.env.LOCAL_DEMO_PROFILES !==
 }
 
 const profiles = [
-  ['recepcion_demo', 'Recepcion', '/recepcion/clientes'],
+  ['recepcion_demo', 'Recepcion', '/recepcion'],
+  ['servicio_cliente_demo', 'ServicioCliente', '/servicio-cliente/nueva-orden'],
+  ['tecnico_demo', 'Tecnico', '/tecnico'],
+  ['jefe_tecnico_demo', 'TecnicoJefe', '/tecnico-jefe'],
   ['bodega_demo', 'Bodega', '/bodega/repuestos'],
   ['calidad_demo', 'Calidad', '/calidad'],
   ['reclamos_demo', 'Reclamos', '/reclamos'],
   ['garantias_demo', 'Garantias', '/garantias'],
-  ['contabilidad_demo', 'Contabilidad', '/contabilidad/facturacion'],
+  ['contabilidad_demo', 'Contabilidad', '/contabilidad/movimientos'],
+  ['secretaria_demo', 'Secretaria', '/secretaria'],
 ];
 
 const prisma = new PrismaClient();
@@ -24,11 +28,18 @@ try {
   const password = '1234';
   const hash = await bcrypt.hash(password, 10);
   for (const [nombre_usuario, rol] of profiles) {
-    await prisma.usuarios.upsert({
+    const user = await prisma.usuarios.upsert({
       where: { nombre_usuario },
       create: { nombre_usuario, rol, contrasena_hash: hash, activo: true },
       update: { rol, contrasena_hash: hash, activo: true, sesion_version: { increment: 1 } },
     });
+    if (rol === 'Tecnico') {
+      await prisma.tecnicos.upsert({
+        where: { usuario_id: user.id_usuario },
+        create: { usuario_id: user.id_usuario, nombre: 'Técnico de prueba', activo: true },
+        update: { activo: true },
+      });
+    }
   }
   const backendDir = dirname(dirname(fileURLToPath(import.meta.url)));
   const outputDir = join(backendDir, 'tmp');

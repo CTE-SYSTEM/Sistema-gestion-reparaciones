@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }) => {
     const userData = {
       id: usuario?.id,
       username: usuario?.nombre || username,
+      personName: usuario?.nombre_persona || '',
       rol: usuario?.rol,
     };
     setUser(userData);
@@ -63,7 +64,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = (account) => {
     setUser((current) => {
-      const updated = { ...current, id: account.id_usuario, username: account.nombre_usuario, rol: account.rol };
+      const updated = { ...current, id: account.id_usuario, username: account.nombre_usuario, personName: account.nombre_persona || '', rol: account.rol };
       sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(updated));
       return updated;
     });

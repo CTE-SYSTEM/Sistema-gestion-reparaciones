@@ -12,6 +12,7 @@ datasource db {
 model Usuarios {
   id_usuario         Int      @id @default(autoincrement())
   nombre_usuario     String   @unique
+  nombre_persona     String?
   contrasena_hash    String
   correo_electronico String?
   rol                String   // Admin, Jefe Tecnico, Tecnico, Recepcion
@@ -19,6 +20,7 @@ model Usuarios {
   sesion_version     Int      @default(0)
   fecha_creacion     DateTime @default(now())
   tecnico            Tecnicos?
+  devoluciones_proveedor DevolucionesProveedor[]
   archivos_servicio  ArchivosServicio[]
   archivos_compra ArchivosCompra[]
   historial_diagnosticos HistorialDiagnosticos[]
@@ -119,6 +121,7 @@ model Tecnicos {
 }
 
 model Diagnosticos {
+  calidad_estado String @default("PENDIENTE") // PENDIENTE, APROBADO, RECHAZADO
   id_diagnostico          Int       @id @default(autoincrement())
   equipo_id               Int
   origen_directo          Boolean   @default(false)
@@ -259,6 +262,7 @@ model Repuestos {
   categoria        Categorias_Repuestos @relation(fields: [tipo_repuesto_id], references: [id_tipo_repuesto])
   proveedor        Proveedores?         @relation(fields: [proveedor_id], references: [id_proveedor])
   compras          Compras[]
+  devoluciones_proveedor DevolucionesProveedor[]
   ordenes_detalles Ordenes_Repuestos[]
 
   @@map("Repuestos")
@@ -270,7 +274,7 @@ model Ordenes_Repuestos {
   repuesto_id         Int?
   pieza_solicitada    String?
   cantidad_usada      Int?      @default(1)
-  estado_entrega      String    @default("PENDIENTE") // PENDIENTE, ENTREGADO
+  estado_entrega      String    @default("PENDIENTE") // PENDIENTE, SIN_EXISTENCIA, ENTREGADO
   fecha_entrega       DateTime?
   fecha_solicitud     DateTime  @default(now())
   fecha_aprobacion    DateTime?
@@ -331,6 +335,7 @@ model Compras {
   archivos         ArchivosCompra[]
   salidas_asignadas Ordenes_Repuestos[]
   reclamos        Reclamos[]
+  devoluciones_proveedor DevolucionesProveedor[]
 
   @@map("Compras")
 }
@@ -521,10 +526,32 @@ model Reclamos {
   analizado_por          Usuarios? @relation("ReclamoAnalizadoPor", fields: [analizado_por_id], references: [id_usuario])
   decidido_por           Usuarios? @relation("ReclamoDecididoPor", fields: [decidido_por_id], references: [id_usuario])
   movimientos_contables  MovimientosContables[]
+  devoluciones_proveedor DevolucionesProveedor[]
 
   @@index([estado, fecha_apertura(sort: Desc)])
   @@index([orden_original_id])
   @@map("Reclamos")
+}
+
+model DevolucionesProveedor {
+  id_devolucion Int @id @default(autoincrement())
+  repuesto_id Int
+  compra_id Int
+  reclamo_id Int?
+  usuario_id Int
+  cantidad Int
+  origen String // BODEGA o RECLAMO
+  estado String @default("CUARENTENA") // CUARENTENA o DEVUELTO
+  motivo String
+  fecha_registro DateTime @default(now())
+  fecha_devolucion DateTime?
+  repuesto Repuestos @relation(fields: [repuesto_id], references: [id_repuesto])
+  compra Compras @relation(fields: [compra_id], references: [id_compra])
+  reclamo Reclamos? @relation(fields: [reclamo_id], references: [id_reclamo])
+  usuario Usuarios @relation(fields: [usuario_id], references: [id_usuario])
+  @@index([repuesto_id, estado])
+  @@index([compra_id])
+  @@map("DevolucionesProveedor")
 }
 
 model RevisionesCalidad {

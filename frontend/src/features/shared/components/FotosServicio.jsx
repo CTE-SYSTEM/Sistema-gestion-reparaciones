@@ -11,7 +11,7 @@ const tipos = {
 export default function FotosServicio({ kind, id, tipoInicial, allowedTypes, readOnly = false, reviewOnly = false, onReview, correccion = null, title = 'Fotografías del servicio' }) {
   const { user } = useContext(AuthContext);
   const role = String(user?.rol || '').normalize('NFD').replace(/[\u0300-\u036f\s_-]/g, '').toLowerCase();
-  const canViewAll = ['secretaria', 'recepcion', 'tecnicojefe', 'administrador', 'adminpro'].includes(role);
+  const canViewAll = ['secretaria', 'recepcion', 'serviciocliente', 'tecnicojefe', 'administrador', 'adminpro'].includes(role);
   const canReview = (!readOnly || reviewOnly) && ['secretaria', 'recepcion', 'tecnicojefe', 'administrador', 'adminpro'].includes(role);
   const opciones = allowedTypes ? tipos[kind].filter(([value]) => allowedTypes.includes(value)) : tipos[kind];
   const [archivos, setArchivos] = useState([]), [tipo, setTipo] = useState(tipoInicial || opciones[0]?.[0]);

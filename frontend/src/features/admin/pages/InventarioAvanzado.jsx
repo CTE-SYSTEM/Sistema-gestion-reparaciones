@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Table from '../../../components/Table';
-import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { inventarioAdminService, reportesAdminService } from '../services';
 
 // Estructura estática extraída fuera del render para optimizar memoria
@@ -76,33 +75,10 @@ export default function InventarioAvanzado() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [searchText, setSearchText] = useState('');
-  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetchInventario(setRepuestos, setLoading, setError);
   }, []);
-
-  const downloadInventoryCsv = async () => {
-    setDownloading(true);
-    try {
-      await downloadJsonExcel(repuestos, columns, 'inventario_repuestos.xlsx');
-    } catch (err) {
-      setError('No se pudo descargar el reporte de inventario.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const downloadInventoryPdf = async () => {
-    setDownloading(true);
-    try {
-      downloadJsonPdf(repuestos, columns, 'inventario_repuestos.pdf', 'Inventario de repuestos');
-    } catch (err) {
-      setError('No se pudo descargar el reporte de inventario en PDF.');
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   const handleViewHistory = async (repuesto) => {
     setSelectedRepuesto(repuesto);
@@ -189,7 +165,7 @@ export default function InventarioAvanzado() {
             <p className="text-sm text-gray-400">Balance calculado a partir de facturas de proveedores y órdenes cerradas.</p>
           </div>
           
-          {/* Controles de Búsqueda y Descarga Unificados */}
+          {/* Búsqueda en el inventario */}
           <div className="flex flex-col gap-2 sm:flex-row w-full lg:w-auto">
             <input
               value={searchText}
@@ -197,24 +173,6 @@ export default function InventarioAvanzado() {
               placeholder="Buscador inteligente: ID, repuesto, categoria, stock, costo o uso..."
               className="w-full rounded-xl border border-gray-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:w-64"
             />
-            <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={downloadInventoryCsv}
-                disabled={downloading || loading || repuestos.length === 0}
-                className="w-full sm:w-auto rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-gray-400"
-              >
-                Excel
-              </button>
-              <button
-                type="button"
-                onClick={downloadInventoryPdf}
-                disabled={downloading || loading || repuestos.length === 0}
-                className="w-full sm:w-auto rounded-xl bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition shadow-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-gray-400"
-              >
-                Generar Reporte General
-              </button>
-            </div>
           </div>
         </div>
 

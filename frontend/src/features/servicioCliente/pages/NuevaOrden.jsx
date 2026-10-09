@@ -5,7 +5,7 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { Loader2, Search, CheckCircle, XCircle, User, Monitor, HelpCircle, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { GuidedTour, tourHighlightClass } from '../../shared/components/GuidedTour';
 import { cancelarOrden, createOrden, getDiagnosticosListosParaOrden, getHistorialOrden, getOrdenes } from '../services/ordenesService';
-import { actualizarContacto, descargarDocumentoDiagnostico, getHistorialDiagnostico, registrarRetiro } from '../services/diagnosticoService';
+import { actualizarContacto, descargarDocumentoDiagnostico, getHistorialDiagnostico, registrarRetiro } from '../services/contactoService';
 import FotosServicio from '../../shared/components/FotosServicio';
 import HistorialEstados from '../../shared/components/HistorialEstados';
 import OrdenDirectaForm from '../components/OrdenDirectaForm';
@@ -59,33 +59,35 @@ const NuevaOrden = () => {
   const historialOrdenRequest = useRef(0);
 
   const diagnosticosQuery = useInfiniteAreaList({
-    queryKey: ['recepcion', 'nueva-orden', 'diagnosticos'],
+    queryKey: ['servicio-cliente', 'nueva-orden', 'diagnosticos'],
     queryFn: getDiagnosticosListosParaOrden,
     search: filter,
+    pageSize: 20,
   });
   const ordenesQuery = useInfiniteAreaList({
-    queryKey: ['recepcion', 'nueva-orden', 'ordenes'],
+    queryKey: ['servicio-cliente', 'nueva-orden', 'ordenes'],
     queryFn: getOrdenes,
     search: ordenSearch,
+    pageSize: 20,
   });
   const diagnosticosFiltrados = diagnosticosQuery.rows;
   const ordenes = ordenesQuery.rows;
   const summary = diagnosticosQuery.data?.pages?.[0]?.meta;
 
   const loadDiagnosticos = useCallback(() => queryClient.invalidateQueries({
-    queryKey: ['recepcion', 'nueva-orden'],
+    queryKey: ['servicio-cliente', 'nueva-orden'],
   }), [queryClient]);
 
   useEffect(() => {
-    const handleSecretariaNotification = (event) => {
+    const handleCustomerNotification = (event) => {
       const type = event.detail?.type;
-      if (type === 'diagnostico_completado' || type === 'orden_creada_secretaria') {
+      if (['diagnostico_completado', 'diagnostico_reabierto', 'orden_creada_servicio_cliente', 'orden_creada_secretaria'].includes(type)) {
         loadDiagnosticos();
       }
     };
 
-    window.addEventListener('recepcion:notificacion', handleSecretariaNotification);
-    return () => window.removeEventListener('recepcion:notificacion', handleSecretariaNotification);
+    window.addEventListener('servicio-cliente:notificacion', handleCustomerNotification);
+    return () => window.removeEventListener('servicio-cliente:notificacion', handleCustomerNotification);
   }, [loadDiagnosticos]);
 
   useEffect(() => {
@@ -468,7 +470,7 @@ const NuevaOrden = () => {
                 {/* Acciones */}
                 <div data-tour-target="actions" className={`flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto shrink-0 ${tourHighlightClass(activeTourTarget === 'actions')}`}>
                   <button type="button" onClick={() => descargarInforme(diag.id_diagnostico)} className="rounded border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-700">Descargar diagnóstico PDF</button>
-                  <button type="button" aria-expanded={fotosDiagnosticoId === diag.id_diagnostico} onClick={() => setFotosDiagnosticoId(fotosDiagnosticoId === diag.id_diagnostico ? null : diag.id_diagnostico)} className="rounded border px-3 py-1.5 text-xs">{fotosDiagnosticoId === diag.id_diagnostico ? 'Ocultar fotos' : 'Ver fotos'}</button>
+                  <button type="button" aria-expanded={fotosDiagnosticoId === diag.id_diagnostico} onClick={() => setFotosDiagnosticoId(fotosDiagnosticoId === diag.id_diagnostico ? null : diag.id_diagnostico)} className="rounded border px-3 py-1.5 text-xs">{fotosDiagnosticoId === diag.id_diagnostico ? 'Ocultar fotos' : 'Ver/agregar fotos de recepción'}</button>
                   <button type="button" onClick={() => guardarContacto(diag)} className="rounded border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700">Guardar seguimiento</button>
                   <button type="button" aria-expanded={historialId === diag.id_diagnostico} onClick={() => mostrarHistorialDiagnostico(diag.id_diagnostico)} className="rounded border px-3 py-1.5 text-xs">{historialId === diag.id_diagnostico ? 'Ocultar historial' : 'Ver historial'}</button>
                   {diag.estado_del_diagnostico === 'RECHAZADO' ? (
@@ -492,7 +494,7 @@ const NuevaOrden = () => {
                   </button>
                   </>}
                 </div>
-                {fotosDiagnosticoId === diag.id_diagnostico && <FotosServicio kind="diagnosticos" id={diag.id_diagnostico} tipoInicial={diag.estado_del_diagnostico === 'RECHAZADO' ? 'FOTO_SALIDA_SIN_REPARAR' : 'FOTO_RECEPCION'} />}
+                {fotosDiagnosticoId === diag.id_diagnostico && <FotosServicio kind="diagnosticos" id={diag.id_diagnostico} tipoInicial="FOTO_RECEPCION" allowedTypes={['FOTO_RECEPCION']} title="Fotos de recepción" />}
                 {historialId === diag.id_diagnostico && (historialLoading ? <p role="status" className="text-xs text-slate-500">Cargando historial…</p> : <HistorialEstados rows={historial} />)}
               </div>
             );
@@ -508,8 +510,8 @@ const NuevaOrden = () => {
     </div>}
     <section className="rounded-xl border bg-white p-4 text-left">
       <h3 className="text-base font-semibold text-gray-900">Órdenes registradas</h3>
-      <p className="mt-1 text-xs text-gray-500">Consulte el estado, conserve fotos de reparación y registre una cancelación con motivo cuando corresponda.</p>
-      <input type="search" aria-label="Buscar órdenes" value={ordenSearch} onChange={(event) => setOrdenSearch(event.target.value)} placeholder="Buscar orden por ID, cliente o equipo..." className="mt-3 w-full max-w-xl rounded-lg border border-gray-300 px-3 py-2 text-xs" />
+      <p className="mt-1 text-xs text-gray-500">Consulte el estado y las fotos registradas; cancele con motivo cuando corresponda.</p>
+      <label className="relative mt-3 block max-w-xl"><span className="sr-only">Buscar órdenes</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="search" value={ordenSearch} onChange={(event) => setOrdenSearch(event.target.value)} placeholder="Buscar orden, cliente, tipo, marca o serie..." className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /></label>
       <div className="mt-3 space-y-3">
         {ordenesQuery.isLoading ? <p className="text-sm text-gray-500">Cargando órdenes...</p> : ordenes.length === 0 && <p className="text-sm text-gray-500">No hay órdenes para esta búsqueda.</p>}
         {ordenes.map((orden) => (
@@ -536,7 +538,7 @@ const NuevaOrden = () => {
                 {pieza.motivo_rechazo && <p className="text-red-700">Motivo de rechazo: {pieza.motivo_rechazo}</p>}
               </div>)}
             </div>}
-            {fotosOrdenId === orden.id_orden && <div className="mt-2"><FotosServicio kind="ordenes" id={orden.id_orden} tipoInicial="FOTO_REPARACION" /></div>}
+            {fotosOrdenId === orden.id_orden && <div className="mt-2"><FotosServicio kind="ordenes" id={orden.id_orden} tipoInicial="FOTO_REPARACION" readOnly title="Fotos de la orden" /></div>}
             {historialOrdenId === orden.id_orden && <div className="mt-2">{historialOrdenLoading ? <p role="status" className="text-xs text-slate-500">Cargando historial…</p> : <HistorialEstados rows={historialOrden} />}</div>}
           </div>
         ))}

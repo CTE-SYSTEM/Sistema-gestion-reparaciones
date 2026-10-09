@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Table from '../../../components/Table';
-import { HelpCircle, Loader2, Plus, Search } from 'lucide-react';
+import { CalendarDays, HelpCircle, Loader2, Plus, Search } from 'lucide-react';
 import { GuidedTour, tourHighlightClass } from '../../shared/components/GuidedTour';
 import { createCompra, getCompras, subirFotoCompra } from '../services/comprasService';
 import FotosCompra from '../components/FotosCompra';
@@ -15,6 +15,7 @@ import { MAX_PHOTO_BYTES, PHOTO_LIMIT_LABEL } from '../../shared/components/phot
 const normalizeText = (value = '') => String(value).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
 const money = (value) => `C$ ${Number(value || 0).toFixed(2)}`;
 const purchaseDate = (value) => value ? new Date(value).toLocaleDateString('es-NI', { timeZone: 'UTC' }) : '-';
+const todayInNicaragua = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Managua', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 const tourSteps = [
   { target: 'create', title: '1. Registrar compra', text: 'Nueva Compra abre el formulario para registrar entradas de repuestos.' },
@@ -31,7 +32,7 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
     proveedor_id: '',
     repuesto_id: '',
     documento: '',
-    fecha_obtencion: new Date().toISOString().slice(0, 10),
+    fecha_obtencion: todayInNicaragua(),
     cantidad: '1',
     costo_unitario: '',
     metodo_pago: '',
@@ -40,8 +41,8 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
   const [ticketFotos, setTicketFotos] = useState([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const addTicketFotos = (files) => {
-    const valid = files.filter((file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size > 0 && file.size <= MAX_PHOTO_BYTES);
-    if (valid.length !== files.length) setFormError(`Cada foto debe ser JPG, PNG o WebP y medir hasta ${PHOTO_LIMIT_LABEL}.`);
+    const valid = files.filter((file) => ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type) && file.size > 0 && file.size <= MAX_PHOTO_BYTES);
+    if (valid.length !== files.length) setFormError(`Cada comprobante debe ser JPG, PNG, WebP o PDF y medir hasta ${PHOTO_LIMIT_LABEL}.`);
     if (valid.length) setTicketFotos((previous) => [...previous, ...valid]);
     return valid.length > 0;
   };
@@ -141,7 +142,7 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
         )}
         {selectedRepuesto && <div className="mt-1 text-xs">Stock actual: {selectedRepuesto.stock_actual ?? 0} · Stock mínimo: {selectedRepuesto.stock_minimo ?? 0} · Ubicación: {selectedRepuesto.ubicacion_fisica || 'No registrada'} (se editan en Repuestos).</div>}
       </div>
-      <div className="space-y-2"><label className="block text-sm font-medium text-gray-700">Fotos del ticket o recibo<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { addTicketFotos(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /><span className="mt-1 block text-xs font-normal text-slate-500">Opcional. JPG, PNG o WebP, hasta {PHOTO_LIMIT_LABEL} por foto.</span></label>
+      <div className="space-y-2"><label className="block text-sm font-medium text-gray-700">Ticket, recibo o factura digital<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(e) => { addTicketFotos(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /><span className="mt-1 block text-xs font-normal text-slate-500">Opcional. Fotos o PDF de hasta {PHOTO_LIMIT_LABEL} por archivo; se guardan con la compra en R2 cuando está configurado.</span></label>
         <button type="button" onClick={() => setCameraOpen(true)} className="rounded border px-3 py-2 text-xs font-semibold text-indigo-700">Usar cámara de este equipo</button>
         <RemotePhotoBridge onAdd={addTicketFotos} />
         {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={(file) => addTicketFotos([file])} />}
@@ -160,8 +161,10 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
 
 const Field = ({ label, className = '', ...props }) => (
   <div className={className}>
-    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-    <input {...props} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor={props.name}>{label}</label>
+    <div className="relative"><input {...props} id={props.name} className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${props.type === 'date' ? 'pr-11' : ''}`} />
+      {props.type === 'date' && <button type="button" aria-label={`Abrir calendario de ${label.toLowerCase()}`} onClick={(event) => event.currentTarget.previousElementSibling?.showPicker?.()} className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1.5 text-indigo-700 hover:bg-indigo-50"><CalendarDays size={18} /></button>}
+    </div>
   </div>
 );
 
@@ -274,7 +277,7 @@ const Compras = () => {
     { header: 'Costo', accessor: 'costo_unitario', render: (row) => money(row.costo_unitario) },
     { header: 'Total', render: (row) => money(Number(row.cantidad || 0) * Number(row.costo_unitario || 0)) },
     { header: 'Pago', accessor: 'metodo_pago', render: (row) => row.metodo_pago || '-' },
-    { header: 'Comprobante', render: (row) => <button type="button" onClick={() => setCompraSeleccionada(row)} className="rounded border px-2 py-1 text-xs text-indigo-700">{row._count?.archivos ? `Revisar compra · ${row._count.archivos} foto(s)` : 'Revisar compra · agregar ticket'}</button> },
+    { header: 'Comprobante', render: (row) => <button type="button" onClick={() => setCompraSeleccionada(row)} className="rounded border px-2 py-1 text-xs text-indigo-700">{row._count?.archivos ? `Revisar compra · ${row._count.archivos} comprobante(s)` : 'Revisar compra · agregar ticket'}</button> },
   ];
 
   const filteredCompras = compras;
@@ -295,11 +298,11 @@ const Compras = () => {
       let guardadas = 0;
       for (const file of ticketFotos) {
         try { await subirFotoCompra(compraId, file); guardadas += 1; }
-        catch { setError(`Compra #${compraId} guardada, pero ${ticketFotos.length - guardadas} foto(s) del ticket quedaron pendientes. Puede agregarlas abajo.`); break; }
+        catch { setError(`Compra #${compraId} guardada, pero ${ticketFotos.length - guardadas} comprobante(s) del ticket quedaron pendientes. Puede agregarlas abajo.`); break; }
       }
       await queryClient.invalidateQueries({ queryKey: ['bodega', 'compras'] });
       setCompraSeleccionada(response.data?.data || null);
-      if (!ticketFotos.length || guardadas === ticketFotos.length) setNotice(`Compra #${compraId} guardada${guardadas ? ` con ${guardadas} foto(s) del ticket` : ''}.`);
+      if (!ticketFotos.length || guardadas === ticketFotos.length) setNotice(`Compra #${compraId} guardada${guardadas ? ` con ${guardadas} comprobante(s)` : ''}.`);
     } catch (err) {
       setError(err?.response?.data?.error || 'No se pudo procesar la compra');
     } finally {

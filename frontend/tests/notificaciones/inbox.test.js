@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeNotifications, reconcileNotifications } from '../../src/utils/notificationInbox.js';
+import { mergeNotifications, reconcileNotifications, notificationAreaNames, secretaryNotificationTarget } from '../../src/utils/notificationInbox.js';
 
 const notice = (id, minute) => ({ id, timestamp: `2026-09-29T12:${String(minute).padStart(2, '0')}:00Z`, title: id });
 test('Avisos: reconectar no duplica un diagnóstico y conserva el más reciente primero', () => {
@@ -18,4 +18,12 @@ test('Avisos: la bandeja limita 25 filas y prioriza la llegada durante la consul
   const rows = reconcileNotifications(history, [notice('en vivo', 50)]);
   assert.equal(rows.length, 25); assert.equal(rows[0].id, 'en vivo');
   assert.ok(!rows.some((r) => r.id === '0'));
+});
+test('Avisos integrales: muestran el área y abren el módulo relacionado', () => {
+  assert.deepEqual(notificationAreaNames({ areas_origen: ['bodega', 'calidad', 'bodega'] }), ['Bodega', 'Calidad']);
+  assert.equal(secretaryNotificationTarget({ type: 'repuesto_entregar', areas_origen: ['bodega'] }), '/bodega/entregas');
+  assert.equal(secretaryNotificationTarget({ type: 'reclamo_creado', areas_origen: ['reclamos', 'garantias'] }), '/reclamos');
+  assert.equal(secretaryNotificationTarget({ type: 'compra_registrada', areas_origen: ['contabilidad'] }), '/secretaria/compras');
+  assert.equal(secretaryNotificationTarget({ type: 'orden_finalizada', areas_origen: ['calidad'] }), '/calidad');
+  assert.equal(secretaryNotificationTarget({ type: 'calidad_aprobada', areas_origen: ['contabilidad', 'garantias'] }), '/secretaria/facturacion');
 });

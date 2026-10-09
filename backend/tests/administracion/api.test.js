@@ -55,10 +55,11 @@ if (!databaseName) {
   });
   test('Perfil exige contraseña actual y conserva rol; no se puede desactivar la cuenta propia', async () => {
     await api('/admin_pro/mi-cuenta', { method: 'PUT', body: { nombre_usuario: 'nuevo', correo_electronico: 'admin@example.test', password_actual: 'incorrecta' }, status: 403 });
-    const changed = await api('/admin_pro/mi-cuenta', { method: 'PUT', body: { nombre_usuario: 'administrador_actualizado', correo_electronico: 'admin@example.test', password_actual: password, rol: 'Tecnico' } });
+    const changed = await api('/admin_pro/mi-cuenta', { method: 'PUT', body: { nombre_usuario: 'administrador_actualizado', nombre_persona: 'Responsable del taller', correo_electronico: 'admin@example.test', password_actual: password, rol: 'Tecnico' } });
     actor.nombre_usuario = changed.data.nombre_usuario; assert.equal(changed.data.rol, 'Administrador');
+    assert.equal(changed.data.nombre_persona, 'Responsable del taller');
     await api(`/admin_pro/usuarios/${actor.id_usuario}`, { method: 'PUT', body: { activo: false }, status: 409 });
-    await api(`/admin_pro/usuarios/${actor.id_usuario}`, { method: 'PUT', body: { rol: 'Secretaria' }, status: 409 });
+    await api(`/admin_pro/usuarios/${actor.id_usuario}`, { method: 'PUT', body: { rol: 'ServicioCliente' }, status: 409 });
   });
   test('Configuración valida límites, evita sobrescrituras y registra motivo y autor', async () => {
     const config = (await api('/admin_pro/configuracion')).data;
@@ -75,8 +76,11 @@ if (!databaseName) {
   test('Cuentas del personal cumplen contraseña mínima y las respuestas ocultan hashes', async () => {
     await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'corta', rol: 'Tecnico', password: '1234' }, status: 400 });
     await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'elevada', rol: 'Administrador', password }, status: 400 });
-    const created = await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'tecnico_creado', correo_electronico: 'tech@example.test', rol: 'Tecnico', password }, status: 201 });
+    const created = await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'tecnico_creado', nombre_persona: 'Técnico de prueba', correo_electronico: 'tech@example.test', rol: 'Tecnico', password }, status: 201 });
     assert.ok(created.tecnico); assert.ok(!JSON.stringify(created).includes('contrasena_hash'));
+    assert.equal(created.tecnico.nombre, 'Técnico de prueba');
+    const integral = await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'operacion_integral', nombre_persona: 'Encargada de prueba', rol: 'Secretaria', password }, status: 201 });
+    assert.equal(integral.data.rol, 'Secretaria'); assert.equal(integral.data.nombre_persona, 'Encargada de prueba');
     const staff = created.data; await login(staff);
     await api(`/admin_pro/usuarios/${staff.id_usuario}/password`, { method: 'PUT', body: { password: 'OtraClaveSegura', admin_password: password } });
     await api('/admin_pro/reportes/usuarios', { token: staff.token, status: 401 });
@@ -193,13 +197,20 @@ if (!databaseName) {
     assert.equal((await api('/admin_pro/reportes/stock_bajo?buscar=Reserva%20verificable')).total, 1);
   });
   test('Todo el catálogo tiene una consulta válida y no expone contraseñas', async () => {
-    const catalog = (await api('/admin_pro/reportes/catalogo')).data; assert.equal(catalog.length, 35);
+    const catalog = (await api('/admin_pro/reportes/catalogo')).data;
+    for (const type of ['actividad_financiera', 'movimientos_contables', 'devoluciones_proveedor', 'calidad_diagnosticos', 'calidad_ordenes', 'reclamos']) {
+      assert.ok(catalog.some((item) => item.id === type));
+    }
     await api('/admin_pro/reportes/opciones');
     for (const report of catalog) {
       const params = new URLSearchParams({ equipo_id: String(sample.equipo.id_equipo), repuesto_id: '1', orden_id: String(sample.orden.id_orden), fecha_inicio: '2000-01-01', fecha_fin: '2030-12-31' });
       const data = await api(`/admin_pro/reportes/${report.id}?${params}`);
       assert.equal(data.reporte.id, report.id); assert.ok(Array.isArray(data.data)); assert.ok(!JSON.stringify(data).includes('contrasena_hash'));
+      if (report.id === 'actividad_financiera') assert.equal(data.resumen_financiero.neto_caja,
+        Math.round((data.resumen_financiero.entradas_caja - data.resumen_financiero.salidas_caja) * 100) / 100);
     }
+    const financialExcel = await request('/admin_pro/reportes/actividad_financiera/excel?fecha_inicio=2000-01-01&fecha_fin=2030-12-31');
+    assert.ok(Buffer.isBuffer(financialExcel.data) && financialExcel.data.length > 1000);
   });
   test('Auditoría antigua se redacta y la paginación no repite movimientos', async () => {
     await prisma.auditoria_Movimientos.create({ data: { tabla: 'Usuarios', operacion: 'LEGACY', datos_nuevos: { nombre: 'Antiguo', contrasena_hash: 'HASH-SECRETO', token: 'TOKEN-SECRETO' } } });
@@ -264,6 +275,8 @@ if (!databaseName) {
     assert.ok(new Date(summary.state.proxima_ejecucion) > new Date()); await runScheduledBackup(); assert.equal((await getBackupSummary()).jobs.length, beforeCount + 1);
   });
   test('Conservación mantiene las copias parciales y archivos antiguos sin manifiesto', async () => {
+    const initialConfig = await getAdminSettings();
+    await api('/admin_pro/configuracion', { method: 'PUT', body: { revision: initialConfig.revision, motivo: 'Desactivar conservación durante preparación de prueba', valores: { respaldos: { conservacion_dias: 0 } } } });
     const latest = (await getBackupSummary()).latestComplete;
     const directory = path.join(process.env.BACKUP_ROOT, latest.month);
     const oldJobs = [];
@@ -311,6 +324,22 @@ if (!databaseName) {
     await runScheduledBackup();
     const recovered = await getBackupSummary(); assert.notEqual(recovered.latestComplete.id, previous);
     assert.equal(recovered.state.reintentos, 0); assert.equal(recovered.state.ultimo_error, null);
+  });
+  test('Recupera una versión completa y conserva una copia del estado reemplazado', async () => {
+    const job = (await api('/admin_pro/backups/manual', { method: 'POST' })).data.latestBackup;
+    assert.equal(job.estado, 'COMPLETO');
+    const marker = await prisma.clientes.create({ data: { nombre: 'Cliente creado después del respaldo' } });
+    const route = `/admin_pro/backups/${job.month}/${job.manifest}/restaurar`;
+    await api(route, { method: 'POST', body: { respaldo_id: job.id, confirmacion: 'incorrecta' }, status: 400 });
+    await api(route, { method: 'POST', token: denied.token, body: { respaldo_id: job.id, confirmacion: 'RESTAURAR' }, status: 403 });
+    assert.ok(await prisma.clientes.findUnique({ where: { id_cliente: marker.id_cliente } }));
+    const restored = await api(route, { method: 'POST', body: { respaldo_id: job.id, confirmacion: 'RESTAURAR' } });
+    assert.equal(restored.data.estado, 'COMPLETADO');
+    assert.equal(restored.data.respaldo_id, job.id);
+    assert.equal(await prisma.clientes.findUnique({ where: { id_cliente: marker.id_cliente } }), null);
+    const safety = (await getBackupSummary()).jobs.find((j) => j.id === restored.data.copia_previa.id);
+    assert.equal(safety?.estado, 'COMPLETO');
+    assert.ok(safety.archivos.some((file) => file.tipo === 'BASE_COMPLETA'));
   });
   test('Desactivaciones simultáneas conservan al menos un administrador activo', async () => {
     const other = await account('segundo_administrador'); await login(other);

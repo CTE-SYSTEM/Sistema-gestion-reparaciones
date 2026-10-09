@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import Table from '../../../components/Table';
-import { downloadJsonPdf } from '../utils/csvExport';
 import { equiposAdminService } from '../services';
 
 const columns = [
@@ -142,11 +141,6 @@ export default function EquiposAvanzado() {
     onEdit: () => openEquipoEdit(equipo),
   }));
 
-  const reportColumns = columns.filter((column) => column.accessor !== 'acciones');
-  const downloadGeneralReport = () => {
-    downloadJsonPdf(filteredEquipos, reportColumns, 'equipos_general.pdf', 'Reporte General de Equipos');
-  };
-
   return (
     <div className="p-4 space-y-6 max-w-7xl mx-auto">
       
@@ -156,14 +150,6 @@ export default function EquiposAvanzado() {
           <h1 className="text-2xl font-bold text-slate-800">Gestión avanzada de equipos</h1>
           <p className="text-gray-400 text-sm mt-0.5">Busca equipos y revisa su estado actual en tiempo real.</p>
         </div>
-        <button
-          type="button"
-          onClick={downloadGeneralReport}
-          disabled={filteredEquipos.length === 0}
-          className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
-        >
-          Generar Reporte General
-        </button>
       </div>
 
       {/* Grid Superior de Métricas */}

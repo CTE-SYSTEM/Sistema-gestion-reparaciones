@@ -1,8 +1,11 @@
 import { createBackupNow, getBackupDownloadUrl, getBackupSummary, resolveBackupFile, verifyBackup } from '../../services/backupService.js';
+import { restoreBackup } from '../../services/backupRestoreService.js';
 
 const backupError = (res, error) => {
   console.error('[Respaldos]', error.message);
-  res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudo completar la operación de respaldo.' });
+  const message = error.status ? error.message : 'No se pudo completar la operación de respaldo.';
+  const safety = error.safetyBackupId ? ` La copia previa quedó guardada como ${error.safetyBackupId}. Revise el estado antes de reintentar.` : '';
+  res.status(error.status || 500).json({ error: `${message}${safety}` });
 };
 
 export const getBackups = async (req, res) => {
@@ -35,5 +38,9 @@ export const downloadBackupFile = async (req, res) => {
 };
 export const verifyBackupFiles = async (req, res) => {
   try { res.json(await verifyBackup(req.params.month, req.params.file, req.user)); }
+  catch (error) { backupError(res, error); }
+};
+export const restoreBackupVersion = async (req, res) => {
+  try { res.json(await restoreBackup(req.params.month, req.params.file, req.body, req.user)); }
   catch (error) { backupError(res, error); }
 };

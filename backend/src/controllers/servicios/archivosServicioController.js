@@ -77,6 +77,8 @@ const technicianOwns = async (userId, kind, id) => {
 
 export const autorizarArchivos = (kind) => async (req, res, next) => {
   if (req.method === 'GET' && hasPermission(req.user?.rol, PERMISSIONS.JEFE_TECNICO_VER)) return next();
+  if (kind === 'diagnostico' && hasPermission(req.user?.rol, PERMISSIONS.DIAGNOSTICOS_ATENDER)
+    && (req.method === 'GET' || ['FOTO_RECEPCION', 'FOTO_SALIDA_SIN_REPARAR'].includes(req.headers['x-tipo-archivo']))) return next();
   const permiso = kind === 'diagnostico' ? PERMISSIONS.DIAGNOSTICOS_GESTIONAR : PERMISSIONS.ORDENES_GESTIONAR;
   if (hasPermission(req.user?.rol, permiso)) return next();
   const id = parsePositiveId(req.params.id);
@@ -95,6 +97,7 @@ export const autorizarContenido = async (req, res, next) => {
   if (!archivo) return res.status(404).json({ error: 'Fotografía no encontrada' });
   if (hasPermission(req.user?.rol, PERMISSIONS.JEFE_TECNICO_VER)) return next();
   const kind = archivo.diagnostico_id ? 'diagnostico' : 'orden';
+  if (kind === 'diagnostico' && hasPermission(req.user?.rol, PERMISSIONS.DIAGNOSTICOS_ATENDER)) return next();
   const permiso = kind === 'diagnostico' ? PERMISSIONS.DIAGNOSTICOS_GESTIONAR : PERMISSIONS.ORDENES_GESTIONAR;
   if (hasPermission(req.user?.rol, permiso)) return next();
   if (normalizeRole(req.user?.rol) === 'tecnico' && archivo.visible_tecnico && await technicianOwns(req.user.id, kind, archivo.diagnostico_id || archivo.orden_id)) {
@@ -132,6 +135,9 @@ export const subirArchivo = (kind) => async (req, res) => {
   if (!types[kind].includes(tipo_archivo)) return res.status(400).json({ error: 'Tipo de fotografía inválido' });
   if (req.photoTechnician && !['FOTO_DIAGNOSTICO', 'FOTO_REPARACION'].includes(tipo_archivo)) {
     return res.status(403).json({ error: 'El técnico solo puede agregar fotos del diagnóstico o reparación asignados' });
+  }
+  if (kind === 'diagnostico' && normalizeRole(req.user?.rol) === 'recepcion' && tipo_archivo !== 'FOTO_RECEPCION') {
+    return res.status(403).json({ error: 'Recepción solo puede agregar fotos del ingreso' });
   }
   const bytes = req.body;
   if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > maxPhotoBytes || !mimeInfo[tipo_mime]?.valid(bytes)) {

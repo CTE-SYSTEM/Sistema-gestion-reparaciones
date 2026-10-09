@@ -52,6 +52,7 @@ export default function RecuperarPassword() {
           : 'Introduce el código enviado a tu correo y elige una contraseña nueva.'}</p>
       </div>
       {message && <p role="status" className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">{message}</p>}
+      {step === 'reset' && <p className="mb-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">Cuenta: <strong>{correo}</strong></p>}
       {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <form onSubmit={step === 'request' ? submitRequest : submitReset} className="space-y-4">
         <label className="block text-sm font-semibold text-gray-700">Correo electrónico

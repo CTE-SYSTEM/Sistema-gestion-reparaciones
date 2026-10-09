@@ -6,9 +6,10 @@ import Table from '../../../components/Table';
 import { createFactura, createFacturaDiagnostico, getDiagnosticosParaFacturar, getFacturas, getOrdenesParaFacturar, getTarifasFacturacion } from '../services/facturasService';
 import { getGarantias } from '../../garantias/services/garantiasService';
 import { useInfiniteAreaList } from '../../shared/hooks/useInfiniteAreaList';
-import { getHistorialOrden, registrarEntregaOrden } from '../../recepcion/services/ordenesService';
+import { getHistorialOrden, registrarEntregaOrden } from '../../servicioCliente/services/ordenesService';
 import FotosServicio from '../../shared/components/FotosServicio';
 import HistorialEstados from '../../shared/components/HistorialEstados';
+import PageHelp from '../../../components/PageHelp';
 
 const money = (value) => `C$ ${Number(value || 0).toFixed(2)}`;
 const IVA_RATE = 0.15;
@@ -156,7 +157,8 @@ const buildTicketHtml = (factura, { autoPrint = false } = {}) => {
 
 const FacturacionPage = () => {
   const { user } = useContext(AuthContext);
-  const canDeliver = user?.rol !== 'Contabilidad';
+  const canDeliver = user?.rol === 'Secretaria';
+  const canInvoice = user?.rol !== 'Contabilidad';
   const [ordenes, setOrdenes] = useState([]);
   const [diagnosticos, setDiagnosticos] = useState([]);
   const [tarifas, setTarifas] = useState({ diagnostico: [], mano_obra: [] });
@@ -235,8 +237,10 @@ const FacturacionPage = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!canInvoice) return undefined;
+    const timer = window.setTimeout(() => { loadData(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [canInvoice]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -413,9 +417,10 @@ const FacturacionPage = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">Facturacion</h1>
-        <p className="text-gray-500">Campos reales: orden finalizada, montos, impuestos, total y metodo de pago.</p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
+        <div><h1 className="text-2xl font-bold mb-1">{canInvoice ? 'Facturación' : 'Facturas'}</h1>
+        <p className="text-gray-500">{canInvoice ? 'Emite la factura al terminar el trabajo o el diagnóstico y antes de entregar el equipo.' : 'Consulta las facturas emitidas y revisa sus cobros en Movimientos.'}</p></div>
+        <PageHelp compact />
       </div>
 
       {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
@@ -441,7 +446,7 @@ const FacturacionPage = () => {
       )}
       {historialOrdenId && <section className="mb-5 rounded-xl border bg-white p-4"><h2 className="mb-2 font-semibold">Historial de la orden #{historialOrdenId}</h2><HistorialEstados rows={historialOrden} /></section>}
 
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-white px-4 py-3 shadow-sm">
+      {canInvoice && <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-white px-4 py-3 shadow-sm">
         <div>
           <h2 className="text-base font-semibold text-gray-800">Emitir nueva factura</h2>
           <p className="text-xs text-gray-500">Abra el formulario solo cuando vaya a registrar una factura.</p>
@@ -455,9 +460,9 @@ const FacturacionPage = () => {
           {showForm ? 'Cerrar formulario' : 'Nueva factura'}
           {showForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
-      </div>
+      </div>}
 
-      {showForm && (
+      {canInvoice && showForm && (
       <form onSubmit={handleSubmit} className="mb-6 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
         <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => { setTipoCobro('orden'); setAutoIva(true); setForm({ orden_id: '', diagnostico_id: '', monto_diagnostico: '', monto_repuestos: '', mano_obra: '', impuestos: '', metodo_pago: '' }); }} className={`rounded border px-3 py-2 text-sm ${tipoCobro === 'orden' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700'}`}>Orden de trabajo</button><button type="button" onClick={() => { setTipoCobro('diagnostico'); setAutoIva(true); setForm({ orden_id: '', diagnostico_id: '', monto_diagnostico: '', monto_repuestos: '', mano_obra: '', impuestos: '', metodo_pago: '' }); }} className={`rounded border px-3 py-2 text-sm ${tipoCobro === 'diagnostico' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700'}`}>Solo diagnóstico</button></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -618,7 +623,7 @@ const FacturacionPage = () => {
                 type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nombre del cliente..."
+                placeholder={tablaActiva === 'facturas' ? 'Buscar factura, orden, cliente o equipo...' : 'Buscar garantía, factura, cliente o equipo...'}
                 className="w-full rounded-lg border border-gray-200 py-2 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </label>

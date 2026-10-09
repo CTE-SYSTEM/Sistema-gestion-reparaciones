@@ -23,6 +23,8 @@ export const RecepcionTecnica = ({ recepcion = {} }) => <section className="roun
 
 export default function ExpedienteTecnico({ kind, id, intent, onClose, username }) {
   const [nota, setNota] = useState('');
+  const [pdfError, setPdfError] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [registroAbierto, setRegistroAbierto] = useState(false);
   const client = useQueryClient();
   const key = ['tecnico', username, 'expediente', kind, id];
@@ -33,12 +35,22 @@ export default function ExpedienteTecnico({ kind, id, intent, onClose, username 
   const presupuesto = kind === 'orden' ? r?.diagnostico?.presupuesto_estimado : item?.presupuesto;
   const moneda = kind === 'orden' ? r?.diagnostico?.moneda_presupuesto : item?.moneda_presupuesto;
   const editable = item && (kind === 'orden' ? item.fecha_inicio_reparacion && ['EN_REPARACION', 'ESPERANDO_PIEZA'].includes(item.estado) : item.fecha_inicio && item.estado === 'EN_REVISION');
+  const reportable = item && (kind === 'orden' ? ['FINALIZADO', 'ENTREGADO'].includes(item.estado) || (item.estado === 'IRREPARABLE' && item.irreparable_estado === 'APROBADO') : ['COMPLETADO', 'DIAGNOSTICADO', 'APROBADO', 'RECHAZADO'].includes(item.estado));
+  const downloadPdf = async () => {
+    setPdfBusy(true); setPdfError('');
+    try {
+      const { exportarExpedientePdf } = await import('../../tecnicoJefe/utils/exportarExpedientePdf');
+      await exportarExpedientePdf(detail.data, { tipo: kind, id });
+    } catch { setPdfError('No se pudo generar el informe PDF.'); }
+    finally { setPdfBusy(false); }
+  };
   return <Dialog open onClose={onClose} className="relative z-[110] tecnico-dialog">
     <div className="fixed inset-0 bg-slate-950/60" aria-hidden="true" /><div className="fixed inset-0 overflow-y-auto p-4 sm:p-8"><DialogPanel className="mx-auto max-w-3xl rounded-2xl bg-white p-5 text-slate-900 shadow-xl">
       <div className="sticky top-0 z-10 mb-4 flex items-center justify-between bg-white py-2"><DialogTitle className="text-lg font-bold">Expediente técnico · #{id}</DialogTitle><button type="button" onClick={onClose} aria-label="Cerrar expediente" className="rounded border px-3 py-2">Cerrar</button></div>
       {detail.isPending && <p role="status">Cargando expediente…</p>}
       {detail.error && <p role="alert" className="text-red-700">{detail.error.response?.data?.error || 'No se pudo cargar el expediente'} <button onClick={() => detail.refetch()}>Reintentar</button></p>}
       {item && <div className="space-y-4">
+        {reportable && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3"><p className="text-sm text-indigo-900">Informe de este trabajo cerrado</p><button type="button" disabled={pdfBusy} onClick={downloadPdf} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{pdfBusy ? 'Generando…' : 'Descargar PDF'}</button>{pdfError && <p role="alert" className="w-full text-sm text-red-700">{pdfError}</p>}</div>}
         <p className="font-semibold">{item.equipo}</p><p className="whitespace-pre-wrap text-sm">Falla: {item.falla}</p>
         <section className="rounded-xl border p-4 text-sm"><div className="mb-3 flex gap-2"><EstadoBadge estado={item.estado === 'IRREPARABLE' && item.irreparable_estado === 'PENDIENTE' ? 'REVISION_JEFE' : item.estado} /><PrioridadBadge prioridad={item.prioridad} /></div>
           <dl className="grid gap-3 sm:grid-cols-2">{[['Asignación', item.fecha_asignacion], ['Inicio real', item.fecha_inicio || item.fecha_inicio_reparacion], ['Finalización', item.fecha_completado || item.fecha_finalizacion], ...((kind !== 'orden' || item.fecha_inicio_reparacion) ? [['Último avance', item.ultimo_avance]] : [])].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd>{fecha(value)}</dd></div>)}</dl>
@@ -51,7 +63,7 @@ export default function ExpedienteTecnico({ kind, id, intent, onClose, username 
         {kind === 'orden' && (item.pruebas_salida || typeof item.enciende_salida === 'boolean') && <section className="rounded-xl border p-4"><h3 className="mb-3 font-semibold">Pruebas de salida</h3><dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">Encendido</dt><dd>{item.enciende_salida == null ? 'Sin registro' : item.enciende_salida ? 'Enciende' : 'No enciende'}</dd></div><div><dt className="text-xs text-slate-500">Alimentación AC</dt><dd>{item.usa_corriente_ac_salida == null ? 'Sin registro' : item.usa_corriente_ac_salida ? 'Probada con AC' : 'No / No aplica'}</dd></div>{Object.entries(item.pruebas_salida || {}).map(([key, result]) => <div key={key}><dt className="text-xs text-slate-500">{pruebaLabels[key]}</dt><dd>{result.replaceAll('_', ' ')}</dd></div>)}</dl></section>}
         {kind === 'orden' && item.irreparable_estado !== 'NO_SOLICITADO' && <div className="rounded-xl border border-amber-200 p-4 text-sm"><strong>Revisión de irreparabilidad: {item.irreparable_estado}</strong><p>{item.motivo_revision_irreparable || 'Pendiente de decisión del jefe técnico'}</p></div>}
         {kind === 'orden' && item.estado === 'IRREPARABLE' && item.irreparable_estado === 'PENDIENTE' && <CorreccionIrreparable id={id} justificacion={item.justificacion_irreparable} username={username} />}
-        {kind === 'orden' && <section className="rounded-xl border p-4 text-sm"><h3 className="mb-3 font-semibold">Solicitudes de piezas</h3>{item.repuestos_usados.length === 0 && <p>Sin solicitudes activas. Las retiradas figuran en el historial.</p>}{item.repuestos_usados.map((p) => <article key={p.id_detalle_repuesto} className="mb-3 rounded border p-3"><strong>{p.repuesto?.nombre || p.pieza_solicitada} · {p.cantidad_usada}</strong><p>{p.estado_aprobacion === 'APROBADO' ? p.estado_entrega === 'ENTREGADO' ? 'Aprobada y entregada' : 'Aprobada · pendiente de entrega física' : p.estado_aprobacion === 'DENEGADO' ? 'Rechazada' : 'Pendiente de aprobación'}</p><p className="text-xs text-slate-500">Solicitada: {fecha(p.fecha_solicitud)}{p.fecha_aprobacion ? ' · Aprobada: ' + fecha(p.fecha_aprobacion) : ''}{p.fecha_entrega ? ' · Entregada: ' + fecha(p.fecha_entrega) : ''}</p>{p.motivo_rechazo && <p>Motivo: {p.motivo_rechazo}</p>}{p.estado_aprobacion === 'PENDIENTE' && ['EN_REPARACION', 'ESPERANDO_PIEZA'].includes(item.estado) && <CorreccionSolicitud solicitud={p} username={username} />}</article>)}</section>}
+        {kind === 'orden' && <section className="rounded-xl border p-4 text-sm"><h3 className="mb-3 font-semibold">Solicitudes de piezas</h3>{item.repuestos_usados.length === 0 && <p>Sin solicitudes activas. Las retiradas figuran en el historial.</p>}{item.repuestos_usados.map((p) => <article key={p.id_detalle_repuesto} className="mb-3 rounded border p-3"><strong>{p.repuesto?.nombre || p.pieza_solicitada} · {p.cantidad_usada}</strong><p>{p.estado_entrega === 'SIN_EXISTENCIA' ? 'Bodega reportó falta de existencias' : p.estado_aprobacion === 'APROBADO' ? p.estado_entrega === 'ENTREGADO' ? 'Aprobada y entregada' : 'Aprobada · pendiente de entrega física' : p.estado_aprobacion === 'DENEGADO' ? 'Rechazada' : 'Pendiente de aprobación'}</p><p className="text-xs text-slate-500">Solicitada: {fecha(p.fecha_solicitud)}{p.fecha_aprobacion ? ' · Aprobada: ' + fecha(p.fecha_aprobacion) : ''}{p.fecha_entrega ? ' · Entregada: ' + fecha(p.fecha_entrega) : ''}</p>{p.motivo_rechazo && <p>Motivo: {p.motivo_rechazo}</p>}{p.estado_aprobacion === 'PENDIENTE' && ['EN_REPARACION', 'ESPERANDO_PIEZA'].includes(item.estado) && <CorreccionSolicitud solicitud={p} username={username} />}</article>)}</section>}
         <HistorialCorrecciones rows={detail.data.correcciones} />
         <FotosServicio kind="diagnosticos" id={kind === 'orden' ? item.diagnostico_id : id} title="Fotografías del diagnóstico" readOnly />
         {kind === 'orden' && <FotosServicio kind="ordenes" id={id} title="Fotografías de la reparación" readOnly />}

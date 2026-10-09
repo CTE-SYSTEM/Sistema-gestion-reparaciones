@@ -8,7 +8,7 @@ const router = express.Router();
 const SESSION_MS = 20 * 60 * 1000;
 const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_PHOTOS = 12;
-const PREFIX = 'photo-transfer/';
+const PREFIX = 'fotos/temporales/';
 const formats = {
   'image/jpeg': (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
   'image/png': (b) => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),

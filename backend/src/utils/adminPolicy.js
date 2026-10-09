@@ -2,7 +2,7 @@ import { normalizeRole } from './roles.js';
 
 export const isAdminRole = (role) => ['administrador', 'adminpro', 'admin'].includes(normalizeRole(role));
 export const ADMIN_ROLES = ['Administrador', 'admin_pro', 'Admin'];
-export const ASSIGNABLE_ROLES = ['Recepcion', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad', 'TecnicoJefe', 'Tecnico'];
+export const ASSIGNABLE_ROLES = ['Secretaria', 'Recepcion', 'ServicioCliente', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad', 'TecnicoJefe', 'Tecnico'];
 export const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 
 export const DEFAULT_ADMIN_SETTINGS = {
@@ -13,7 +13,7 @@ export const DEFAULT_ADMIN_SETTINGS = {
     margen_repuesto_porcentaje: 0,
   },
   reglas: {
-    garantia_aviso_dias: 30, orden_atrasada_dias: 7,
+    garantia_aviso_dias: 30, orden_atrasada_dias: 7, alerta_tecnica_horas: 72,
     correccion_cierre_horas: 24, correccion_excepcional_habilitada: true,
     tarifas_diagnostico: [], tarifas_mano_obra: [],
     stock_minimo_predeterminado: 1,
@@ -21,8 +21,8 @@ export const DEFAULT_ADMIN_SETTINGS = {
     password_minimo: 8,
   },
   respaldos: {
-    habilitado: true, frecuencia: 'mensual', hora: '02:00', dia_semana: 1,
-    dia_mes: 1, zona_horaria: 'America/Managua', conservacion_dias: 0,
+    habilitado: true, frecuencia: 'semanal', hora: '02:00', dia_semana: 1,
+    dia_mes: 1, zona_horaria: 'America/Managua', conservacion_dias: 28,
   },
 };
 
@@ -55,6 +55,7 @@ export const validateSettings = (input, previous = DEFAULT_ADMIN_SETTINGS) => {
   percentage(b.margen_repuesto_porcentaje, 'Margen de repuestos');
   integer(r.garantia_aviso_dias, 1, 365, 'Aviso de garantías');
   integer(r.orden_atrasada_dias, 1, 365, 'Plazo de órdenes');
+  integer(r.alerta_tecnica_horas, 1, 720, 'Alerta de trabajo técnico sin avance');
   integer(r.correccion_cierre_horas, 1, 168, 'Plazo de corrección del cierre');
   integer(r.stock_minimo_predeterminado, 0, 100000, 'Stock mínimo predeterminado');
   for (const key of ['tarifas_diagnostico', 'tarifas_mano_obra']) {

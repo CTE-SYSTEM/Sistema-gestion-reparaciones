@@ -14,6 +14,7 @@ const fields = {
   reglas: [
     ['garantia_aviso_dias', 'Avisar garantías por vencer (días)', 'number', 1, 365, 'Usado en el resumen y en el filtro inicial del reporte.'],
     ['orden_atrasada_dias', 'Considerar una orden atrasada después de (días)', 'number', 1, 365, 'Usado por el reporte de órdenes atrasadas.'],
+    ['alerta_tecnica_horas', 'Alertar trabajo técnico sin avance después de (horas)', 'number', 1, 720, 'Se aplica al tablero y a las alertas del jefe técnico. Valor inicial: 72 horas.'],
     ['correccion_cierre_horas', 'Corregir un cierre técnico dentro de (horas)', 'number', 1, 168, 'El técnico debe indicar un motivo; después de este plazo, la corrección se marca como excepción.'],
     ['correccion_excepcional_habilitada', 'Permitir correcciones excepcionales después del plazo', 'checkbox', null, null, 'Las excepciones exigen motivo y quedan marcadas en el historial.'],
     ['stock_minimo_predeterminado', 'Stock mínimo de repuestos nuevos', 'number', 0, 100000, 'Se aplica si Secretaría deja vacío el mínimo al crear un repuesto. Cada repuesto puede tener su propio mínimo.'],

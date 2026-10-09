@@ -76,11 +76,13 @@ const photoTimestamp = (date) => {
 export const r2EquipmentFolderFromKey = (key, equipoId) => {
   if (typeof key !== 'string') return null;
   const parts = key.split('/');
-  if (parts.length !== 4 || !slugPattern.test(parts[0]) || !r2Folders.has(parts[2])) return null;
-  const equipmentMatch = parts[1].match(/^[a-z0-9]+(?:-[a-z0-9]+)*-equipo-([1-9]\d*)$/);
+  const organized = parts.length === 5 && parts[0] === 'fotos' && parts[1] === 'equipos';
+  const legacy = parts.length === 4 && slugPattern.test(parts[0]);
+  if ((!organized && !legacy) || !r2Folders.has(parts[organized ? 3 : 2])) return null;
+  const equipmentMatch = parts[organized ? 2 : 1].match(/^[a-z0-9]+(?:-[a-z0-9]+)*-equipo-([1-9]\d*)$/);
   if (!equipmentMatch || (equipoId !== undefined && Number(equipmentMatch[1]) !== equipoId)) return null;
-  if (!photoFilenamePattern.test(parts[3])) return null;
-  return `${parts[0]}/${parts[1]}`;
+  if (!photoFilenamePattern.test(parts[organized ? 4 : 3])) return null;
+  return organized ? parts.slice(0, 3).join('/') : `${parts[0]}/${parts[1]}`;
 };
 
 export const isR2Key = (key) => typeof key === 'string'
@@ -104,8 +106,10 @@ export const r2ServiceKey = ({ kind, serviceId, equipo, tipoArchivo, ext, existi
   }
   if (!['.jpg', '.png', '.webp'].includes(ext)) throw new Error('Extensión de fotografía inválida');
   const description = `${slug(equipo.marca, 'sin-marca')}-${slug(equipo.modelo, 'sin-modelo')}`;
-  const equipmentFolder = r2EquipmentFolderFromKey(existingKey, equipo.id_equipo)
-    || `${slug(equipo.tipo, 'sin-tipo')}/${description}-equipo-${equipo.id_equipo}`;
+  const previousFolder = r2EquipmentFolderFromKey(existingKey, equipo.id_equipo);
+  const equipmentName = (previousFolder?.startsWith('fotos/equipos/') ? previousFolder.split('/').at(-1) : previousFolder?.replace('/', '-'))
+    || `${slug(equipo.tipo, 'sin-tipo')}-${description}-equipo-${equipo.id_equipo}`;
+  const equipmentFolder = `fotos/equipos/${equipmentName}`;
   return `${equipmentFolder}/${stage.folder}/${kind}-${serviceId}-${photoTimestamp(uploadedAt)}-${randomBytes(4).toString('hex')}${ext}`;
 };
 

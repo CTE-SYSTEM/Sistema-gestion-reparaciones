@@ -14,6 +14,10 @@ const profile = (body) => {
     if (typeof body.nombre_usuario !== 'string' || !body.nombre_usuario.trim() || body.nombre_usuario.length > 100) fail(400, 'Nombre de usuario inválido.');
     data.nombre_usuario = body.nombre_usuario.trim();
   }
+  if (body.nombre_persona !== undefined) {
+    if (body.nombre_persona != null && (typeof body.nombre_persona !== 'string' || body.nombre_persona.length > 120)) fail(400, 'Nombre de persona inválido.');
+    data.nombre_persona = body.nombre_persona?.trim() || null;
+  }
   if (body.correo_electronico !== undefined) {
     if (body.correo_electronico != null && (typeof body.correo_electronico !== 'string' || body.correo_electronico.length > 254 || (body.correo_electronico.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.correo_electronico.trim())))) fail(400, 'Correo inválido.');
     data.correo_electronico = body.correo_electronico?.trim() || null;
@@ -35,7 +39,7 @@ const guardAccess = async (tx, actor, current, data) => {
 export const getUsuarios = async (req, res) => {
   try {
     const users = await prisma.usuarios.findMany({ select: {
-      id_usuario: true, nombre_usuario: true, correo_electronico: true, rol: true,
+      id_usuario: true, nombre_usuario: true, nombre_persona: true, correo_electronico: true, rol: true,
       activo: true, fecha_creacion: true, tecnico: true,
     }, orderBy: { id_usuario: 'asc' } });
     res.json({ data: users, password_minimo: (await getBusinessSettings()).reglas.password_minimo });
@@ -52,7 +56,7 @@ export const createUsuario = async (req, res) => {
       const user = await tx.usuarios.create({ data: { ...data, rol: req.body.rol, contrasena_hash: hash } });
       let tecnico = null;
       if (user.rol === 'Tecnico') tecnico = await tx.tecnicos.create({ data: {
-        usuario_id: user.id_usuario, nombre: user.nombre_usuario, activo: user.activo,
+        usuario_id: user.id_usuario, nombre: user.nombre_persona || user.nombre_usuario, activo: user.activo,
         especialidad: req.body.especialidad?.trim() || null, horario: req.body.horario?.trim() || null,
         contacto: req.body.contacto?.trim() || user.correo_electronico,
       } });
@@ -78,8 +82,8 @@ export const updateUsuario = async (req, res) => {
       const updated = await tx.usuarios.update({ where: { id_usuario: id }, data });
       if (updated.rol === 'Tecnico') {
         await tx.tecnicos.upsert({ where: { usuario_id: id },
-          update: { nombre: updated.nombre_usuario, activo: updated.activo },
-          create: { usuario_id: id, nombre: updated.nombre_usuario, activo: updated.activo } });
+          update: { nombre: updated.nombre_persona || updated.nombre_usuario, activo: updated.activo },
+          create: { usuario_id: id, nombre: updated.nombre_persona || updated.nombre_usuario, activo: updated.activo } });
       } else if (current.rol === 'Tecnico') {
         await tx.tecnicos.updateMany({ where: { usuario_id: id }, data: { activo: false } });
       }

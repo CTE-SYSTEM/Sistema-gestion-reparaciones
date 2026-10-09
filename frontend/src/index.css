@@ -252,6 +252,14 @@ code {
   line-height: 1.2;
 }
 
+.sgr-summary-header h1 {
+  color: #fff;
+}
+
+.secretaria-main .sgr-summary-header h1 {
+  color: #fff;
+}
+
 .admin-main h1,
 .secretaria-main h1 {
   font-size: clamp(1.6rem, 1.1rem + 1vw, 2.15rem);
@@ -521,11 +529,16 @@ textarea {
 
 .app-sidebar.is-collapsed .sidebar-brand-copy,
 .app-sidebar.is-collapsed .sidebar-user-panel,
-.app-sidebar.is-collapsed .sidebar-footer,
 .app-sidebar.is-collapsed .sidebar-collapse-toggle span,
 .app-sidebar.is-collapsed .nav-link > span {
   display: none;
 }
+
+.app-sidebar.is-collapsed .sidebar-footer { padding-inline: .5rem; }
+.app-sidebar.is-collapsed .sidebar-footer > a,
+.app-sidebar.is-collapsed .sidebar-footer > button { justify-content: center; padding-inline: .5rem; }
+.app-sidebar.is-collapsed .sidebar-footer-label,
+.app-sidebar.is-collapsed .sidebar-footer-meta { display: none; }
 
 .app-sidebar.is-collapsed .sidebar-header {
   align-items: center;
@@ -718,11 +731,16 @@ textarea {
 
   .app-sidebar.is-collapsed .sidebar-brand-copy,
   .app-sidebar.is-collapsed .sidebar-user-panel,
-  .app-sidebar.is-collapsed .sidebar-footer,
   .app-sidebar.is-collapsed .sidebar-collapse-toggle span,
   .app-sidebar.is-collapsed .nav-link > span {
     display: block;
   }
+
+  .app-sidebar.is-collapsed .sidebar-footer { padding-inline: .75rem; }
+  .app-sidebar.is-collapsed .sidebar-footer > a,
+  .app-sidebar.is-collapsed .sidebar-footer > button { justify-content: flex-start; }
+  .app-sidebar.is-collapsed .sidebar-footer-label,
+  .app-sidebar.is-collapsed .sidebar-footer-meta { display: block; }
 
   .app-sidebar.is-collapsed .sidebar-collapse-toggle {
     width: 100%;

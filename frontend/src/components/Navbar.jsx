@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import { NotificationTray } from './NotificationTray';
 import { NotificationBell, NotificationToast } from './NotificationAttention';
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
+import { secretaryNotificationTarget } from '../utils/notificationInbox';
 
 const normalizeRole = (role) => String(role || '')
   .normalize('NFD')
@@ -16,9 +17,9 @@ const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
-  const isSecretaria = ['secretaria', 'recepcion'].includes(normalizeRole(user?.rol));
+  const isCustomerArea = ['secretaria', 'serviciocliente'].includes(normalizeRole(user?.rol));
   const isAdmin = ['administrador', 'adminpro', 'admin'].includes(normalizeRole(user?.rol));
-  const hasInbox = ['secretaria', 'recepcion', 'bodega', 'calidad', 'reclamos', 'garantias', 'contabilidad'].includes(normalizeRole(user?.rol)) || isAdmin;
+  const hasInbox = ['secretaria', 'serviciocliente', 'bodega', 'calidad', 'reclamos', 'garantias', 'contabilidad'].includes(normalizeRole(user?.rol)) || isAdmin;
   const {
     notifications,
     connected: socketConnected,
@@ -29,7 +30,7 @@ const Navbar = ({ onToggleSidebar }) => {
     enabled: hasInbox,
     persistent: true,
     onRefresh: (notification) => {
-      if (isSecretaria) window.dispatchEvent(new CustomEvent('recepcion:notificacion', { detail: notification }));
+      if (isCustomerArea) window.dispatchEvent(new CustomEvent('servicio-cliente:notificacion', { detail: notification }));
     },
     refreshIntervalMs: 0,
   });
@@ -44,11 +45,11 @@ const Navbar = ({ onToggleSidebar }) => {
           : role === 'reclamos' ? '/reclamos'
             : role === 'garantias' ? (item.entity?.kind === 'reclamo' ? '/garantias/reclamos' : '/garantias')
               : role === 'contabilidad' ? (item.type === 'movimiento_contable' ? '/contabilidad/movimientos' : '/contabilidad/facturacion')
-                : role === 'recepcion' ? (item.entity?.kind === 'reclamo' ? '/recepcion/reclamos'
-                  : item.type === 'diagnostico_completado' ? '/recepcion/nueva-orden'
-                    : item.type === 'factura_creada' || item.type === 'calidad_aprobada' ? '/recepcion/entregas' : '/recepcion/flujo-atencion')
-                : (['orden_finalizada', 'irreparable_confirmado', 'factura_creada', 'garantia_registrada', 'equipo_entregado'].includes(item.type)) && role === 'secretaria'
-                  ? '/secretaria/facturacion' : '/secretaria/nueva-orden';
+                : role === 'serviciocliente' ? (item.entity?.kind === 'reclamo' ? '/servicio-cliente/reclamos'
+                  : item.type === 'diagnostico_completado' ? '/servicio-cliente/nueva-orden'
+                    : ['calidad_aprobada', 'irreparable_confirmado'].includes(item.type) ? '/servicio-cliente/facturacion'
+                      : item.type === 'factura_creada' ? '/servicio-cliente/entregas' : '/servicio-cliente/flujo-atencion')
+                : role === 'secretaria' ? secretaryNotificationTarget(item) : '/secretaria/nueva-orden';
     navigate(target);
     setShowNotifications(false); dismissLatest();
   };
@@ -92,13 +93,13 @@ const Navbar = ({ onToggleSidebar }) => {
               </div>
             )}
 
-            <Link to="/mi-cuenta" aria-label="Abrir Mi cuenta" className="flex items-center gap-3 rounded-xl p-1 transition hover:bg-slate-50">
+            <Link to={isAdmin ? '/admin/mi-cuenta' : '/mi-cuenta'} aria-label="Abrir Mi cuenta" className="flex items-center gap-3 rounded-xl p-1 transition hover:bg-slate-50">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-black text-white">
-                {user.username?.charAt(0).toUpperCase() || <UserRound className="h-5 w-5" />}
+                {(user.personName || user.username)?.charAt(0).toUpperCase() || <UserRound className="h-5 w-5" />}
               </div>
               <div className="hidden text-left sm:block">
-                <div className="text-sm font-bold text-gray-800">{user.username}</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{user.rol}</div>
+                <div className="text-sm font-bold text-gray-800">{user.personName || user.username}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{user.rol === 'Secretaria' ? 'Operación integral' : user.rol}</div>
               </div>
             </Link>
 

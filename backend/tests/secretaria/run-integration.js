@@ -25,7 +25,7 @@ testUrl.pathname = `/${databaseName}`;
 const testEnv = {
   ...process.env, NODE_ENV: 'test', DATABASE_URL: testUrl.href, SQL_DATABASE_URL: testUrl.href,
   [{ secretaria: 'CTE_SECRETARIA_TEST_DATABASE', jefeTecnico: 'CTE_JEFE_TEST_DATABASE', tecnico: 'CTE_TECNICO_TEST_DATABASE', administracion: 'CTE_ADMIN_TEST_DATABASE', notificaciones: 'CTE_NOTIFICACIONES_TEST_DATABASE', areas: 'CTE_AREAS_TEST_DATABASE' }[suite]]: databaseName,
-  JWT_SECRET: randomUUID(), CHECKPOINT_DISABLE: '1',
+  JWT_SECRET: randomUUID(), CHECKPOINT_DISABLE: '1', BACKUP_STORAGE: 'local', VERCEL: '0',
 };
 const runNode = (args) => new Promise((resolve, reject) => {
   const child = spawn(process.execPath, args, { cwd: backendRoot, env: testEnv, stdio: 'inherit' });

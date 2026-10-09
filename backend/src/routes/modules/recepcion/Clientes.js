@@ -2,15 +2,15 @@
 import { Router } from 'express';
 import { getClientes, createCliente, updateCliente, deleteCliente } from '../../../controllers/recepcion/clientesController.js';
 import authMiddleware, { requirePermission } from '../../../middlewares/authMiddleware.js';
-import { PERMISSIONS } from '../../../utils/permissions.js';
+import { PERMISSIONS, requireAnyPermission } from '../../../utils/permissions.js';
 
 const router = Router();
 
-router.use(authMiddleware, requirePermission(PERMISSIONS.CLIENTES_GESTIONAR));
+router.use(authMiddleware);
 
-router.get('/', getClientes);
-router.post('/', createCliente);
-router.put('/:id', updateCliente);
-router.delete('/:id', deleteCliente);
+router.get('/', requireAnyPermission(PERMISSIONS.CLIENTES_GESTIONAR, PERMISSIONS.ORDENES_GESTIONAR), getClientes);
+router.post('/', requirePermission(PERMISSIONS.CLIENTES_GESTIONAR), createCliente);
+router.put('/:id', requirePermission(PERMISSIONS.CLIENTES_GESTIONAR), updateCliente);
+router.delete('/:id', requirePermission(PERMISSIONS.CLIENTES_GESTIONAR), deleteCliente);
 
 export default router;

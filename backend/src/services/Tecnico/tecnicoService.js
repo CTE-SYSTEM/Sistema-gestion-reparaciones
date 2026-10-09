@@ -157,6 +157,7 @@ export const completarDiagnostico = async (diagnosticoId, payload, user) => {
         presupuesto_estimado: presupuestoEstimado,
         moneda_presupuesto: monedaPresupuesto(payload.moneda_presupuesto, actual.moneda_presupuesto),
         estado_del_diagnostico: 'COMPLETADO',
+        calidad_estado: 'PENDIENTE',
         fecha_completado: new Date(),
       },
       include: diagnosticoInclude,
@@ -671,7 +672,7 @@ export const resumenTecnico = async (user, query = {}) => {
     prisma.diagnosticos.count({ where: filtroTrabajo('diagnostico', id, { ...query, grupo: 'completados' }) }),
     prisma.ordenes.count({ where: filtroTrabajo('orden', id, query) }),
     prisma.ordenes.count({ where: filtroTrabajo('orden', id, { ...query, grupo: 'completados' }) }),
-    prisma.ordenes_Repuestos.count({ where: { orden: { tecnico_id: id }, AND: [filtroFecha(['fecha_solicitud'], query.periodo)], OR: [{ estado_aprobacion: 'PENDIENTE' }, { estado_aprobacion: 'APROBADO', estado_entrega: 'PENDIENTE' }] } }),
+    prisma.ordenes_Repuestos.count({ where: { orden: { tecnico_id: id }, AND: [filtroFecha(['fecha_solicitud'], query.periodo)], OR: [{ estado_aprobacion: 'PENDIENTE' }, { estado_aprobacion: 'APROBADO', estado_entrega: { in: ['PENDIENTE', 'SIN_EXISTENCIA'] } }] } }),
     prisma.diagnosticos.count({ where: filtroTrabajo('diagnostico', id, { ...query, grupo: 'por_iniciar' }) }),
     prisma.ordenes.count({ where: filtroTrabajo('orden', id, { ...query, grupo: 'por_iniciar' }) }),
     prisma.ordenes.count({ where: filtroTrabajo('orden', id, { ...query, grupo: 'esperando_piezas' }) }),
@@ -686,7 +687,8 @@ export const misSolicitudes = async (user, query = {}) => {
   if (!t) fail(403, 'Técnico no encontrado');
   const p = parsePagination(query), search = String(query.search || '').trim().slice(0, 120);
   const where = { AND: [{ orden: { tecnico_id: t.id_tecnico } }, filtroFecha(['fecha_solicitud'], query.periodo),
-    ...(query.estado ? query.estado === 'POR_ENTREGAR' ? [{ estado_aprobacion: 'APROBADO', estado_entrega: 'PENDIENTE' }] : [{ estado_aprobacion: query.estado }] : []),
+    ...(query.estado ? query.estado === 'POR_ENTREGAR' ? [{ estado_aprobacion: 'APROBADO', estado_entrega: 'PENDIENTE' }]
+      : query.estado === 'SIN_EXISTENCIA' ? [{ estado_entrega: 'SIN_EXISTENCIA' }] : [{ estado_aprobacion: query.estado }] : []),
     ...(search ? [{ OR: [{ pieza_solicitada: { contains: search, mode: 'insensitive' } }, { repuesto: { nombre: { contains: search, mode: 'insensitive' } } }, ...(Number.isInteger(Number(search)) ? [{ orden_id: Number(search) }] : [])] }] : []),
   ] };
   const [rows, total] = await Promise.all([

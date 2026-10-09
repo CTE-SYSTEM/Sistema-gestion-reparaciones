@@ -56,6 +56,9 @@ export const notificationRole = (role) => {
   return ['administrador', 'adminpro', 'admin'].includes(normalized) ? 'administrador' : normalized;
 };
 
+// El perfil integral atiende estas áreas sin recibir avisos privados del técnico o del jefe.
+const secretaryAreas = new Set(['recepcion', 'serviciocliente', 'bodega', 'calidad', 'reclamos', 'garantias', 'contabilidad']);
+
 const technicalTitles = {
   diagnostico_asignado: 'Nuevo diagnóstico asignado', diagnostico_actualizado: 'Diagnóstico actualizado',
   orden_asignado: 'Nueva reparación asignada', prioridad_actualizada: 'Prioridad actualizada',
@@ -63,7 +66,9 @@ const technicalTitles = {
   orden_cerrada: 'Finalización registrada', irreparable_revisado: 'Irreparabilidad revisada',
   repuesto_aprobar: 'Pieza aprobada', repuesto_rechazar: 'Pieza rechazada',
   repuesto_entregar: 'Pieza entregada', repuesto_corregir: 'Solicitud de pieza actualizada',
+  repuesto_sin_existencia: 'Pieza sin existencias', repuesto_disponibilidad_revisada: 'Existencia de pieza revisada',
   calidad_rechazada: 'Control de calidad solicita corrección',
+  calidad_diagnostico_error: 'Calidad encontró un error en el diagnóstico',
   'repuesto_retirar-aprobacion': 'Aprobación de pieza retirada', repuesto_reabrir: 'Solicitud de pieza en revisión',
   'repuesto_corregir-entrega': 'Entrega de pieza corregida', repuesto_devolver: 'Devolución de pieza registrada',
 };
@@ -79,13 +84,17 @@ const technicalPayload = (payload) => {
   } : null;
   return {
     type: Object.hasOwn(technicalTitles, payload.type) ? payload.type : 'trabajo_actualizado',
-    title, message: `${title}${entity?.orden_id || entity?.id ? ` · Referencia #${entity.orden_id || entity.id}` : ''}. Consulta el expediente técnico.`,
+    title, message: ['repuesto_entregar', 'repuesto_sin_existencia', 'repuesto_disponibilidad_revisada', 'calidad_rechazada', 'calidad_diagnostico_error'].includes(payload.type)
+      ? String(payload.message || title).slice(0, 500)
+      : `${title}${entity?.orden_id || entity?.id ? ` · Referencia #${entity.orden_id || entity.id}` : ''}. Consulta el expediente técnico.`,
     severity: ['info', 'success', 'warning', 'error'].includes(payload.severity) ? payload.severity : 'info', entity,
   };
 };
 
 const deliver = async (role, payload, userId) => {
   const targetRole = notificationRole(role);
+  // Servicio al Cliente recibe avisos cuando puede crear una orden o emitir una factura.
+  if (targetRole === 'serviciocliente' && !['diagnostico_completado', 'calidad_aprobada', 'irreparable_confirmado'].includes(payload.type)) return null;
   const notification = {
     ...(targetRole === 'tecnico' ? technicalPayload(payload) : payload),
     id: randomUUID(), timestamp: new Date().toISOString(), destinatario_rol: targetRole,
@@ -109,8 +118,16 @@ const deliver = async (role, payload, userId) => {
   }
 };
 
-export const notifyRole = (role, payload) => deliver(role, payload);
-export const notifyRoles = async (roles, payload) => Promise.all(roles.map((role) => notifyRole(role, payload)));
+const deliverRoles = async (roles, payload) => {
+  const targets = [...new Set(roles.map(notificationRole))];
+  const areas = targets.filter((role) => secretaryAreas.has(role));
+  if (areas.length && !targets.includes('secretaria')) targets.push('secretaria');
+  return Promise.all(targets.map((role) => deliver(role,
+    role === 'secretaria' && areas.length ? { ...payload, areas_origen: areas } : payload)));
+};
+
+export const notifyRole = async (role, payload) => (await deliverRoles([role], payload))[0];
+export const notifyRoles = (roles, payload) => deliverRoles(roles, payload);
 export const notifyJefeTecnico = (payload) => notifyRole('TecnicoJefe', payload);
 export const notifyTecnico = (tecnico, payload) => {
   if (!Number.isSafeInteger(tecnico?.usuario_id) || tecnico.usuario_id < 1) return Promise.resolve(null);

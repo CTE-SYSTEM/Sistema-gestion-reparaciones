@@ -14,7 +14,7 @@ if (!databaseName) {
   assert.ok(['db', 'localhost', '127.0.0.1', '[::1]'].includes(url.hostname));
   const { default: app } = await import('../../src/app/app.js');
   const { default: prisma } = await import('../../src/app/prismaClient.js');
-  const { notifyRole, notifyJefeTecnico, notifyTecnico, initializeNotifications } = await import('../../src/services/notifications.js');
+  const { notifyRole, notifyRoles, notifyJefeTecnico, notifyTecnico, initializeNotifications } = await import('../../src/services/notifications.js');
   let server, base, io, jefe, otroJefe, secretaria, tecnico, otroTecnico, inactive, admin;
   const account = async (name, rol, active = true) => {
     const user = await prisma.usuarios.create({ data: { nombre_usuario: name, rol, activo: active, contrasena_hash: 'sin-login-pruebas' } });
@@ -81,6 +81,28 @@ if (!databaseName) {
     await api('/notificaciones/leidas', { method: 'PATCH', body: { ids: ['inválido'] }, status: 400 });
     const adminNotice = await notifyRole('Administrador', { type: 'prueba', title: 'Aviso administrativo', message: 'Contexto administrativo' });
     assert.ok((await api('/notificaciones', { actor: admin })).data.some((item) => item.id === adminNotice.id));
+  });
+  test('Avisos: Secretaría recibe cada área integral una vez y conserva el origen', async () => {
+    const areas = ['Recepcion', 'ServicioCliente', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad'];
+    for (const role of areas) {
+      const actor = await account(`area_avisos_${role.toLowerCase()}`, role);
+      const type = role === 'ServicioCliente' ? 'diagnostico_completado' : `aviso_${role.toLowerCase()}`;
+      await notifyRole(role, { type, title: `Aviso ${role}`, message: `Actividad de ${role}` });
+      const stored = await prisma.notificaciones.findMany({ where: { usuario_id: secretaria.id_usuario } });
+      const copy = stored.find((entry) => entry.contenido.type === type);
+      assert.ok(copy, `Falta aviso de ${role} para Secretaría`);
+      assert.equal(copy.contenido.destinatario_rol, 'secretaria');
+      assert.deepEqual(copy.contenido.areas_origen, [role.toLowerCase()]);
+      if (role !== 'ServicioCliente') assert.ok((await api('/notificaciones', { actor })).data.some((item) => item.type === type));
+    }
+    await notifyRoles(['Secretaria', 'Bodega', 'Calidad'], { type: 'aviso_compartido', title: 'Aviso conjunto', message: 'Una sola copia' });
+    const copies = (await prisma.notificaciones.findMany({ where: { usuario_id: secretaria.id_usuario } }))
+      .filter((entry) => entry.contenido.type === 'aviso_compartido');
+    assert.equal(copies.length, 1);
+    assert.deepEqual(copies[0].contenido.areas_origen, ['bodega', 'calidad']);
+    assert.ok((await api('/notificaciones', { actor: secretaria })).data.some((item) => item.type === 'aviso_compartido'));
+    const privateNotice = await notifyTecnico(tecnico.perfil, { type: 'orden_asignado', entity: { kind: 'orden', id: 765 } });
+    assert.equal((await prisma.notificaciones.count({ where: { usuario_id: secretaria.id_usuario, id: privateNotice.id } })), 0);
   });
   test('Avisos: más de 25 pendientes mantienen el total y las lecturas muestran el siguiente grupo', async () => {
     const before = (await api('/notificaciones', { actor: secretaria })).total;

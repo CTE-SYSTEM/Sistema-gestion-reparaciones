@@ -3,11 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { FileDown, FileSpreadsheet, Search, BarChart3 } from 'lucide-react';
 import { administracionService, errorText, saveBlob } from '../services/administracionService';
 import { downloadSectionedPdf } from '../utils/csvExport';
+import { reportFilename, reportIdentity, reportPeriod } from '../utils/reportIdentity';
 import { AdminPage, AdminSection, AdminField, AdminButton, AdminNotice, AdminDataTable, inputClass, formatAdminDate } from '../components/AdministrationUI';
 
 const filterKeys = { fechas: ['fecha_inicio', 'fecha_fin'], tecnico: ['tecnico_id'], proveedor: ['proveedor_id'], cliente: ['cliente_id'], equipo: ['equipo_id'], repuesto: ['repuesto_id'], orden: ['orden_id'], dias: ['dias'], year: ['year'], estado_orden: ['estado'], estado_garantia: ['estado'] };
 const requiredFilters = ['equipo', 'repuesto', 'orden'];
 const orderStates = ['PENDIENTE', 'ASIGNADO', 'APROBADO', 'EN_REPARACION', 'ESPERANDO_PIEZA', 'FINALIZADO', 'IRREPARABLE', 'ENTREGADO', 'CANCELADO'];
+const financeLabels = { facturado: 'Facturado', compras_registradas: 'Compras registradas', entradas_caja: 'Entradas de caja', salidas_caja: 'Salidas de caja', neto_caja: 'Neto de caja' };
+const money = (value) => `C$ ${Number(value || 0).toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export default function Reportes() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [catalog, setCatalog] = useState([]), [options, setOptions] = useState({});
@@ -31,6 +34,7 @@ export default function Reportes() {
     return () => { controller.abort(); request.current?.abort(); generation.current++; };
   }, []);
   const definition = catalog.find((r) => r.id === selected);
+  const resultIdentity = result ? reportIdentity(result.reporte) : null;
   const categories = useMemo(() => [...new Set(catalog.map((r) => r.categoria))], [catalog]);
   const invalidate = () => { generation.current++; request.current?.abort(); setResult(null); setPage(1); setLoading(false); setError(''); };
   const selectReport = (id) => { invalidate(); setSelected(id); const report = catalog.find((r) => r.id === id);
@@ -53,12 +57,18 @@ export default function Reportes() {
   const exportReport = async (format) => {
     setExporting(format); setError('');
     try {
+      const chosenFilters = params();
       if (format === 'xlsx') {
-        const { data } = await administracionService.getReporteExcel(selected, params()); saveBlob(data, `${selected}.xlsx`);
+        const { data } = await administracionService.getReporteExcel(selected, chosenFilters);
+        saveBlob(data, reportFilename(definition, chosenFilters, 'xlsx'));
       } else {
-        const { data } = await administracionService.getReporte(selected, params());
-        downloadSectionedPdf({ title: data.reporte.nombre, filename: `${selected}.pdf`, description: data.nota || data.reporte.descripcion,
-          metadata: [{ label: 'Generado', value: formatAdminDate(data.generado_en) }, { label: 'Registros', value: data.total },
+        const { data } = await administracionService.getReporte(selected, chosenFilters);
+        const { area, type } = reportIdentity(data.reporte);
+        downloadSectionedPdf({ title: data.reporte.nombre, filename: reportFilename(data.reporte, data.filtros, 'pdf', data.generado_en), description: data.nota || data.reporte.descripcion,
+          metadata: [{ label: 'Área', value: area }, ...(type ? [{ label: 'Tipo', value: type }] : []),
+            ...(reportPeriod(data.filtros) ? [{ label: 'Período', value: reportPeriod(data.filtros) }] : []),
+            { label: 'Generado', value: formatAdminDate(data.generado_en) }, { label: 'Registros', value: data.total },
+            ...Object.entries(data.resumen_financiero || {}).map(([key, value]) => ({ label: financeLabels[key], value: money(value) })),
             ...Object.entries(data.filtros).map(([k, v]) => ({ label: k.replaceAll('_', ' '), value: String(v) }))],
           sections: [{ title: data.reporte.nombre, rows: data.data, columns: data.columns }] });
       }
@@ -90,8 +100,9 @@ export default function Reportes() {
           </div></fieldset><AdminButton type="submit" disabled={initializing || loading || missingRequired || Boolean(exporting)}><Search size={16} />{loading ? 'Consultando…' : 'Consultar reporte'}</AdminButton>
         </form>}
     </AdminSection>
-    {result ? <AdminSection title={result.reporte.nombre} description={`${result.total} registros · Consulta: ${formatAdminDate(result.generado_en)}`}>
+    {result ? <AdminSection title={result.reporte.nombre} description={[resultIdentity.area, resultIdentity.type, reportPeriod(result.filtros), `${result.total} registros`, `Generado: ${formatAdminDate(result.generado_en)}`].filter(Boolean).join(' · ')}>
       {(result.filtros.fecha_inicio || result.filtros.fecha_fin) && <p className="mb-4 text-sm text-slate-600">Período aplicado: {result.filtros.fecha_inicio || 'sin fecha inicial'} al {result.filtros.fecha_fin || 'sin fecha final'}.</p>}
+      {result.resumen_financiero && <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{Object.entries(result.resumen_financiero).map(([key, value]) => <div key={key} className="rounded-xl border bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-600">{financeLabels[key]}</p><p className="mt-1 text-lg font-black text-slate-900">{money(value)}</p></div>)}</div>}
       <div className="mb-4 flex flex-wrap gap-2"><AdminButton secondary disabled={Boolean(exporting) || !result.total} onClick={() => exportReport('xlsx')}><FileSpreadsheet size={16} />{exporting === 'xlsx' ? 'Generando…' : 'Descargar Excel'}</AdminButton><AdminButton secondary disabled={Boolean(exporting) || !result.total} onClick={() => exportReport('pdf')}><FileDown size={16} />{exporting === 'pdf' ? 'Generando…' : 'Descargar PDF'}</AdminButton></div>
       {result.nota && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{result.nota}</p>}
       <AdminDataTable rows={result.data} columns={result.columns} page={page} onPageChange={setPage} />

@@ -113,6 +113,9 @@ public
 tmp/
 temp/
 
+# Documento local con contraseñas de perfiles de prueba.
+docs/perfiles-del-sistema.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

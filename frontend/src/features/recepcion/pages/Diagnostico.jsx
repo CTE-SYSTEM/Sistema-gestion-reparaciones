@@ -277,7 +277,7 @@ const Diagnostico = () => {
     setMessage(null);
     let savedId = savedPhotoDiagnosisId || currentId;
     let diagnosisSaved = false;
-    const resultLabel = savedPhotoDiagnosisId ? `Diagnóstico #${savedPhotoDiagnosisId}` : isEditing ? 'Diagnóstico actualizado' : 'Diagnóstico de ingreso generado';
+    const resultLabel = savedPhotoDiagnosisId ? `Diagnóstico #${savedPhotoDiagnosisId}` : isEditing ? `Recepción del diagnóstico #${currentId} modificada` : 'Diagnóstico de ingreso generado';
     try {
       if (!savedPhotoDiagnosisId) {
         if (isEditing) {
@@ -367,7 +367,7 @@ const Diagnostico = () => {
     )}
 
     {message && (
-      <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-lg flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2 text-left">
+      <div role="status" className="fixed right-4 top-20 z-50 flex max-w-md items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left text-sm font-semibold text-emerald-800 shadow-lg animate-in fade-in slide-in-from-top-2">
         <CheckCircle2 className="w-4 h-4 shrink-0" />
         <span>{message}</span>
       </div>

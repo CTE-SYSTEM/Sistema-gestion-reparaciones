@@ -1,4 +1,5 @@
 const idPattern = /^[a-z0-9-]{1,60}$/;
+export const neonSnapshotConfigured = () => Boolean(process.env.NEON_API_KEY && idPattern.test(process.env.NEON_PROJECT_ID || '') && idPattern.test(process.env.NEON_BRANCH_ID || ''));
 
 const config = () => {
   const { NEON_API_KEY, NEON_PROJECT_ID, NEON_BRANCH_ID } = process.env;
@@ -10,11 +11,12 @@ const config = () => {
   return { token: NEON_API_KEY, project: NEON_PROJECT_ID, branch: NEON_BRANCH_ID };
 };
 
-const callNeon = async (method, path) => {
+const callNeon = async (method, path, payload) => {
   const { token } = config();
   const response = await fetch(`https://console.neon.tech/api/v2${path}`, {
-    method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    signal: AbortSignal.timeout(30000),
+    method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(payload ? { 'Content-Type': 'application/json' } : {}) },
+    body: payload ? JSON.stringify(payload) : undefined,
+    signal: AbortSignal.timeout(120000),
   });
   if (!response.ok) {
     const error = new Error(`Neon rechazó la operación de respaldo (${response.status}). Revise el plan, los permisos y los identificadores.`);
@@ -46,4 +48,17 @@ export const deleteNeonSnapshot = async (id) => {
   if (!idPattern.test(id || '')) throw new Error('Instantánea de Neon inválida.');
   const { project } = config();
   await callNeon('DELETE', `/projects/${project}/snapshots/${id}`);
+};
+
+export const restoreNeonSnapshot = async (snapshot) => {
+  const { project, branch } = config();
+  if (!idPattern.test(snapshot?.id || '') || snapshot.project !== project || snapshot.branch !== branch) {
+    const error = new Error('La instantánea no corresponde a esta base de datos.');
+    error.status = 409;
+    throw error;
+  }
+  return callNeon('POST', `/projects/${project}/snapshots/${snapshot.id}/restore`, {
+    target_branch_id: branch,
+    finalize_restore: true,
+  });
 };

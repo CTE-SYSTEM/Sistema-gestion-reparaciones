@@ -119,8 +119,8 @@ La autorización de fotos verifica la relación con el diagnóstico u orden; con
 | Clientes | [clientesController.js](src/controllers/recepcion/clientesController.js). | Datos de cliente, búsqueda y paginación. |
 | Equipos | [equiposController.js](src/controllers/recepcion/equiposController.js), [equipoService.js](src/services/recepcion/equipoService.js). | Asociación a cliente, tipo, marca, modelo y serie. |
 | Diagnóstico | [diagnosticoController.js](src/controllers/recepcion/diagnosticoController.js), [diagnosticoService.js](src/services/recepcion/diagnosticoService.js). | Recepción, edición, filtros y estado técnico. |
-| Órdenes | [nuevaOrdenController.js](src/controllers/recepcion/nuevaOrdenController.js), [ordenService.js](src/services/recepcion/ordenService.js). | Diagnósticos listos, creación, monto autorizado y órdenes. |
-| Contacto y salida | [flujoServicioController.js](src/controllers/recepcion/flujoServicioController.js). | PDF, contacto, historial, retiro, entrega y cancelación. |
+| Órdenes | [nuevaOrdenController.js](src/controllers/servicioCliente/nuevaOrdenController.js), [ordenService.js](src/services/servicioCliente/ordenService.js). | Diagnósticos listos, creación, monto autorizado y órdenes. |
+| Contacto y salida | [flujoServicioController.js](src/controllers/servicioCliente/flujoServicioController.js). | PDF, contacto, historial, retiro, entrega y cancelación. |
 | Fotos | [archivosServicioController.js](src/controllers/servicios/archivosServicioController.js), [fotoStorage.js](src/services/archivos/fotoStorage.js). | Permisos, MIME, R2/local, nombres, escritura y lectura. |
 | Inventario | [repuestoController.js](src/controllers/bodega/repuestoController.js), [tipoRepuestoController.js](src/controllers/bodega/tipoRepuestoController.js). | Catálogo, categorías y disponibilidad. |
 | Compras | [comprasController.js](src/controllers/bodega/comprasController.js), [proveedoresController.js](src/controllers/bodega/proveedoresController.js). | Abastecimiento y proveedores. |
@@ -143,7 +143,8 @@ Los prefijos se montan en [app.js](src/app/app.js). Consulta los archivos de rut
 | `/api/clientes` | Consulta y gestión de clientes. | [Clientes.js](src/routes/modules/recepcion/Clientes.js). |
 | `/api/equipos` | Consulta y gestión de equipos. | [Equipos.js](src/routes/modules/recepcion/Equipos.js). |
 | `/api/recepcion/diagnostico` (alias `/api/secretaria/diagnostico`) | Recepción, edición, estados, contacto, PDF y retiro. | [Diagnostico.js](src/routes/modules/recepcion/Diagnostico.js). |
-| `/api/ordenes` | Diagnósticos listos, órdenes, entrega, cancelación e historial. | [NuevaOrden.js](src/routes/modules/recepcion/NuevaOrden.js). |
+| `/api/servicio-cliente/diagnostico` | Contacto, respuesta del cliente, PDF y retiro sin reparar. | [Contacto.js](src/routes/modules/servicioCliente/Contacto.js). |
+| `/api/ordenes` | Diagnósticos listos, órdenes, entrega, cancelación e historial. | [NuevaOrden.js](src/routes/modules/servicioCliente/NuevaOrden.js). |
 | `/api/archivos-servicio` | Fotografías y descarga autenticada. | [ArchivosServicio.js](src/routes/modules/servicios/ArchivosServicio.js). |
 | `/api/tecnicos` | Catálogo y trabajo asignado a técnicos. | [tecnicos.js](src/routes/modules/Tecnico/tecnicos.js). |
 | `/api/jefe-tecnico` | Supervisión, asignaciones, prioridades, disponibilidad, repuestos y excepciones. | [Supervision.js](src/routes/modules/JefeTecnico/Supervision.js). |
@@ -193,8 +194,8 @@ Usa [.env.example](.env.example) como plantilla. Los secretos y conexiones reale
 | `JWT_SECRET` | Firma de tokens. Producción rechaza el secreto de ejemplo. |
 | `CORS_ORIGIN`, `FRONTEND_URL` | Orígenes permitidos; se admiten listas separadas por comas. |
 | `REQUEST_BODY_LIMIT` | Límite de JSON/formularios; predeterminado `1mb`. Las fotos tienen su propio límite. |
-| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | Clave privada y remitente verificado para correos transaccionales, incluida la recuperación de contraseña. |
-| `BREVO_SENDER_NAME`, `BREVO_REPLY_TO_EMAIL` | Nombre visible del remitente y dirección opcional para respuestas. |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Clave privada y remitente de un dominio verificado en Resend para correos transaccionales, incluida la recuperación de contraseña. |
+| `RESEND_FROM_NAME`, `RESEND_REPLY_TO_EMAIL` | Nombre visible del remitente y dirección opcional para respuestas. |
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Configuración completa de almacenamiento R2. |
 | `R2_ENDPOINT` | Endpoint S3 opcional de la cuenta, sin ruta de bucket ni parámetros. |
 | `SERVICE_UPLOAD_DIR` | Destino local de fotografías; predeterminado `uploads/servicios`. |

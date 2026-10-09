@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Autocomplete from '../../shared/components/Autocomplete';
-import { getClientes } from '../services/clientesService';
-import { getEquipos } from '../services/equiposService';
+import { getClientes } from '../../recepcion/services/clientesService';
+import { getEquipos } from '../../recepcion/services/equiposService';
 import { createOrdenDirecta } from '../services/ordenesService';
 
 export default function OrdenDirectaForm({ onCreated, onCancel }) {

@@ -1,4 +1,4 @@
-// frontend/src/features/secretaria/services/ordenesService.js
+// Servicio al Cliente: órdenes y entregas.
 import api from '../../../services/api';
 
 export const getOrdenes = (params = {}) => api.get('/ordenes', { params, cache: false });

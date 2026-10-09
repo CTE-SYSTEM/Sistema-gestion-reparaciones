@@ -1,27 +1,36 @@
 // backend/src/controllers/Secretaria/garantiasController.js
 import prisma from '../../app/prismaClient.js';
-import { notifyRoles } from '../../services/notifications.js';
-import { normalizeOptionalText, parsePositiveId } from '../../utils/domainValidation.js';
+import { parsePositiveId } from '../../utils/domainValidation.js';
+import { getBusinessSettings, recordAdminAction } from '../../services/adminSettingsService.js';
+import { withAuditUser } from '../../utils/auditContext.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
 
 export const getGarantias = async (req, res) => {
   try {
     const { page, pageSize, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim();
-    const where = search
-      ? {
+    const estado = String(req.query.estado || 'TODAS').toUpperCase();
+    const now = new Date();
+    const where = {
+      ...(estado === 'VIGENTES' ? { fecha_inicio: { lte: now }, fecha_vencimiento: { gte: now } } : {}),
+      ...(estado === 'VENCIDAS' ? { fecha_vencimiento: { lt: now } } : {}),
+      ...(estado === 'PENDIENTES' ? { fecha_inicio: null } : {}),
+      ...(search ? {
           OR: [
-            ...(Number.isInteger(Number(search)) ? [{ id_garantia: Number(search) }] : []),
+            ...(/^\d+$/.test(search) && Number(search) <= 2147483647 ? [{ id_garantia: Number(search) }, { factura_id: Number(search) }] : []),
             { condiciones: { contains: search, mode: 'insensitive' } },
             { factura: { metodo_pago: { contains: search, mode: 'insensitive' } } },
             { factura: { orden: { diagnostico: { equipo: { cliente: { nombre: { contains: search, mode: 'insensitive' } } } } } } },
+            { factura: { orden: { diagnostico: { equipo: { marca: { contains: search, mode: 'insensitive' } } } } } },
+            { factura: { orden: { diagnostico: { equipo: { modelo: { contains: search, mode: 'insensitive' } } } } } },
           ],
-        }
-      : {};
+        } : {}),
+    };
     const [garantiasRows, total] = await Promise.all([
       prisma.garantias.findMany({
         where,
         include: {
+          reclamos: { select: { id_reclamo: true, cobertura: true, estado: true, fecha_apertura: true }, orderBy: { id_reclamo: 'desc' } },
           factura: {
             include: {
               orden: {
@@ -61,9 +70,10 @@ export const getGarantias = async (req, res) => {
 
 export const createGarantia = async (req, res) => {
   try {
-    const { factura_id, condiciones, duracion_meses } = req.body;
+    const { factura_id } = req.body;
     const facturaId = parsePositiveId(factura_id);
-    const duracionMeses = Number(duracion_meses);
+    const { negocio } = await getBusinessSettings();
+    const duracionMeses = negocio.garantia_meses;
 
     if (!facturaId) {
       return res.status(400).json({ error: 'La factura es obligatoria' });
@@ -96,7 +106,7 @@ export const createGarantia = async (req, res) => {
     const nuevaGarantia = await prisma.garantias.create({
       data: {
         factura_id: facturaId,
-        condiciones: normalizeOptionalText(condiciones),
+        condiciones: negocio.garantia_condiciones,
         duracion_meses: duracionMeses,
         fecha_inicio,
         fecha_vencimiento,
@@ -106,11 +116,6 @@ export const createGarantia = async (req, res) => {
       },
     });
 
-    await notifyRoles(['Secretaria', 'Recepcion', 'Contabilidad'], {
-      type: 'garantia_registrada', title: 'Garantía registrada',
-      message: `La garantía #${nuevaGarantia.id_garantia} de la factura #${facturaId} fue registrada.`,
-      entity: { kind: 'garantia', id: nuevaGarantia.id_garantia },
-    });
     res.status(201).json({
       message: 'Garantia generada exitosamente',
       data: nuevaGarantia,
@@ -125,6 +130,27 @@ export const createGarantia = async (req, res) => {
     }
     res.status(500).json({ error: 'No se pudo registrar la garantia' });
   }
+};
+
+export const revalidarGarantia = async (req, res) => {
+  try {
+    const id = parsePositiveId(req.params.id);
+    const meses = Number(req.body?.meses);
+    const motivo = String(req.body?.motivo || '').trim();
+    if (!id || !Number.isInteger(meses) || meses < 1 || meses > 36 || motivo.length < 10 || motivo.length > 1000) return res.status(400).json({ error: 'Indique meses (1 a 36) y motivo de 10 a 1000 caracteres' });
+    const result = await withAuditUser(req.user, async (tx) => {
+      await tx.$queryRaw`SELECT id_garantia FROM "Garantias" WHERE id_garantia = ${id} FOR UPDATE`;
+      const existing = await tx.garantias.findUnique({ where: { id_garantia: id } });
+      if (!existing) throw Object.assign(new Error('Garantía no encontrada'), { statusCode: 404 });
+      if (!existing.fecha_inicio || !existing.fecha_vencimiento) throw Object.assign(new Error('La garantía comienza al entregar el equipo; todavía no puede revalidarse'), { statusCode: 409 });
+      const base = new Date(Math.max(Date.now(), new Date(existing.fecha_vencimiento).getTime()));
+      const vencimiento = new Date(base); vencimiento.setUTCMonth(vencimiento.getUTCMonth() + meses);
+      const updated = await tx.garantias.update({ where: { id_garantia: id }, data: { fecha_vencimiento: vencimiento, duracion_meses: Number(existing.duracion_meses || 0) + meses } });
+      await recordAdminAction(req.user, 'Garantias', 'REVALIDACION', { id_garantia: id, fecha_vencimiento: existing.fecha_vencimiento }, { fecha_vencimiento: vencimiento, meses }, motivo, tx);
+      return updated;
+    });
+    res.json({ data: result });
+  } catch (error) { res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo revalidar la garantía' }); }
 };
 
 export const getGarantiaByFactura = async (req, res) => {

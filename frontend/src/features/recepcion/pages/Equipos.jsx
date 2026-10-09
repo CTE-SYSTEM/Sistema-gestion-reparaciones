@@ -56,7 +56,7 @@ const tourSteps = [
   { target: 'client', title: '2. Confirmar cliente', text: 'Primero confirma el cliente correcto. La verificacion muestra telefono e ID para reducir errores antes de guardar.' },
   { target: 'details', title: '3. Datos seguros', text: 'Tipo, marca y modelo son obligatorios. Las sugerencias de marca y modelo se filtran por el tipo de equipo seleccionado.' },
   { target: 'actions', title: '4. Guardar o seguir', text: 'Guardar Equipo registra el aparato y vuelve a la lista. Guardar y Seguir registra el aparato y abre Diagnostico con cliente y equipo seleccionados.' },
-  { target: 'search', title: '5. Buscar por cliente', text: 'El buscador filtra por nombre del cliente para encontrar rapidamente sus equipos.' },
+  { target: 'search', title: '5. Buscar equipos', text: 'Busca por cliente, tipo, marca, modelo o número de serie para encontrar el equipo correcto.' },
   { target: 'table', title: '6. Revisar y editar', text: 'La tabla permite revisar y editar equipos. No se elimina desde secretaria para evitar perdida accidental de registros.' },
 ];
 
@@ -504,7 +504,7 @@ const Equipos = () => {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input 
           type="text" 
-          placeholder="Buscar por nombre del cliente..." 
+          placeholder="Buscar cliente, tipo, marca, modelo o serie..."
           value={searchTerm} 
           onChange={(e) => setSearchTerm(e.target.value)} 
           className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-all" 

@@ -1,4 +1,4 @@
-// backend/src/routes/modules/secretaria/NuevaOrden.js
+// Órdenes y entregas del área de Servicio al Cliente.
 import express from 'express';
 const router = express.Router();
 import {
@@ -8,10 +8,10 @@ import {
   getDiagnosticosListosParaOrden,
   getOrdenes,
   updateOrden,
-} from '../../../controllers/recepcion/nuevaOrdenController.js';
+} from '../../../controllers/servicioCliente/nuevaOrdenController.js';
 import authMiddleware, { requirePermission } from '../../../middlewares/authMiddleware.js';
 import { PERMISSIONS } from '../../../utils/permissions.js';
-import { cancelarOrden, getHistorialOrden, registrarEntregaOrden } from '../../../controllers/recepcion/flujoServicioController.js';
+import { cancelarOrden, getHistorialOrden, registrarEntregaOrden } from '../../../controllers/servicioCliente/flujoServicioController.js';
 
 router.use(authMiddleware, requirePermission(PERMISSIONS.ORDENES_GESTIONAR));
 

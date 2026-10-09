@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
+import { Search } from 'lucide-react';
 
 const COLUMNS = [
   { header: 'Cliente', accessor: 'cliente' },
@@ -16,7 +16,6 @@ export default function ClientesAvanzado() {
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [downloading, setDownloading] = useState(false);
 
   // Estados para el buscador multiparámetro
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,29 +71,6 @@ export default function ClientesAvanzado() {
     });
   }, [clientes, searchTerm, searchParam]);
 
-  // Handlers para Descargas de Reportes utilizando la lista filtrada
-  const downloadClientesCsv = async () => {
-    setDownloading(true);
-    try {
-      await downloadJsonExcel(clientesFiltrados, COLUMNS, 'clientes_equipos.xlsx');
-    } catch (err) {
-      setError('No se pudo descargar el reporte en Excel.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const downloadClientesPdf = () => {
-    setDownloading(true);
-    try {
-      downloadJsonPdf(clientesFiltrados, COLUMNS, 'clientes_equipos.pdf', 'Clientes y equipos');
-    } catch (err) {
-      setError('No se pudo descargar el reporte en PDF.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   // Cálculos derivados del estado en tiempo real (basados en los datos filtrados)
   const totalEquiposGarantia = clientesFiltrados.reduce((total, item) => total + (item.raw_equipos || 0), 0);
   const totalOrdenesAsignadas = clientesFiltrados.reduce((total, item) => total + (item.raw_ordenes || 0), 0);
@@ -129,7 +105,7 @@ export default function ClientesAvanzado() {
       {/* Contenedor Principal de la Tabla */}
       <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 space-y-4">
         
-        {/* Barra de Herramientas: Título, Buscador y Exportaciones */}
+        {/* Barra de herramientas y búsqueda */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-gray-50 pb-4">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Resumen de clientes</h2>
@@ -139,6 +115,7 @@ export default function ClientesAvanzado() {
           {/* Bloque de Búsqueda y Filtros */}
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
             <div className="flex flex-1 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition">
+              <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
               <select
                 value={searchParam}
                 onChange={(e) => setSearchParam(e.target.value)}
@@ -149,8 +126,9 @@ export default function ClientesAvanzado() {
                 <option value="telefono">Teléfono</option>
               </select>
               <input
-                type="text"
-                placeholder="Buscar..."
+                type="search"
+                aria-label="Buscar clientes"
+                placeholder={searchParam === 'cliente' ? 'Buscar por nombre del cliente...' : searchParam === 'telefono' ? 'Buscar por teléfono...' : 'Buscar cliente o teléfono...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-transparent text-sm text-slate-700 outline-none"
@@ -165,25 +143,6 @@ export default function ClientesAvanzado() {
               )}
             </div>
             
-            {/* Botones de Acción de Reportes */}
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={downloadClientesCsv}
-                disabled={downloading || loading || clientesFiltrados.length === 0}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-gray-400 whitespace-nowrap"
-              >
-                Exportar Excel
-              </button>
-              <button
-                type="button"
-                onClick={downloadClientesPdf}
-                disabled={downloading || loading || clientesFiltrados.length === 0}
-                className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition shadow-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-gray-400 whitespace-nowrap"
-              >
-                Exportar PDF
-              </button>
-            </div>
           </div>
         </div>
 

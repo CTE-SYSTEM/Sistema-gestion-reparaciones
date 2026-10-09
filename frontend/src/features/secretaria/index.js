@@ -7,4 +7,4 @@ export { default as TiposRepuestoSecretaria } from '../bodega/pages/TiposRepuest
 export { default as ComprasSecretaria } from '../bodega/pages/Compras';
 export { default as FacturacionSecretaria } from '../contabilidad/pages/Facturacion';
 export { default as DiagnosticoSecretaria } from '../recepcion/pages/Diagnostico';
-export { default as NuevaOrdenSecretaria } from '../recepcion/pages/NuevaOrden';
+export { default as NuevaOrdenSecretaria } from '../servicioCliente/pages/NuevaOrden';

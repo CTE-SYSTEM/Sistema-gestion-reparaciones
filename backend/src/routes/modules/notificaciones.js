@@ -41,16 +41,34 @@ router.get('/', async (req, res) => {
         AND o.estado = 'IRREPARABLE' AND o.irreparable_estado = 'PENDIENTE'
     ))
   )`;
+  const actionableServicio = Prisma.sql`(${role} <> 'serviciocliente' OR
+    (n.contenido->>'type' = 'diagnostico_completado' AND EXISTS (
+      SELECT 1 FROM "Diagnosticos" d WHERE d.id_diagnostico::text = (n.contenido #>> '{entity,id}')
+        AND d.estado_del_diagnostico IN ('COMPLETADO', 'DIAGNOSTICADO')
+        AND NOT EXISTS (SELECT 1 FROM "Ordenes" o WHERE o.diagnostico_id = d.id_diagnostico)
+        AND NOT EXISTS (SELECT 1 FROM "Facturas" f WHERE f.diagnostico_id = d.id_diagnostico)
+    )) OR
+    (n.contenido->>'type' = 'calidad_aprobada' AND EXISTS (
+      SELECT 1 FROM "Ordenes" o WHERE o.id_orden::text = (n.contenido #>> '{entity,id}')
+        AND o.estado = 'FINALIZADO' AND o.calidad_estado = 'APROBADO' AND o.es_garantia = false
+        AND NOT EXISTS (SELECT 1 FROM "Facturas" f WHERE f.orden_id = o.id_orden)
+    )) OR
+    (n.contenido->>'type' = 'irreparable_confirmado' AND EXISTS (
+      SELECT 1 FROM "Ordenes" o WHERE o.id_orden::text = (n.contenido #>> '{entity,id}')
+        AND o.estado = 'IRREPARABLE' AND o.irreparable_estado = 'APROBADO'
+        AND NOT EXISTS (SELECT 1 FROM "Facturas" f WHERE f.orden_id = o.id_orden)
+    ))
+  )`;
   const [rows, counts] = await prisma.$transaction([
     prisma.$queryRaw`SELECT n.contenido FROM "Notificaciones" n
       WHERE n.usuario_id = ${req.user.id} AND n.leida_en IS NULL
         AND COALESCE(n.contenido->>'destinatario_rol', 'secretaria') = ${role}
-        AND ${actionableJefe}
+        AND ${actionableJefe} AND ${actionableServicio}
       ORDER BY n.fecha_hora DESC, n.id DESC LIMIT 25`,
     prisma.$queryRaw`SELECT COUNT(*)::int AS total FROM "Notificaciones" n
       WHERE n.usuario_id = ${req.user.id} AND n.leida_en IS NULL
         AND COALESCE(n.contenido->>'destinatario_rol', 'secretaria') = ${role}
-        AND ${actionableJefe}`,
+        AND ${actionableJefe} AND ${actionableServicio}`,
   ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   res.json({ data: rows.map((row) => row.contenido), total: counts[0].total });
 });

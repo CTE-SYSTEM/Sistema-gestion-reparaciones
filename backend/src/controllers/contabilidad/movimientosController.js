@@ -2,7 +2,6 @@ import prisma from '../../app/prismaClient.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { METODOS_PAGO, parseNonNegativeMoney, parsePositiveId } from '../../utils/domainValidation.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
-import { notifyRoles } from '../../services/notifications.js';
 
 const fail = (statusCode, message) => { throw Object.assign(new Error(message), { statusCode }); };
 const errorResponse = (res, error) => res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo registrar el movimiento' });
@@ -56,8 +55,10 @@ export const crearMovimiento = async (req, res) => {
     const motivo = String(req.body?.motivo || '').trim();
     const metodo = String(req.body?.metodo || '').trim();
     const referencia = String(req.body?.referencia || '').trim();
-    if (!['COBRO', 'DEVOLUCION', 'COSTO_RECLAMO'].includes(tipo) || monto <= 0 || motivo.length < 5 || motivo.length > 2000) fail(400, 'Indique tipo, monto mayor que cero y motivo de 5 a 2000 caracteres');
-    if (tipo === 'COSTO_RECLAMO' ? !reclamoId : !facturaId) fail(400, tipo === 'COSTO_RECLAMO' ? 'Seleccione el reclamo' : 'Seleccione la factura');
+    if (!['COBRO', 'DEVOLUCION', 'COSTO_RECLAMO', 'GASTO_OPERATIVO', 'OTRO_INGRESO'].includes(tipo) || monto <= 0 || motivo.length < 5 || motivo.length > 2000) fail(400, 'Indique tipo, monto mayor que cero y motivo de 5 a 2000 caracteres');
+    if (['COBRO', 'DEVOLUCION'].includes(tipo) && !facturaId) fail(400, 'Seleccione la factura');
+    if (tipo === 'COSTO_RECLAMO' && !reclamoId) fail(400, 'Seleccione el reclamo');
+    if (['GASTO_OPERATIVO', 'OTRO_INGRESO'].includes(tipo) && (facturaId || reclamoId)) fail(400, 'Este movimiento se registra sin factura ni reclamo');
     if (tipo !== 'COSTO_RECLAMO' && !METODOS_PAGO.filter((m) => m !== 'Pendiente').includes(metodo)) fail(400, 'Seleccione un método de pago válido');
     const data = await withAuditUser(req.user, async (tx) => {
       if (reclamoId && !await tx.reclamos.findUnique({ where: { id_reclamo: reclamoId }, select: { id_reclamo: true } })) fail(404, 'Reclamo no encontrado');
@@ -74,11 +75,6 @@ export const crearMovimiento = async (req, res) => {
         usuario_id: req.user.id, metodo: tipo === 'COSTO_RECLAMO' ? null : metodo,
         referencia: referencia || null, motivo,
       } });
-    });
-    await notifyRoles(tipo === 'COSTO_RECLAMO' ? ['Reclamos', 'Garantias'] : ['Recepcion', 'Garantias'], {
-      type: 'movimiento_contable', title: 'Movimiento contable registrado',
-      message: `${tipo.replaceAll('_', ' ')} por ${monto.toFixed(2)}${facturaId ? ` en factura #${facturaId}` : ` en reclamo #${reclamoId}`}.`,
-      entity: { kind: facturaId ? 'factura' : 'reclamo', id: facturaId || reclamoId },
     });
     res.status(201).json({ data: { ...data, monto: Number(data.monto) } });
   } catch (error) { errorResponse(res, error); }

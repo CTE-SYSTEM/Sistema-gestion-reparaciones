@@ -2,13 +2,13 @@ import express from 'express';
 import authMiddleware from '../../../middlewares/authMiddleware.js';
 import { autorizarArchivos, autorizarContenido, descargarArchivo, galeriaServicio, listarArchivos, subirArchivo, revisarVisibilidadTecnica } from '../../../controllers/servicios/archivosServicioController.js';
 import { requirePermission } from '../../../middlewares/authMiddleware.js';
-import { PERMISSIONS } from '../../../utils/permissions.js';
+import { PERMISSIONS, requireAnyPermission } from '../../../utils/permissions.js';
 import { photoBodyLimit } from '../../../utils/photoLimit.js';
 
 const router = express.Router();
 const photoBody = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: photoBodyLimit });
 router.use(authMiddleware);
-router.get('/galeria', requirePermission(PERMISSIONS.DIAGNOSTICOS_GESTIONAR), galeriaServicio);
+router.get('/galeria', requireAnyPermission(PERMISSIONS.DIAGNOSTICOS_GESTIONAR, PERMISSIONS.DIAGNOSTICOS_ATENDER), galeriaServicio);
 router.get('/diagnosticos/:id', autorizarArchivos('diagnostico'), listarArchivos('diagnostico'));
 router.post('/diagnosticos/:id', autorizarArchivos('diagnostico'), photoBody, subirArchivo('diagnostico'));
 router.get('/ordenes/:id', autorizarArchivos('orden'), listarArchivos('orden'));

@@ -3,7 +3,7 @@ import prisma from '../../app/prismaClient.js';
 import { loadAdminReport, REPORT_CATALOG } from '../../services/adminReportsService.js';
 import { getBusinessSettings } from '../../services/adminSettingsService.js';
 
-const numericColumn = (accessor) => /^(stock_|cantidad|costo|precio|monto|subtotal|total|ganancia|perdida|margen|rentabilidad|promedio|dias_|horas_|porcentaje|valor_)/i.test(accessor);
+const numericColumn = (accessor) => /^(stock_|cantidad|costo|precio|monto|subtotal|total|ganancia|perdida|margen|rentabilidad|promedio|dias_|horas_|porcentaje|valor_|importe_|efecto_)/i.test(accessor);
 const integerColumn = (accessor) => /^(stock_|cantidad|dias_|horas_)/i.test(accessor);
 const excelValue = (value, accessor) => {
   if (value == null) return '';
@@ -48,6 +48,14 @@ export const downloadReportExcel = async (req, res) => {
     sheet.addRow(['Filtros', result.nota ? `${filterSummary}\nNota: ${result.nota}` : filterSummary]);
     sheet.getRow(3).alignment = { wrapText: true, vertical: 'middle' };
     sheet.getRow(3).height = result.nota ? 45 : 30;
+    if (result.resumen_financiero) {
+      const summary = result.resumen_financiero;
+      const labels = sheet.addRow(['Facturado', 'Compras registradas', 'Entradas de caja', 'Salidas de caja', 'Neto de caja']);
+      labels.font = { bold: true, color: { argb: 'FF312E81' } };
+      const totals = sheet.addRow([summary.facturado, summary.compras_registradas, summary.entradas_caja, summary.salidas_caja, summary.neto_caja]);
+      totals.font = { bold: true };
+      totals.eachCell((cell) => { cell.numFmt = '#,##0.00'; });
+    }
     const header = sheet.addRow(result.columns.map((c) => c.header));
     header.height = 28;
     header.eachCell((cell) => {

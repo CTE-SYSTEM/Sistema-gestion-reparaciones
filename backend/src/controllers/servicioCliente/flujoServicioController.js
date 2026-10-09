@@ -47,6 +47,9 @@ export const registrarContacto = async (req, res) => {
       if (!['COMPLETADO', 'DIAGNOSTICADO', 'RECHAZADO'].includes(actual.estado_del_diagnostico)) {
         const error = new Error('El diagnóstico aún no está finalizado'); error.statusCode = 409; throw error;
       }
+      if (actual.calidad_estado !== 'APROBADO') {
+        const error = new Error('Calidad debe aprobar el diagnóstico antes de contactar al cliente'); error.statusCode = 409; throw error;
+      }
       if (estado === 'DOCUMENTO_ENVIADO' && !actual.diagnostico_real) {
         const error = new Error('Falta el informe técnico'); error.statusCode = 409; throw error;
       }
@@ -104,6 +107,7 @@ export const descargarDocumentoDiagnostico = async (req, res) => {
   if (!['COMPLETADO', 'DIAGNOSTICADO', 'APROBADO', 'RECHAZADO'].includes(d.estado_del_diagnostico) || !d.diagnostico_real) {
     return res.status(409).json({ error: 'El informe técnico aún no está completo' });
   }
+  if (d.calidad_estado !== 'APROBADO') return res.status(409).json({ error: 'Calidad debe aprobar el diagnóstico antes de descargar el informe para el cliente' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="diagnostico-${id}.pdf"`);
   const doc = crearInformeDiagnostico(d);

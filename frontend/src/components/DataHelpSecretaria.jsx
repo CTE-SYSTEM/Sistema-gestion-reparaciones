@@ -25,35 +25,32 @@ export const defaultHelp = {
 };
 
 const facturacionHelp = {
-  title: 'Mini tutorial de facturación',
-  description: 'Consulta facturas emitidas y control de cobros.',
+  title: 'Ayuda de facturación',
+  description: 'Emite facturas de órdenes finalizadas o diagnósticos terminados.',
   steps: [
-    [
-      '1. Busca factura',
-      'Filtra por cliente, orden o fecha de emisión.',
-    ],
-    [
-      '2. Revisa montos',
-      'Confirma repuestos, mano de obra, impuestos y total.',
-    ],
-    [
-      '3. Verifica garantía',
-      'Comprueba si la factura ya tiene garantía asociada.',
-    ],
-    [
-      '4. Exporta o audita',
-      'Usa la información para reportes y seguimiento administrativo.',
-    ],
+    ['1. Abre nueva factura', 'Selecciona una orden o un diagnóstico terminado que esté disponible para facturar.'],
+    ['2. Revisa importes', 'Comprueba diagnóstico, repuestos, mano de obra, IVA y método de pago.'],
+    ['3. Guarda y consulta', 'Emite la factura, abre el comprobante y búscala por número, orden, cliente o equipo.'],
+  ],
+};
+
+const facturasConsultaHelp = {
+  title: 'Ayuda de facturas',
+  description: 'Consulta facturas emitidas y sus garantías asociadas.',
+  steps: [
+    ['1. Busca factura', 'Busca por número de factura u orden, cliente o equipo.'],
+    ['2. Revisa el detalle', 'Consulta importes, impuestos, total y comprobante.'],
+    ['3. Consulta garantías', 'Cambia a la pestaña Garantías para buscar la cobertura asociada.'],
   ],
 };
 
 const flujoAtencionHelp = {
   title: 'Mini tutorial de flujo de atención',
-  description: 'Sigue cada equipo desde ingreso hasta garantía.',
+  description: 'Sigue cada visita del equipo desde ingreso hasta garantía.',
   steps: [
     [
       '1. Usa filtros',
-      'Cambia entre pendientes, revisión, reparación, facturación y garantía.',
+      'Cambia entre pendientes, revisión, reparación, facturación, entrega y garantía.',
     ],
     [
       '2. Busca rápido',
@@ -61,7 +58,7 @@ const flujoAtencionHelp = {
     ],
     [
       '3. Lee la línea',
-      'Cada tarjeta muestra cliente, equipo, diagnóstico, orden y postventa.',
+      'Cada tarjeta muestra una atención con su diagnóstico y orden. Los regresos del mismo equipo aparecen separados.',
     ],
     [
       '4. Decide el siguiente paso',
@@ -71,6 +68,40 @@ const flujoAtencionHelp = {
 };
 
 export const helpByPath = {
+  '/garantias': {
+    title: 'Ayuda de garantías',
+    description: 'Consulte la cobertura de los equipos y gestione su vigencia.',
+    steps: [
+      ['1. Busque el equipo', 'Filtre por cliente, equipo, factura o vigencia. La cobertura comienza cuando se entrega el equipo.'],
+      ['2. Revise la cobertura', 'Las condiciones y la duración inicial se definen en la configuración del negocio.'],
+      ['3. Gestione el caso', 'Abra Reclamos para decidir la cobertura y quién asume el costo. Para extender una garantía iniciada, indique meses y motivo de revalidación.'],
+    ],
+  },
+  '/bodega': {
+    title: 'Ayuda de inicio de bodega',
+    description: 'Revise existencias, compras y entregas pendientes.',
+    steps: [['1. Revise el resumen', 'Consulte repuestos con stock bajo y las últimas entradas.'], ['2. Descargue el informe', 'Seleccione fechas para exportar entradas y salidas con sus proveedores y equipos de destino.']],
+  },
+  '/bodega/entregas': {
+    title: 'Ayuda de entrega de piezas',
+    description: 'Entregue las piezas autorizadas para cada orden.',
+    steps: [['1. Busque la solicitud', 'Busque por orden, cliente, equipo, serie o repuesto.'], ['2. Confirme el destino y lote', 'Revise el equipo y seleccione la compra de origen; su costo se conserva para la facturación.'], ['3. Registre la entrega', 'Confirme la cantidad disponible. El técnico recibe el aviso de entrega.']],
+  },
+  '/calidad': {
+    title: 'Ayuda de calidad',
+    description: 'Revise diagnósticos y reparaciones terminados.',
+    steps: [['1. Seleccione el trabajo', 'Abra una orden o diagnóstico terminado y revise al técnico responsable.'], ['2. Registre las pruebas', 'Indique si hubo errores; describa la parte afectada y las observaciones.'], ['3. Confirme la revisión', 'El resultado queda guardado y los errores se notifican al técnico y a su jefe.']],
+  },
+  '/contabilidad': {
+    title: 'Ayuda de inicio de contabilidad',
+    description: 'Consulte entradas y salidas de dinero por mes.',
+    steps: [['1. Seleccione el año', 'Revise cobros, devoluciones, costos de reclamos, compras y gastos.'], ['2. Descargue el informe', 'Exporte los movimientos y el resumen mensual a Excel.']],
+  },
+  '/contabilidad/movimientos': {
+    title: 'Ayuda de movimientos contables',
+    description: 'Registre y consulte operaciones de dinero con su motivo.',
+    steps: [['1. Elija la operación', 'Use Cobro o Devolución para una factura, Costo de reclamo para un caso y Otros ingresos o Gasto operativo para operaciones generales.'], ['2. Complete el registro', 'Indique monto, método y motivo. Revise el documento asociado antes de guardar.']],
+  },
   '/admin/administracion': {
     title: 'Administración del taller',
     description: 'Centraliza la cuenta, los accesos y la configuración del negocio.',
@@ -87,6 +118,24 @@ export const helpByPath = {
       ['1. Actualiza el perfil', 'Introduce tu contraseña actual para guardar usuario y correo.'],
       ['2. Cambia la contraseña', 'Confirma la nueva contraseña y cumple el mínimo indicado.'],
       ['3. Revisa las sesiones', 'Cambiar la contraseña o cerrar todas las sesiones requiere iniciar sesión otra vez.'],
+    ],
+  },
+  '/mi-cuenta': {
+    title: 'Mi cuenta',
+    description: 'Administra tu usuario, correo y contraseña.',
+    steps: [
+      ['1. Abre una opción', 'Despliega Datos de la cuenta o Contraseña y sesiones.'],
+      ['2. Actualiza tus datos', 'Introduce tu contraseña actual para guardar usuario y correo.'],
+      ['3. Protege tu acceso', 'Cambiar la contraseña o cerrar sesiones requiere iniciar sesión otra vez.'],
+    ],
+  },
+  '/recepcion': {
+    title: 'Inicio de Recepción',
+    description: 'Consulta cuántos ingresos se han registrado por visita.',
+    steps: [
+      ['1. Revisa los períodos', 'Los contadores muestran ingresos de esta semana, mes, año y el total.'],
+      ['2. Registra la visita', 'Abre Ingresar equipo para documentar la falla del equipo recibido.'],
+      ['3. Da seguimiento', 'Flujo de atención separa cada visita y orden, incluso si regresa el mismo equipo.'],
     ],
   },
   '/admin/configuracion': {
@@ -407,9 +456,56 @@ export const helpByPath = {
     ],
   },
 
-  '/admin/visualizacion-control-facturas': facturacionHelp,
-  '/admin/facturacion': facturacionHelp,
+  '/admin/visualizacion-control-facturas': facturasConsultaHelp,
+  '/admin/facturacion': facturasConsultaHelp,
   '/secretaria/facturacion': facturacionHelp,
+  '/contabilidad/facturacion': facturasConsultaHelp,
+  '/servicio-cliente/facturacion': {
+    title: 'Facturación de Servicio al Cliente',
+    description: 'Emite la factura después de la aprobación de calidad y antes de entregar el equipo.',
+    steps: [
+      ['1. Elige el servicio', 'Selecciona una orden finalizada o un diagnóstico terminado sin orden.'],
+      ['2. Revisa el cobro', 'Confirma diagnóstico, repuestos, mano de obra, impuestos y método de pago.'],
+      ['3. Emite la factura', 'Guarda e imprime el comprobante. La entrega se registra después en Entregas.'],
+    ],
+  },
+  '/servicio-cliente/entregas': {
+    title: 'Ayuda de entregas',
+    description: 'Entrega equipos facturados cuando el saldo esté pagado y se cumpla el control de calidad.',
+    steps: [
+      ['1. Busca la entrega', 'Busca por factura, orden, cliente o equipo entre las entregas pendientes.'],
+      ['2. Revisa el expediente', 'Comprueba calidad y saldo de la factura antes de continuar.'],
+      ['3. Documenta la salida', 'Guarda la fotografía de entrega e indica quién recibe el equipo.'],
+      ['4. Confirma', 'Registra la entrega cuando todos los datos estén completos.'],
+    ],
+  },
+  '/servicio-cliente/reclamos': {
+    title: 'Ayuda de reclamos',
+    description: 'Registra y consulta problemas comunicados después de entregar una orden.',
+    steps: [
+      ['1. Abre el reclamo', 'Indica la orden entregada y describe el problema que informa el cliente.'],
+      ['2. Busca un expediente', 'Busca por número de reclamo u orden, cliente o descripción del problema.'],
+      ['3. Sigue la resolución', 'Consulta el análisis, la cobertura y la orden de reingreso cuando corresponda.'],
+    ],
+  },
+  '/reclamos': {
+    title: 'Ayuda de reclamos',
+    description: 'Analiza reclamos y registra su resolución.',
+    steps: [
+      ['1. Busca el expediente', 'Busca por reclamo, orden, cliente o problema.'],
+      ['2. Registra el análisis', 'Indica el origen del problema y la evidencia.'],
+      ['3. Cierra el caso', 'Documenta la resolución y la comunicación al cliente.'],
+    ],
+  },
+  '/garantias/reclamos': {
+    title: 'Ayuda de coberturas',
+    description: 'Revisa reclamos analizados y decide su cobertura.',
+    steps: [
+      ['1. Busca el reclamo', 'Busca por reclamo, orden o cliente.'],
+      ['2. Comprueba la garantía', 'Revisa su vigencia y el análisis del problema.'],
+      ['3. Decide la cobertura', 'Registra la decisión y explica el motivo.'],
+    ],
+  },
 
   '/admin/ordenes-estado': {
     title: 'Mini tutorial de estado de órdenes',
@@ -533,6 +629,8 @@ export const helpByPath = {
 
   '/secretaria/flujo-atencion': flujoAtencionHelp,
   '/admin/flujo-atencion': flujoAtencionHelp,
+  '/recepcion/flujo-atencion': flujoAtencionHelp,
+  '/servicio-cliente/flujo-atencion': flujoAtencionHelp,
 
   '/tecnico': {
     title: 'Mini tutorial del técnico',

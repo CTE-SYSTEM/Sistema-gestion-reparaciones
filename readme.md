@@ -176,7 +176,7 @@ Las cuentas iniciales y datos de demostración están definidos en [Seed.js](bac
 | Componente | Variables principales | Referencia |
 | --- | --- | --- |
 | Backend | `DATABASE_URL`, `SQL_DATABASE_URL`, `PORT`, `JWT_SECRET`, `NODE_ENV`, `CORS_ORIGIN`, `FRONTEND_URL`. | [Configuración del backend](backend/Readme.md#configuración). |
-| Correo transaccional | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, y opcionalmente `BREVO_SENDER_NAME`, `BREVO_REPLY_TO_EMAIL`. | [Envío y recuperación](docs/parametros-genericos-sgr.md#4-usuarios-perfiles-y-correos). |
+| Correo transaccional | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, y opcionalmente `RESEND_FROM_NAME`, `RESEND_REPLY_TO_EMAIL`. | [Envío y recuperación](docs/parametros-genericos-sgr.md#4-usuarios-perfiles-y-correos). |
 | R2 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` y, opcionalmente, `R2_ENDPOINT`. | [Fotografías R2](backend/Readme.md#fotografías-y-cloudflare-r2). |
 | Respaldos | `BACKUP_ROOT`, `BACKUP_DISPLAY_ROOT`. | [Respaldos](backend/Readme.md#respaldos). |
 | Frontend | `VITE_API_URL`, `VITE_PROXY_TARGET`, opcionalmente `VITE_SOCKET_URL`. | [Configuración del frontend](frontend/README.md#configuración-y-despliegue). |
@@ -293,7 +293,7 @@ Funciones transversales: tema claro/oscuro persistido en `localStorage`, ajustes
 | Equipos | `src/features/recepcion/pages/Equipos.jsx`, `services/equiposService.js`. | `src/services/recepcion/equipoService.js`, modelo `Equipos`. |
 | Recepción y diagnóstico | `src/features/recepcion/pages/Diagnostico.jsx`, `components/Diagnostico/`. | `src/services/recepcion/diagnosticoService.js`, `utils/receptionRequirements.js`. |
 | Fotografías | `components/shared/FotosPendientes.jsx`, `FotosServicio.jsx`, `hooks/usePhotoQueue.js`. | `archivosServicioController.js`, `fotoStorage.js`, modelo `ArchivosServicio`. |
-| Órdenes y entrega | `src/features/recepcion/pages/NuevaOrden.jsx`, `Facturacion.jsx`. | `ordenService.js`, `flujoServicioController.js`, `FlujoEstados.sql`. |
+| Órdenes y entrega | `src/features/servicioCliente/pages/NuevaOrden.jsx`, `src/features/servicioCliente/pages/Entregas.jsx`. | `src/services/servicioCliente/ordenService.js`, `flujoServicioController.js`, `FlujoEstados.sql`. |
 | Trabajo técnico y asignaciones | `src/features/tecnico/`, `src/features/tecnicoJefe/`. | `controllers/Tecnico/`, `controllers/JefeTecnico/`, rutas correspondientes. |
 | Inventario, compras y facturación | Módulos de Secretaría y administración. | Controladores de Secretaría y SQL de inventario, facturación y garantías. |
 | Reportes y usuarios | `src/features/admin/`. | `src/controllers/admin_pro/`, SQL administrativo. |

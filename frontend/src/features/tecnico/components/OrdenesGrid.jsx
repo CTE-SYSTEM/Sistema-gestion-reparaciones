@@ -24,7 +24,7 @@ const OrdenCard = ({ orden, completed, busy, username, onEstadoChange, onSolicit
     {revision && <p className="mb-3 rounded border border-amber-200 p-3 text-sm">Irreparabilidad pendiente de revisión del jefe. Puede corregir o retirar el informe desde el expediente.</p>}
     {orden.motivo_revision_irreparable && <p className="mb-3 rounded border border-indigo-100 p-3 text-sm"><strong>Decisión del jefe: </strong>{orden.motivo_revision_irreparable}</p>}
     {piezas.length > 0 && <div className="mb-4 space-y-2"><h3 className="text-sm font-semibold">Piezas del trabajo</h3>{piezas.map((p) => <div key={p.id_detalle_repuesto} className="rounded border p-3 text-xs"><strong>{p.repuesto?.nombre || p.pieza_solicitada}</strong> · {p.cantidad_usada}
-      <p className="mt-1">{p.estado_aprobacion === 'APROBADO' ? p.estado_entrega === 'ENTREGADO' ? 'Aprobada y entregada' : 'Aprobada · pendiente de entrega física' : p.estado_aprobacion === 'DENEGADO' ? 'Rechazada' : 'Pendiente de aprobación'}</p>
+      <p className="mt-1">{p.estado_entrega === 'SIN_EXISTENCIA' ? 'Bodega reportó falta de existencias' : p.estado_aprobacion === 'APROBADO' ? p.estado_entrega === 'ENTREGADO' ? 'Aprobada y entregada' : 'Aprobada · pendiente de entrega física' : p.estado_aprobacion === 'DENEGADO' ? 'Rechazada' : 'Pendiente de aprobación'}</p>
       {p.motivo_rechazo && <p className="mt-1 text-red-700">Motivo: {p.motivo_rechazo}</p>}
     </div>)}</div>}
     {bloqueadaPorPiezas && !cerrado && <p className="mb-3 text-xs text-amber-800">Para reanudar o finalizar, las solicitudes deben estar resueltas y las piezas aprobadas, entregadas.</p>}

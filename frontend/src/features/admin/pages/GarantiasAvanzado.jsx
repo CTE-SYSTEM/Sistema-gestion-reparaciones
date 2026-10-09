@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import Table from '../../../components/Table';
-import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { garantiasAdminService } from '../services';
 import { administracionService } from '../services/administracionService';
 
@@ -61,7 +60,6 @@ export default function GarantiasAvanzado() {
   const [selectedEquipoId, setSelectedEquipoId] = useState('');
   const [createMessage, setCreateMessage] = useState('');
   const [actionMessage, setActionMessage] = useState('');
-  const [downloading, setDownloading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Petición optimizada con useCallback
@@ -296,28 +294,6 @@ export default function GarantiasAvanzado() {
       setError(err.response?.data?.error || 'No se pudo revalidar la garantía.');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const downloadGarantiasCsv = async () => {
-    setDownloading(true);
-    try {
-      await downloadJsonExcel(garantias, columns, 'garantias.xlsx');
-    } catch (err) {
-      setError('No se pudo descargar el reporte en Excel.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const downloadGarantiasPdf = async () => {
-    setDownloading(true);
-    try {
-      downloadJsonPdf(garantias, columns, 'garantias.pdf', 'Reporte de Garantías');
-    } catch (err) {
-      setError('No se pudo descargar el reporte en PDF.');
-    } finally {
-      setDownloading(false);
     }
   };
 
@@ -569,26 +545,6 @@ export default function GarantiasAvanzado() {
                 <div>
                   <h2 className="text-lg font-bold text-slate-800">Libro de garantías expedidas</h2>
                   <p className="text-sm text-gray-400">Historial completo de estados, plazos de vencimiento y clientes contables.</p>
-                </div>
-                <div className="flex gap-2 self-end sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={downloadGarantiasCsv}
-                    disabled={downloading || loading || garantias.length === 0}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm disabled:bg-slate-200 disabled:text-gray-400 whitespace-nowrap"
-                    title="Exportar a Excel"
-                  >
-                    Excel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadGarantiasPdf}
-                    disabled={downloading || loading || garantias.length === 0}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold text-white hover:bg-slate-900 transition shadow-sm disabled:bg-slate-200 disabled:text-gray-400 whitespace-nowrap"
-                    title="Exportar a PDF"
-                  >
-                    PDF
-                  </button>
                 </div>
               </div>
 

@@ -20,13 +20,16 @@ export const listarReclamos = async (req, res) => {
     const { page, pageSize, offset } = parsePagination(req.query);
     const estado = String(req.query.estado || '').trim().toUpperCase();
     const search = String(req.query.search || '').trim();
-    const id = parsePositiveId(search);
+    const id = /^\d+$/.test(search) && Number(search) <= 2147483647 ? parsePositiveId(search) : null;
     const where = {
       ...(estado && estado !== 'TODOS' ? { estado } : {}),
       ...(search ? { OR: [
         ...(id ? [{ id_reclamo: id }, { orden_original_id: id }] : []),
         { descripcion: { contains: search, mode: 'insensitive' } },
         { orden_original: { diagnostico: { equipo: { cliente: { nombre: { contains: search, mode: 'insensitive' } } } } } },
+        { orden_original: { diagnostico: { equipo: { marca: { contains: search, mode: 'insensitive' } } } } },
+        { orden_original: { diagnostico: { equipo: { modelo: { contains: search, mode: 'insensitive' } } } } },
+        { orden_original: { diagnostico: { equipo: { numero_serie: { contains: search, mode: 'insensitive' } } } } },
       ] } : {}),
     };
     const [data, total] = await Promise.all([
@@ -84,7 +87,7 @@ export const analizarReclamo = async (req, res) => {
         analisis, costo_estimado: costo, analizado_por_id: req.user.id, fecha_analisis: new Date(),
       }, include: detail });
     });
-    await notifyRoles(['Garantias', 'Recepcion', ...(costo !== null ? ['Contabilidad'] : [])], {
+    await notifyRoles(['Garantias', 'ServicioCliente', ...(costo !== null ? ['Contabilidad'] : [])], {
       type: 'reclamo_analizado', title: 'Reclamo analizado',
       message: `El reclamo #${id} requiere decisión de cobertura${responsable === 'PROVEEDOR' ? ' y revisión del proveedor' : ''}.`,
       entity: { kind: 'reclamo', id },
@@ -110,6 +113,7 @@ export const decidirCobertura = async (req, res) => {
       if (!reclamo) fail(404, 'Reclamo no encontrado');
       if (reclamo.estado !== 'ANALIZADO' || reclamo.cobertura !== 'PENDIENTE') fail(409, 'Analice el reclamo antes de decidir la cobertura');
       const now = new Date();
+      if (decision === 'APROBADA' && (!reclamo.responsable_tipo || reclamo.responsable_tipo === 'INDETERMINADO')) fail(409, 'Decida en el análisis quién asume el costo antes de aprobar la reparación cubierta');
       if (decision === 'APROBADA' && (!reclamo.garantia?.fecha_inicio || !reclamo.garantia?.fecha_vencimiento
         || now < reclamo.garantia.fecha_inicio || now > reclamo.garantia.fecha_vencimiento)) fail(409, 'La garantía debe estar vigente para aprobar un reingreso cubierto');
       let reingresoId = null;
@@ -134,7 +138,7 @@ export const decidirCobertura = async (req, res) => {
         orden_reingreso_id: reingresoId, estado: decision === 'APROBADA' ? 'EN_REINGRESO' : 'RESUELTO',
       }, include: detail });
     });
-    await notifyRoles(['Recepcion', 'Reclamos', 'Contabilidad'], { type: 'reclamo_decidido', title: 'Cobertura decidida', message: `Reclamo #${id}: cobertura ${decision.toLowerCase()}.`, entity: { kind: 'reclamo', id } });
+    await notifyRoles(['ServicioCliente', 'Reclamos', 'Contabilidad'], { type: 'reclamo_decidido', title: 'Cobertura decidida', message: `Reclamo #${id}: cobertura ${decision.toLowerCase()}.`, entity: { kind: 'reclamo', id } });
     if (data.orden_reingreso_id) await notifyJefeTecnico({ type: 'orden_creada', title: 'Orden de garantía pendiente', message: `Asigne la orden de reingreso #${data.orden_reingreso_id}.`, entity: { kind: 'orden', id: data.orden_reingreso_id } });
     res.json({ data });
   } catch (error) { replyError(res, error); }
@@ -154,7 +158,7 @@ export const cerrarReclamo = async (req, res) => {
       if (reclamo.cobertura === 'APROBADA' && reclamo.orden_reingreso?.estado !== 'ENTREGADO') fail(409, 'Entregue la orden de reingreso antes de cerrar el reclamo');
       return tx.reclamos.update({ where: { id_reclamo: id }, data: { estado: 'CERRADO', resolucion, fecha_cierre: new Date() }, include: detail });
     });
-    await notifyRoles(['Recepcion', 'Garantias', 'Contabilidad'], { type: 'reclamo_cerrado', title: 'Reclamo cerrado', message: `Reclamo #${id} cerrado con resolución registrada.`, entity: { kind: 'reclamo', id } });
+    await notifyRoles(['ServicioCliente', 'Garantias', 'Contabilidad'], { type: 'reclamo_cerrado', title: 'Reclamo cerrado', message: `Reclamo #${id} cerrado con resolución registrada.`, entity: { kind: 'reclamo', id } });
     res.json({ data });
   } catch (error) { replyError(res, error); }
 };

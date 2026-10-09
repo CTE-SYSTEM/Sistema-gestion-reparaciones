@@ -21,6 +21,7 @@ const resolveHelp = (pathname) => {
   if (helpByPath[pathname]) {
     return helpByPath[pathname];
   }
+  if (pathname.endsWith('/mi-cuenta')) return helpByPath['/mi-cuenta'];
 
   // 2. Coincidencia por prefijo
   // Soporta IDs dinámicos como /admin/ordenes/123

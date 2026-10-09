@@ -89,7 +89,7 @@ if (!databaseName) {
   };
   const ready = async () => fixture('Laptop', {
     estado_del_diagnostico: 'COMPLETADO', diagnostico_real: 'Fuente averiada', presupuesto_estimado: 500,
-    estado_contacto: 'DOCUMENTO_ENVIADO',
+    estado_contacto: 'DOCUMENTO_ENVIADO', calidad_estado: 'APROBADO',
   });
   const orderFixture = async (state = 'PENDIENTE') => {
     const data = await ready();
@@ -173,6 +173,8 @@ if (!databaseName) {
     }
     const query = `search=${encodeURIComponent(prefix)}&pageSize=2`;
     const first = (await api(`/flujo-atencion?${query}&page=1`)).payload;
+    const defaultPage = (await api(`/flujo-atencion?search=${encodeURIComponent(prefix)}`)).payload;
+    assert.equal(defaultPage.meta.pageSize, 20);
     assert.equal(first.data.length, 2);
     assert.equal(first.meta.resumen.todos, 3);
     assert.equal(first.meta.hasMore, true);
@@ -184,6 +186,43 @@ if (!databaseName) {
     assert.equal(filtered.data.length, 1);
     assert.equal(filtered.data[0].filtro, 'listos-orden');
     await api('/flujo-atencion?filtro=invalido', { expected: 400 });
+  });
+
+  test('Recepción: cada reingreso del mismo equipo conserva su propia orden y cuenta como ingreso', async () => {
+    const before = (await api('/flujo-atencion/resumen-recepcion')).payload.data;
+    const prefix = unique('Equipo con dos visitas');
+    const cliente = await prisma.clientes.create({ data: { nombre: prefix, telefono: String(93000000 + sequence) } });
+    const equipo = await prisma.equipos.create({ data: { cliente_id: cliente.id_cliente, tipo: 'Laptop', marca: 'Prueba' } });
+    const previousDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const anterior = await prisma.diagnosticos.create({ data: {
+      equipo_id: equipo.id_equipo, fecha_hora: previousDate, falla_reportada: 'Pantalla rota', estado_del_diagnostico: 'COMPLETADO',
+    } });
+    const ordenAnterior = await prisma.ordenes.create({ data: {
+      diagnostico_id: anterior.id_diagnostico, estado: 'ENTREGADO', fecha_ingreso: previousDate, fecha_entrega: previousDate,
+    } });
+    const actual = await prisma.diagnosticos.create({ data: {
+      equipo_id: equipo.id_equipo, falla_reportada: 'No carga', estado_del_diagnostico: 'COMPLETADO',
+    } });
+    const ordenActual = await prisma.ordenes.create({ data: {
+      diagnostico_id: actual.id_diagnostico, estado: 'EN_REPARACION',
+    } });
+
+    const query = `search=${encodeURIComponent(prefix)}&pageSize=1`;
+    const first = (await api(`/flujo-atencion?${query}&page=1`)).payload;
+    const second = (await api(`/flujo-atencion?${query}&page=2`)).payload;
+    assert.equal(first.meta.resumen.todos, 2);
+    assert.equal(first.meta.hasMore, true);
+    assert.equal(second.meta.hasMore, false);
+    assert.equal(first.data[0].orden.id_orden, ordenActual.id_orden);
+    assert.equal(first.data[0].diagnostico.falla_reportada, 'No carga');
+    assert.equal(second.data[0].orden.id_orden, ordenAnterior.id_orden);
+    assert.equal(second.data[0].diagnostico.falla_reportada, 'Pantalla rota');
+    assert.equal(first.data[0].equipo.id_equipo, second.data[0].equipo.id_equipo);
+
+    const after = (await api('/flujo-atencion/resumen-recepcion')).payload.data;
+    assert.equal(after.total, before.total + 2);
+    assert.equal(after.semana, before.semana + 1);
+    assert.equal(after.mes, before.mes + 1);
   });
 
   test('Secretaría: recepción y actualización de diagnósticos', async (t) => {
@@ -242,7 +281,7 @@ if (!databaseName) {
       const list = (await api(`/archivos-servicio/diagnosticos/${id}`)).payload.data;
       assert.deepEqual(new Set(list.map((item) => item.id_archivo)), new Set([first.id_archivo, second.id_archivo]));
       const records = await prisma.archivosServicio.findMany({ where: { diagnostico_id: id }, orderBy: { id_archivo: 'asc' } });
-      const folder = `monitor/samsung-${equipo.modelo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-equipo-${equipo.id_equipo}`;
+      const folder = `fotos/equipos/monitor-samsung-${equipo.modelo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-equipo-${equipo.id_equipo}`;
       assert.ok(records[0].ruta_archivo.startsWith(`${folder}/recepcion/`));
       assert.ok(records[1].ruta_archivo.startsWith(`${folder}/diagnostico/`));
       assert.notEqual(records[0].ruta_archivo, records[1].ruta_archivo);
@@ -327,7 +366,7 @@ if (!databaseName) {
     await t.test('nueva orden exige diagnóstico listo, informe, presupuesto, monto y contacto', async () => {
       const pending = await fixture();
       await post('/ordenes', { diagnostico_id: pending.diagnostico.id_diagnostico, monto_autorizado: 500 }, 409);
-      const missingReport = await fixture('Laptop', { estado_del_diagnostico: 'COMPLETADO', presupuesto_estimado: 500 });
+      const missingReport = await fixture('Laptop', { estado_del_diagnostico: 'COMPLETADO', calidad_estado: 'APROBADO', presupuesto_estimado: 500 });
       await post('/ordenes', { diagnostico_id: missingReport.diagnostico.id_diagnostico, monto_autorizado: 500 }, 400);
       await prisma.diagnosticos.update({ where: { id_diagnostico: missingReport.diagnostico.id_diagnostico }, data: { diagnostico_real: 'Informe sin presupuesto', presupuesto_estimado: 0 } });
       await post('/ordenes', { diagnostico_id: missingReport.diagnostico.id_diagnostico, monto_autorizado: 500 }, 400);
@@ -337,7 +376,7 @@ if (!databaseName) {
       await post('/ordenes', { diagnostico_id: prepared.diagnostico.id_diagnostico, monto_autorizado: 500 }, 400);
     });
     await t.test('un presupuesto USD se conserva y la orden requiere un monto autorizado explícito en NIO', async () => {
-      const { diagnostico } = await fixture('Laptop', { estado_del_diagnostico: 'COMPLETADO', diagnostico_real: 'Informe presupuesto USD', presupuesto_estimado: 125.50, moneda_presupuesto: 'USD', estado_contacto: 'DOCUMENTO_ENVIADO' });
+      const { diagnostico } = await fixture('Laptop', { estado_del_diagnostico: 'COMPLETADO', calidad_estado: 'APROBADO', diagnostico_real: 'Informe presupuesto USD', presupuesto_estimado: 125.50, moneda_presupuesto: 'USD', estado_contacto: 'DOCUMENTO_ENVIADO' });
       const id = diagnostico.id_diagnostico;
       const available = (await api('/ordenes/diagnosticos-listos?search=Informe%20presupuesto%20USD')).payload.data;
       assert.equal(available.find((row) => row.id_diagnostico === id).moneda_presupuesto, 'USD');
@@ -349,7 +388,7 @@ if (!databaseName) {
       assert.equal(orden.diagnostico.moneda_presupuesto, 'USD'); assert.equal(Number(orden.diagnostico.presupuesto_estimado), 125.50);
     });
     await t.test('crear orden registra autorización, evita duplicado y conserva historial', async () => {
-      const { diagnostico } = await fixture('Laptop', { estado_del_diagnostico: 'COMPLETADO', diagnostico_real: 'Fuente averiada', presupuesto_estimado: 500 });
+      const { diagnostico } = await fixture('Laptop', { estado_del_diagnostico: 'COMPLETADO', calidad_estado: 'APROBADO', diagnostico_real: 'Fuente averiada', presupuesto_estimado: 500 });
       const contactRoute = `/secretaria/diagnostico/${diagnostico.id_diagnostico}/contacto`;
       const contact = (await api(contactRoute, { method: 'PATCH', body: { estado_contacto: 'DOCUMENTO_ENVIADO' } })).payload.data;
       assert.ok(contact.fecha_envio_documento);
@@ -370,7 +409,7 @@ if (!databaseName) {
     });
     await t.test('diagnósticos disponibles y órdenes respetan páginas de 20', async () => {
       const { equipo } = await fixture();
-      const rows = await prisma.diagnosticos.createManyAndReturn({ data: Array.from({ length: 21 }, () => ({ equipo_id: equipo.id_equipo, falla_reportada: 'Grupo paginado listo', estado_del_diagnostico: 'COMPLETADO', diagnostico_real: 'Informe paginado', presupuesto_estimado: 100 })) });
+      const rows = await prisma.diagnosticos.createManyAndReturn({ data: Array.from({ length: 21 }, () => ({ equipo_id: equipo.id_equipo, falla_reportada: 'Grupo paginado listo', estado_del_diagnostico: 'COMPLETADO', calidad_estado: 'APROBADO', diagnostico_real: 'Informe paginado', presupuesto_estimado: 100 })) });
       const first = (await api('/ordenes/diagnosticos-listos?search=Grupo%20paginado%20listo')).payload;
       const second = (await api('/ordenes/diagnosticos-listos?search=Grupo%20paginado%20listo&page=2')).payload;
       assert.equal(first.data.length, 20);
@@ -568,7 +607,7 @@ if (!databaseName) {
 
   test('Secretaría: factura diagnósticos completados sin rechazo y omite cargos de diagnóstico en cero de la orden', async () => {
     for (const estado of ['COMPLETADO', 'DIAGNOSTICADO']) {
-      const { diagnostico } = await fixture('Laptop', { estado_del_diagnostico: estado, diagnostico_real: 'Pantalla averiada' });
+      const { diagnostico } = await fixture('Laptop', { estado_del_diagnostico: estado, calidad_estado: 'APROBADO', diagnostico_real: 'Pantalla averiada' });
       const disponibles = (await api('/facturas/diagnosticos-disponibles')).payload.data;
       assert.ok(disponibles.some((item) => item.id_diagnostico === diagnostico.id_diagnostico));
       await post('/facturas/diagnosticos', { diagnostico_id: diagnostico.id_diagnostico, monto_diagnostico: 0, metodo_pago: 'Efectivo' }, 400);
@@ -600,7 +639,7 @@ if (!databaseName) {
     await api(`/compras/${compra.id_compra}/fotos`, { method: 'POST', bytes: Buffer.from('falso'), expected: 400 });
     const foto = (await api(`/compras/${compra.id_compra}/fotos`, { method: 'POST', bytes: png, headers: { 'X-File-Name': encodeURIComponent('ticket.png') }, expected: 201 })).payload.data;
     const stored = await prisma.archivosCompra.findUnique({ where: { id_archivo: foto.id_archivo } });
-    assert.ok(stored.ruta_archivo.startsWith('compras/'));
+    assert.ok(stored.ruta_archivo.startsWith('documentos/compras/'));
     const purchaseRow = (await api('/compras?search=T-123')).payload.data.find((row) => row.id_compra === compra.id_compra);
     assert.equal(purchaseRow._count.archivos, 1);
     assert.equal((await api(`/compras/fotos?search=T-123`)).payload.data.some((row) => row.id_archivo === foto.id_archivo), true);

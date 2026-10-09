@@ -24,7 +24,7 @@ import {
   deleteUsuario,
 } from '../../../controllers/admin_pro/usuariosController.js';
 import { getMonitoreoGeneral, getDashboardResumen } from '../../../controllers/admin_pro/dashboardController.js';
-import { getBackups, triggerBackupNow, downloadBackupFile, verifyBackupFiles } from '../../../controllers/admin_pro/backupController.js';
+import { getBackups, triggerBackupNow, downloadBackupFile, verifyBackupFiles, restoreBackupVersion } from '../../../controllers/admin_pro/backupController.js';
 import {
   downloadDiagnosticosReporteAdmin,
   getDiagnosticosAdmin,
@@ -61,7 +61,7 @@ router.get('/ordenes/:id/repuestos', getRepuestosPorOrdenAdmin);
 router.get('/ordenes/:id/repuestos/reporte', downloadRepuestosPorOrdenAdmin);
 router.post('/ordenes/crear', async (req, res, next) => {
   try {
-    const { createOrden } = await import('../../../controllers/recepcion/nuevaOrdenController.js');
+    const { createOrden } = await import('../../../controllers/servicioCliente/nuevaOrdenController.js');
     return createOrden(req, res);
   } catch (error) {
     next(error);
@@ -89,6 +89,7 @@ router.get('/backups', getBackups);
 router.post('/backups/manual', triggerBackupNow);
 router.get('/backups/:month/:file/descargar', downloadBackupFile);
 router.post('/backups/:month/:file/verificar', verifyBackupFiles);
+router.post('/backups/:month/:file/restaurar', restoreBackupVersion);
 router.get('/analitica/productividad', getProductividadAdmin);
 router.get('/analitica/ganancias', getGananciasAdmin);
 router.put('/ordenes/:id', updateOrdenAdmin);

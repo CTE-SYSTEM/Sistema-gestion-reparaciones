@@ -3,6 +3,7 @@ import { withAuditUser } from '../../utils/auditContext.js';
 import { assertInList, parsePositiveId } from '../../utils/domainValidation.js';
 import { assertPuedeFinalizar, assertTecnicoDisponible, auditMotivo, diagnosticoActivo, fail, lockTrabajo, motivoObligatorio, ordenActiva, tecnicoElegible } from '../../utils/tecnicoWorkflow.js';
 import { catalogoDisponible, lockRepuestos, stockDisponible } from '../Tecnico/stockDisponible.js';
+import { getBusinessSettings } from '../adminSettingsService.js';
 
 const userSelect = { id_usuario: true, nombre_usuario: true };
 const techInclude = { usuario: { select: { id_usuario: true, nombre_usuario: true, rol: true, activo: true } } };
@@ -21,6 +22,7 @@ const pieceSnapshot = (r) => JSON.parse(JSON.stringify(Object.fromEntries([
 const correctionTypes = {
   corregir: 'CORRECCION_REPUESTO', 'retirar-aprobacion': 'RETIRAR_APROBACION',
   reabrir: 'REABRIR_SOLICITUD', 'corregir-entrega': 'CORREGIR_ENTREGA', devolver: 'DEVOLUCION_REPUESTO',
+  'sin-existencia': 'PIEZA_SIN_EXISTENCIA', 'revisar-disponibilidad': 'DISPONIBILIDAD_REVISADA',
 };
 const average = (rows, start, end) => {
   const values = rows.filter((r) => r[start] && r[end] && new Date(r[end]) >= new Date(r[start])).map((r) => (new Date(r[end]) - new Date(r[start])) / 3600000);
@@ -33,21 +35,22 @@ const toWork = (r, tipo) => {
   return { key: `${tipo}-${r.id_orden || r.id_diagnostico}`, tipo, id: r.id_orden || r.id_diagnostico, diagnostico_id: tipo === 'orden' ? r.diagnostico_id : null, equipo_nombre: [e.marca, e.modelo].filter(Boolean).join(' ') || e.tipo || 'Equipo', cliente_nombre: e.cliente.nombre, tecnico: r.tecnico, estado: r.estado || r.estado_del_diagnostico, prioridad: r.prioridad || 'Normal', activo: isActive, fecha_finalizacion: r.fecha_finalizacion || r.fecha_completado, ultimo_avance: last, horas_sin_avance: last ? Math.max(0, (Date.now() - new Date(last)) / 3600000) : 0, irreparable_estado: r.irreparable_estado, justificacion_irreparable: r.justificacion_irreparable, tiene_factura: billed, puede_asignar: isActive && !r.tecnico_id && !billed && r.estado !== 'IRREPARABLE', puede_intervenir: isActive && Boolean(r.tecnico_id) && !billed && r.estado !== 'IRREPARABLE' };
 };
 export const resumen = async () => {
-  const [diagnosticos, ordenes, techs, pieces, catalogo, intervenciones] = await Promise.all([
+  const [diagnosticos, ordenes, techs, pieces, catalogo, intervenciones, settings] = await Promise.all([
     prisma.diagnosticos.findMany({ include: diagInclude, orderBy: { id_diagnostico: 'desc' } }),
     prisma.ordenes.findMany({ include: orderInclude, orderBy: { id_orden: 'desc' } }),
     prisma.tecnicos.findMany({ where: { activo: true }, include: techInclude, orderBy: { nombre: 'asc' } }),
     prisma.ordenes_Repuestos.findMany({ include: pieceInclude, orderBy: { fecha_solicitud: 'desc' } }),
-    catalogoDisponible(prisma), prisma.intervencionesTecnicas.findMany({ include: { usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }),
+    catalogoDisponible(prisma), prisma.intervencionesTecnicas.findMany({ include: { usuario: { select: userSelect } }, orderBy: { fecha_hora: 'desc' } }), getBusinessSettings(),
   ]);
+  const alertaTecnicaHoras = settings.reglas.alerta_tecnica_horas;
   const trabajos = [...diagnosticos.map((r) => toWork(r, 'diagnostico')), ...ordenes.map((r) => toWork(r, 'orden'))];
   const activos = trabajos.filter((r) => r.activo);
-  const tecnicos = techs.filter(tecnicoElegible).map((t) => ({ ...t, diagnosticos_activos: activos.filter((r) => r.tipo === 'diagnostico' && r.tecnico?.id_tecnico === t.id_tecnico).length, ordenes_activas: activos.filter((r) => r.tipo === 'orden' && r.tecnico?.id_tecnico === t.id_tecnico).length, atrasados: activos.filter((r) => r.tecnico?.id_tecnico === t.id_tecnico && r.horas_sin_avance >= 72).length }));
+  const tecnicos = techs.filter(tecnicoElegible).map((t) => ({ ...t, diagnosticos_activos: activos.filter((r) => r.tipo === 'diagnostico' && r.tecnico?.id_tecnico === t.id_tecnico).length, ordenes_activas: activos.filter((r) => r.tipo === 'orden' && r.tecnico?.id_tecnico === t.id_tecnico).length, atrasados: activos.filter((r) => r.tecnico?.id_tecnico === t.id_tecnico && r.horas_sin_avance >= alertaTecnicaHoras).length }));
   const repuestos = pieces.map((p) => {
     const editable = ordenActiva(p.orden) && p.orden.estado !== 'IRREPARABLE' && !p.orden.facturas.length;
     const delivered = p.estado_entrega === 'ENTREGADO', approved = p.estado_aprobacion === 'APROBADO';
     return { ...p, puede_revisar: editable && !delivered && p.estado_aprobacion === 'PENDIENTE',
-      puede_entregar: editable && approved && !delivered && Boolean(p.repuesto_id),
+      puede_entregar: editable && approved && p.estado_entrega === 'PENDIENTE' && Boolean(p.repuesto_id),
       puede_corregir: editable && !delivered && ['PENDIENTE', 'APROBADO'].includes(p.estado_aprobacion),
       puede_retirar_aprobacion: editable && approved && !delivered,
       puede_reabrir: editable && !delivered && p.estado_aprobacion === 'DENEGADO',
@@ -55,7 +58,7 @@ export const resumen = async () => {
       puede_devolver: editable && approved && delivered && Boolean(p.repuesto_id) };
   });
   const count = (estado) => activos.filter((r) => r.estado === estado).length;
-  return { trabajos, tecnicos, repuestos, catalogo, intervenciones, indicadores: { trabajos_activos: activos.length, diagnosticos_activos: activos.filter((r) => r.tipo === 'diagnostico').length, ordenes_activas: activos.filter((r) => r.tipo === 'orden').length, sin_asignar: activos.filter((r) => r.puede_asignar).length, asignados: count('ASIGNADO'), en_diagnostico: count('EN_REVISION'), en_reparacion: count('EN_REPARACION'), esperando_piezas: count('ESPERANDO_PIEZA'), irreparables_pendientes: ordenes.filter((o) => o.estado === 'IRREPARABLE' && o.irreparable_estado === 'PENDIENTE' && o.justificacion_irreparable).length, repuestos_pendientes: repuestos.filter((p) => p.puede_revisar).length, repuestos_por_entregar: repuestos.filter((p) => p.puede_entregar).length, atrasados: activos.filter((r) => r.horas_sin_avance >= 72).length, promedio_diagnostico_horas: average(diagnosticos, 'fecha_inicio', 'fecha_completado'), promedio_reparacion_horas: average(ordenes, 'fecha_inicio_reparacion', 'fecha_finalizacion') } };
+  return { trabajos, tecnicos, repuestos, catalogo, intervenciones, indicadores: { alerta_tecnica_horas: alertaTecnicaHoras, trabajos_activos: activos.length, diagnosticos_activos: activos.filter((r) => r.tipo === 'diagnostico').length, ordenes_activas: activos.filter((r) => r.tipo === 'orden').length, sin_asignar: activos.filter((r) => r.puede_asignar).length, asignados: count('ASIGNADO'), en_diagnostico: count('EN_REVISION'), en_reparacion: count('EN_REPARACION'), esperando_piezas: count('ESPERANDO_PIEZA'), irreparables_pendientes: ordenes.filter((o) => o.estado === 'IRREPARABLE' && o.irreparable_estado === 'PENDIENTE' && o.justificacion_irreparable).length, repuestos_pendientes: repuestos.filter((p) => p.puede_revisar).length, repuestos_por_entregar: repuestos.filter((p) => p.puede_entregar).length, atrasados: activos.filter((r) => r.horas_sin_avance >= alertaTecnicaHoras).length, promedio_diagnostico_horas: average(diagnosticos, 'fecha_inicio', 'fecha_completado'), promedio_reparacion_horas: average(ordenes, 'fecha_inicio_reparacion', 'fecha_finalizacion') } };
 };
 export const detalle = async (tipo, value) => {
   const id = idValue(value), { model, key, include } = entity(tipo), whereHistory = tipo === 'orden' ? { orden_id: id } : { diagnostico_id: id };
@@ -171,17 +174,33 @@ export const accionRepuesto = (value, accion, payload, user) => withAuditUser(us
     });
     return finish(changes, motivo);
   }
+  if (accion === 'sin-existencia') {
+    if (r.estado_entrega !== 'PENDIENTE' || !['PENDIENTE', 'APROBADO'].includes(r.estado_aprobacion)) fail(409, 'Solo se pueden reportar solicitudes pendientes sin entrega');
+    const detalle = String(payload.motivo || '').trim();
+    if (detalle.length > 500) fail(400, 'La observación no debe superar 500 caracteres');
+    return finish({ estado_entrega: 'SIN_EXISTENCIA' }, detalle || 'Bodega confirmó que no hay una pieza disponible para esta solicitud');
+  }
+  if (accion === 'revisar-disponibilidad') {
+    if (r.estado_entrega !== 'SIN_EXISTENCIA') fail(409, 'Esta solicitud no está marcada como faltante');
+    if (r.estado_aprobacion !== 'APROBADO' || !r.repuesto_id) fail(409, 'El jefe técnico debe vincular y aprobar la pieza antes de entregarla');
+    await lockRepuestos(tx, [r.repuesto_id]);
+    if (await stockDisponible(tx, r.repuesto_id, id) < Number(r.cantidad_usada || 0)) fail(409, 'La pieza aún no tiene existencias suficientes');
+    return finish({ estado_entrega: 'PENDIENTE' }, 'Bodega comprobó nuevamente la existencia de la pieza aprobada');
+  }
   if (accion === 'entregar') {
-    if (r.estado_aprobacion !== 'APROBADO' || r.estado_entrega === 'ENTREGADO' || !r.repuesto_id) fail(409, 'Solo se pueden entregar piezas del catálogo aprobadas y pendientes de entrega');
+    if (r.estado_aprobacion !== 'APROBADO' || r.estado_entrega !== 'PENDIENTE' || !r.repuesto_id) fail(409, 'Solo se pueden entregar piezas del catálogo aprobadas y pendientes de entrega');
     const compraId = payload.compra_id ? idValue(payload.compra_id) : null;
+    await lockRepuestos(tx, [r.repuesto_id]);
+    if (await stockDisponible(tx, r.repuesto_id, id) < Number(r.cantidad_usada || 0)) fail(409, 'Stock físico insuficiente para la entrega');
     if (compraId) {
-      await lockRepuestos(tx, [r.repuesto_id]);
       const compra = await tx.compras.findUnique({ where: { id_compra: compraId } });
       if (!compra || compra.repuesto_id !== r.repuesto_id) fail(409, 'La compra seleccionada no corresponde al repuesto aprobado');
-      const asignadas = await tx.ordenes_Repuestos.aggregate({ where: { compra_id: compraId, estado_entrega: 'ENTREGADO' }, _sum: { cantidad_usada: true } });
-      if (Number(compra.cantidad || 0) - Number(asignadas._sum.cantidad_usada || 0) < Number(r.cantidad_usada || 0)) fail(409, 'La compra no tiene suficientes unidades sin asignar');
-      if (await stockDisponible(tx, r.repuesto_id, id) < Number(r.cantidad_usada || 0)) fail(409, 'Stock físico insuficiente para la entrega');
-    }
+      const [asignadas, defectuosas] = await Promise.all([
+        tx.ordenes_Repuestos.aggregate({ where: { compra_id: compraId, estado_entrega: 'ENTREGADO' }, _sum: { cantidad_usada: true } }),
+        tx.devolucionesProveedor.aggregate({ where: { compra_id: compraId, origen: 'BODEGA' }, _sum: { cantidad: true } }),
+      ]);
+      if (Number(compra.cantidad || 0) - Number(asignadas._sum.cantidad_usada || 0) - Number(defectuosas._sum.cantidad || 0) < Number(r.cantidad_usada || 0)) fail(409, 'La compra no tiene suficientes unidades sin asignar');
+    } else if (await tx.compras.count({ where: { repuesto_id: r.repuesto_id } })) fail(409, 'Seleccione la compra de origen de esta pieza');
     return finish({ estado_entrega: 'ENTREGADO', fecha_entrega: new Date(), usuario_entregador_id: user.id, compra_id: compraId }, 'Entrega física de repuesto al técnico');
   }
   if (accion === 'rechazar') {
@@ -200,5 +219,5 @@ export const accionRepuesto = (value, accion, payload, user) => withAuditUser(us
   if (!part || part.descontinuada) fail(404, 'El repuesto no está disponible en el catálogo');
   if (accion === 'corregir' && repuestoId === r.repuesto_id && cantidad === r.cantidad_usada) fail(409, 'Cambie la pieza o la cantidad para registrar una corrección');
   if ((accion === 'aprobar' || r.estado_aprobacion === 'APROBADO') && await stockDisponible(tx, repuestoId, id) < cantidad) fail(409, 'Stock disponible insuficiente; otras órdenes ya tienen piezas reservadas');
-  return finish({ repuesto_id: repuestoId, pieza_solicitada: part.nombre, cantidad_usada: cantidad, ...(accion === 'aprobar' ? { estado_aprobacion: 'APROBADO', usuario_aprobador_id: user.id, fecha_aprobacion: new Date(), fecha_rechazo: null, motivo_rechazo: null, estado_entrega: 'PENDIENTE', fecha_entrega: null, usuario_entregador_id: null } : {}) }, accion === 'corregir' ? motivoObligatorio(payload.motivo) : 'Aprobación de solicitud de repuesto');
+  return finish({ repuesto_id: repuestoId, pieza_solicitada: part.nombre, cantidad_usada: cantidad, ...(accion === 'aprobar' ? { estado_aprobacion: 'APROBADO', usuario_aprobador_id: user.id, fecha_aprobacion: new Date(), fecha_rechazo: null, motivo_rechazo: null, estado_entrega: 'PENDIENTE', fecha_entrega: null, usuario_entregador_id: null } : r.estado_entrega === 'SIN_EXISTENCIA' ? { estado_entrega: 'PENDIENTE' } : {}) }, accion === 'corregir' ? motivoObligatorio(payload.motivo) : 'Aprobación de solicitud de repuesto');
 });

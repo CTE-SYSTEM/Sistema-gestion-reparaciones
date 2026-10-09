@@ -1,4 +1,5 @@
 import prisma from '../../app/prismaClient.js';
+import { normalizeRole } from '../../utils/roles.js';
 import { monedaPresupuesto } from '../../utils/monedaPresupuesto.js';
 import {
   DIAGNOSTICO_ESTADOS,
@@ -131,6 +132,12 @@ export const actualizarDiagnostico = async (id, data, user) => {
   const diagnosticoId = parsePositiveId(id);
   if (!diagnosticoId) throw new Error('El ID del diagnostico es inválido');
   const existente = await prisma.diagnosticos.findUniqueOrThrow({ where: { id_diagnostico: diagnosticoId }, include: { equipo: { select: { tipo: true } } } });
+  if (normalizeRole(user?.rol) === 'recepcion'
+    && (existente.tecnico_id || !['INGRESADO', 'PENDIENTE'].includes(existente.estado_del_diagnostico))) {
+    const error = new Error('La recepción de este equipo ya pasó a revisión técnica');
+    error.statusCode = 409;
+    throw error;
+  }
   const updateData = {};
   let equipoTipo = existente.equipo.tipo;
   let equipoChanged = false;

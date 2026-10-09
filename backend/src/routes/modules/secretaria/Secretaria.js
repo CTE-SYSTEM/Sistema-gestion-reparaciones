@@ -10,7 +10,7 @@ import comprasRoutes from '../bodega/Compras.js';
 import facturasRoutes from '../contabilidad/facturas.js';
 import garantiasRoutes from '../garantias/garantias.js';
 import diagnosticoRoutes from '../recepcion/Diagnostico.js';
-import NuevaOrden from '../recepcion/NuevaOrden.js';
+import NuevaOrden from '../servicioCliente/NuevaOrden.js';
 
 // Usamos las rutas específicas de Secretaría
 router.use('/clientes', clientesRoutes);

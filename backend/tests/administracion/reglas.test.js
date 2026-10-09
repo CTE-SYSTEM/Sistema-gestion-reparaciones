@@ -38,7 +38,7 @@ test('Auditoría elimina contraseñas, hashes y tokens incluso en estructuras an
 });
 test('Programación usa la fecha de Nicaragua y cruza días, semanas y años', () => {
   const base = { ...DEFAULT_ADMIN_SETTINGS.respaldos };
-  assert.equal(nextBackupDate(base, new Date('2026-12-31T23:30:00Z')).toISOString(), '2027-01-01T08:00:00.000Z');
+  assert.equal(nextBackupDate(base, new Date('2026-12-31T23:30:00Z')).toISOString(), '2027-01-04T08:00:00.000Z');
   assert.equal(nextBackupDate({ ...base, frecuencia: 'diaria' }, new Date('2026-09-29T03:00:00Z')).toISOString(), '2026-09-29T08:00:00.000Z');
   assert.equal(nextBackupDate({ ...base, frecuencia: 'diaria' }, new Date('2026-09-29T08:00:00Z')).toISOString(), '2026-09-30T08:00:00.000Z');
   assert.equal(nextBackupDate({ ...base, frecuencia: 'semanal', dia_semana: 1 }, new Date('2026-09-29T10:00:00Z')).toISOString(), '2026-10-05T08:00:00.000Z');

@@ -307,7 +307,7 @@ const Proveedores = () => {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
-          placeholder="Buscar proveedores..."
+          placeholder="Buscar nombre, contacto, teléfono o correo..."
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           className="w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition-all"

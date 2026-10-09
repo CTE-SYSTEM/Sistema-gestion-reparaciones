@@ -14,6 +14,7 @@ export const administracionService = {
   createBackup: () => api.post(`${root}/backups/manual`),
   downloadBackup: (month, name) => api.get(`${root}/backups/${encodeURIComponent(month)}/${encodeURIComponent(name)}/descargar`, { responseType: 'blob' }),
   verifyBackup: (month, name) => api.post(`${root}/backups/${encodeURIComponent(month)}/${encodeURIComponent(name)}/verificar`),
+  restoreBackup: (month, name, respaldoId, confirmacion) => api.post(`${root}/backups/${encodeURIComponent(month)}/${encodeURIComponent(name)}/restaurar`, { respaldo_id: respaldoId, confirmacion }),
   getCatalogo: (signal) => api.get(`${root}/reportes/catalogo`, { signal }),
   getOpciones: (signal) => api.get(`${root}/reportes/opciones`, { signal }),
   getReporte: (type, params, signal) => api.get(`${root}/reportes/${type}`, { params, signal, cache: false }),

@@ -1,5 +1,5 @@
 import * as service from '../../services/JefeTecnico/supervisionService.js';
-import { notifyTecnico, notifyRole, notifyRoles } from '../../services/notifications.js';
+import { notifyJefeTecnico, notifyTecnico, notifyRole, notifyRoles } from '../../services/notifications.js';
 
 export const respond = (operation, message) => async (req, res) => {
   try { res.json({ data: await operation(req), ...(message ? { message } : {}) }); }
@@ -31,7 +31,7 @@ export const intervenirTrabajo = (tipo) => respond(async (req) => {
     await workNotice(tipo, actualizado, 'Trabajo reasignado a tu cuenta', `El trabajo #${req.params.id} quedó a tu cargo. Motivo: ${req.body.motivo}`, 'trabajo_reasignado');
   } else {
     await workNotice(tipo, actualizado, 'Finalización excepcional', `El jefe registró una finalización excepcional para la orden #${req.params.id}.`, 'orden_cerrada');
-    await notifyRoles(['Secretaria', 'Recepcion', 'Contabilidad', 'Calidad'], { type: 'orden_finalizada', title: 'Orden finalizada', message: `La orden #${req.params.id} quedó finalizada.`, entity: { kind: 'orden', id: Number(req.params.id) } });
+    await notifyRoles(['Secretaria', 'ServicioCliente', 'Contabilidad', 'Calidad'], { type: 'orden_finalizada', title: 'Orden finalizada', message: `La orden #${req.params.id} quedó finalizada.`, entity: { kind: 'orden', id: Number(req.params.id) } });
   }
   return actualizado;
 }, 'Intervención excepcional registrada con su motivo');
@@ -39,14 +39,28 @@ export const actualizarDisponibilidad = respond((req) => service.disponibilidad(
 export const revisarIrreparable = respond(async (req) => {
   const r = await service.revisarIrreparable(req.params.id, req.body, req.user);
   await workNotice('orden', r, 'Irreparabilidad revisada', `Orden #${req.params.id}: ${req.body.decision === 'APROBADO' ? 'irreparabilidad confirmada' : 'regresa a reparación'}. ${req.body.motivo}`, 'irreparable_revisado');
-  if (req.body.decision === 'APROBADO') await notifyRoles(['Secretaria', 'Recepcion', 'Contabilidad'], { type: 'irreparable_confirmado', title: 'Irreparabilidad confirmada', message: `El jefe confirmó la irreparabilidad de la orden #${req.params.id}.`, entity: { kind: 'orden', id: Number(req.params.id) } });
+  if (req.body.decision === 'APROBADO') await notifyRoles(['Secretaria', 'ServicioCliente', 'Contabilidad'], { type: 'irreparable_confirmado', title: 'Irreparabilidad confirmada', message: `El jefe confirmó la irreparabilidad de la orden #${req.params.id}.`, entity: { kind: 'orden', id: Number(req.params.id) } });
   return r;
 }, 'Revisión de irreparabilidad registrada');
 export const procesarRepuesto = (accion) => respond(async (req) => {
   const r = await service.accionRepuesto(req.params.id, accion, req.body, req.user);
-  const payload = { type: `repuesto_${accion}`, title: `Solicitud de repuesto: ${accion}`, message: `La solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id} fue procesada. ${r.motivo_rechazo || ''}`, entity: { kind: 'repuesto', id: r.id_detalle_repuesto, orden_id: r.orden_id } };
+  const equipo = r.orden?.diagnostico?.equipo;
+  const nombreEquipo = [equipo?.tipo, equipo?.marca, equipo?.modelo].filter(Boolean).join(' ');
+  const pieza = r.repuesto?.nombre || r.pieza_solicitada || 'pieza';
+  const shortage = accion === 'sin-existencia', reviewed = accion === 'revisar-disponibilidad';
+  const payload = { type: shortage ? 'repuesto_sin_existencia' : reviewed ? 'repuesto_disponibilidad_revisada' : `repuesto_${accion}`,
+    title: shortage ? 'Pieza sin existencias' : reviewed ? 'Existencia revisada' : accion === 'entregar' ? 'Pieza entregada al taller' : `Solicitud de repuesto: ${accion}`,
+    severity: shortage ? 'warning' : 'info',
+    message: shortage
+      ? `Bodega registró que faltan ${r.cantidad_usada || 1} unidad(es) de ${pieza} para la orden #${r.orden_id}. Revise la solicitud #${r.id_detalle_repuesto}.`
+      : reviewed ? `Bodega volvió a comprobar ${pieza} para la orden #${r.orden_id}; la solicitud puede continuar hacia la entrega.`
+      : accion === 'entregar'
+      ? `${r.cantidad_usada || 1} × ${pieza} de la orden #${r.orden_id}${nombreEquipo ? ` para ${nombreEquipo}` : ''} ya está disponible. Compra #${r.compra_id || 'sin identificar'}.`
+      : `La solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id} fue procesada. ${r.motivo_rechazo || ''}`,
+    entity: { kind: 'repuesto', id: r.id_detalle_repuesto, orden_id: r.orden_id } };
   await notifyTecnico(r.tecnico_solicitante || r.orden.tecnico, payload);
   if (r.tecnico_solicitante?.id_tecnico !== r.orden.tecnico?.id_tecnico) await notifyTecnico(r.orden.tecnico, payload);
-  if (['aprobar', 'entregar', 'devolver'].includes(accion)) await notifyRole('Bodega', payload);
+  if (shortage) await notifyJefeTecnico(payload);
+  if (['aprobar', 'entregar', 'devolver', 'sin-existencia', 'revisar-disponibilidad'].includes(accion)) await notifyRole('Bodega', payload);
   return r;
 }, 'Acción de repuesto registrada correctamente');

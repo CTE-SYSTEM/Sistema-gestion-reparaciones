@@ -25,29 +25,29 @@ export default function FotosCompra({ id, onChanged }) {
     let saved = 0;
     try {
       for (const file of files) {
-        if (file.size > MAX_PHOTO_BYTES || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error(`Cada foto debe ser JPG, PNG o WebP y medir hasta ${PHOTO_LIMIT_LABEL}.`);
+        if (file.size > MAX_PHOTO_BYTES || !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type)) throw new Error(`Cada comprobante debe ser JPG, PNG, WebP o PDF y medir hasta ${PHOTO_LIMIT_LABEL}.`);
         await subirFotoCompra(id, file);
         saved += 1;
       }
-      setFiles([]); setNotice(`${saved} foto(s) guardada(s).`); await reload(); onChanged?.();
+      setFiles([]); setNotice(`${saved} comprobante(s) guardado(s).`); await reload(); onChanged?.();
     } catch (e) { setFiles((prev) => prev.slice(saved)); setError(e.response?.data?.error || e.message || 'No se pudo guardar el ticket'); await reload().catch(() => {}); }
     finally { setBusy(false); }
   };
   const open = async (foto) => {
     setError('');
     try { const response = await descargarFotoCompra(foto.id_archivo); setPreview({ foto, url: URL.createObjectURL(response.data) }); }
-    catch { setError('No se pudo abrir la foto del ticket'); }
+    catch { setError('No se pudo abrir el comprobante'); }
   };
   return <section className="mt-4 rounded-xl border bg-slate-50 p-4 text-left">
-    <h3 className="font-semibold">Fotos del ticket · compra #{id}</h3>
-    <p className="mt-1 text-xs text-slate-500">Las fotos quedan vinculadas a esta compra y organizadas por fecha.</p>
-    <label className="mt-3 block text-sm">Agregar fotos del ticket<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={(e) => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /></label>
+    <h3 className="font-semibold">Comprobantes de la compra #{id}</h3>
+    <p className="mt-1 text-xs text-slate-500">Fotos y PDF quedan vinculados a esta compra y organizados por fecha.</p>
+    <label className="mt-3 block text-sm">Agregar ticket o factura<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple disabled={busy} onChange={(e) => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }} className="mt-1 block w-full text-xs" /></label>
     <button type="button" disabled={busy} onClick={() => setCameraOpen(true)} className="rounded border px-3 py-2 text-xs font-semibold text-indigo-700 disabled:opacity-50">Usar cámara de este equipo</button>
     <div className="mt-2"><RemotePhotoBridge onAdd={addFiles} disabled={busy} /></div>
     {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={(file) => addFiles([file])} />}
     {files.length > 0 && <div className="mt-2"><p className="text-xs">{files.map((f) => f.name).join(', ')}</p><button type="button" onClick={upload} disabled={busy} className="mt-2 rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Guardar fotos'}</button></div>}
     {error && <p role="alert" className="mt-2 text-xs text-red-700">{error}</p>}{notice && <p role="status" className="mt-2 text-xs text-emerald-700">{notice}</p>}
     <div className="mt-3 flex flex-wrap gap-2">{fotos.map((foto) => <button key={foto.id_archivo} type="button" onClick={() => open(foto)} className="rounded border bg-white px-3 py-2 text-left text-xs text-indigo-700"><strong className="block">{foto.nombre_original}</strong><span>{new Date(foto.fecha_subida).toLocaleString('es-NI', { timeZone: 'America/Managua' })}</span></button>)}{!fotos.length && <p className="text-xs text-slate-500">Sin fotos del ticket.</p>}</div>
-    {preview && <div className="mt-3 rounded border bg-white p-3"><img src={preview.url} alt={preview.foto.nombre_original} className="max-h-96 max-w-full object-contain" /><div className="mt-2 flex gap-3 text-xs"><a href={preview.url} download={preview.foto.nombre_original} className="text-indigo-700 underline">Descargar</a><button type="button" onClick={() => setPreview(null)} className="underline">Cerrar</button></div></div>}
+    {preview && <div className="mt-3 rounded border bg-white p-3">{preview.foto.tipo_mime === 'application/pdf' ? <iframe src={preview.url} title={preview.foto.nombre_original} className="h-96 w-full rounded border" /> : <img src={preview.url} alt={preview.foto.nombre_original} className="max-h-96 max-w-full object-contain" />}<div className="mt-2 flex gap-3 text-xs"><a href={preview.url} download={preview.foto.nombre_original} className="text-indigo-700 underline">Descargar</a><button type="button" onClick={() => setPreview(null)} className="underline">Cerrar</button></div></div>}
   </section>;
 }

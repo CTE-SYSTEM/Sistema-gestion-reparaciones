@@ -1,5 +1,5 @@
 import prisma from '../../app/prismaClient.js';
-import ordenService from '../../services/recepcion/ordenService.js';
+import ordenService from '../../services/servicioCliente/ordenService.js';
 import { notifyJefeTecnico, notifyRoles, notifyTecnico } from '../../services/notifications.js';
 
 export const getOrdenes = async (req, res) => {
@@ -71,8 +71,8 @@ export const createOrden = async (req, res) => {
       entity: { kind: 'orden', id: orden.id_orden },
     });
 
-    await notifyRoles(['Secretaria', 'Recepcion'], {
-      type: 'orden_creada_secretaria',
+    await notifyRoles(['Secretaria', 'ServicioCliente'], {
+      type: 'orden_creada_servicio_cliente',
       title: 'Orden generada',
       message: `La orden #${orden?.id_orden || orden?.id || diagnosticoId} fue creada correctamente`,
       severity: 'success',
@@ -109,6 +109,11 @@ export const createOrdenDirecta = async (req, res) => {
   try {
     const orden = await ordenService.crearOrdenDirecta(req.body, req.user);
     await notifyJefeTecnico({ type: 'orden_creada', title: 'Orden directa pendiente de asignación', message: `La orden #${orden.id_orden} necesita un técnico.`, severity: 'warning', entity: { kind: 'orden', id: orden.id_orden } });
+    await notifyRoles(['Secretaria', 'ServicioCliente'], {
+      type: 'orden_creada_servicio_cliente', title: 'Orden directa generada',
+      message: `La orden directa #${orden.id_orden} fue creada correctamente.`, severity: 'success',
+      entity: { kind: 'orden', id: orden.id_orden },
+    });
     res.status(201).json({ data: orden });
   } catch (error) {
     res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo crear la orden directa' });

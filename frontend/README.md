@@ -119,7 +119,8 @@ Un 401 fuera del login limpia la sesión, vacía la caché HTTP y emite `auth:un
 | `/admin/tecnicos`, `/ganancias` bajo `/admin` | Rendimiento y finanzas. |
 | `/admin/historial-equipo`, `/historial-repuesto` bajo `/admin` | Trazabilidad administrativa. |
 | `/secretaria` | `features/secretaria/pages/SecretariaDashboard.jsx`. |
-| `/recepcion/clientes`, `/equipos`, `/diagnostico`, `/nueva-orden`, `/entregas` y `/flujo-atencion` | Recepción y atención al cliente. |
+| `/recepcion/clientes`, `/recepcion/equipos`, `/recepcion/diagnostico` y `/recepcion/flujo-atencion` | Recepción de clientes y equipos. |
+| `/servicio-cliente/nueva-orden`, `/servicio-cliente/entregas`, `/servicio-cliente/flujo-atencion` y `/servicio-cliente/reclamos` | Contacto, autorización, órdenes y entrega. |
 | `/bodega/repuestos`, `/tipos-repuesto`, `/compras`, `/proveedores` | Inventario y abastecimiento. |
 | `/contabilidad/facturacion` | Emisión y consulta de facturas. |
 | `/calidad`, `/garantias` | Control de calidad y gestión de garantías. |
@@ -141,7 +142,7 @@ Cada pantalla y servicio está en la carpeta de su área. `features/secretaria/`
 | Clientes | [Clientes.jsx](src/features/recepcion/pages/Clientes.jsx) | [clientesService.js](src/features/recepcion/services/clientesService.js). |
 | Equipos | [Equipos.jsx](src/features/recepcion/pages/Equipos.jsx) | [equiposService.js](src/features/recepcion/services/equiposService.js). |
 | Diagnóstico | [Diagnostico.jsx](src/features/recepcion/pages/Diagnostico.jsx) | [diagnosticoService.js](src/features/recepcion/services/diagnosticoService.js). |
-| Órdenes | [NuevaOrden.jsx](src/features/recepcion/pages/NuevaOrden.jsx) | [ordenesService.js](src/features/recepcion/services/ordenesService.js). |
+| Órdenes | [NuevaOrden.jsx](src/features/servicioCliente/pages/NuevaOrden.jsx) | [ordenesService.js](src/features/servicioCliente/services/ordenesService.js). |
 | Repuestos | [Repuestos.jsx](src/features/bodega/pages/Repuestos.jsx) | [repuestosService.js](src/features/bodega/services/repuestosService.js). |
 | Tipos de repuesto | [TiposRepuesto.jsx](src/features/bodega/pages/TiposRepuesto.jsx) | [tiposRepuestoService.js](src/features/bodega/services/tiposRepuestoService.js). |
 | Proveedores | [Proveedores.jsx](src/features/bodega/pages/Proveedores.jsx) | [proveedoresService.js](src/features/bodega/services/proveedoresService.js). |
@@ -296,6 +297,8 @@ Para fotografías y otras descargas se utiliza respuesta binaria. Las URL de pre
 | `VITE_API_URL` | Base pública de Axios. Desarrollo habitual: `/api`; backend separado: `https://backend.example/api`. |
 | `VITE_PROXY_TARGET` | Destino del proxy del servidor Vite. Host: `http://localhost:5000`; Compose: `http://backend:5000`. |
 | `VITE_SOCKET_URL` | URL opcional de Socket.IO si necesita un destino independiente. |
+
+No hace falta crear `frontend/.env` para el desarrollo local: la API usa `/api` y Vite dirige esas peticiones a `http://localhost:5000` por defecto. Si la interfaz se publica separada del backend, configure `VITE_API_URL` en el entorno de compilación; [`frontend/.env.example`](.env.example) muestra las opciones públicas. La clave de Resend nunca va en variables `VITE_`.
 
 El socket usa `VITE_SOCKET_URL`, o deriva el destino de `VITE_API_URL` retirando `/api`, o usa el origen de la ventana como alternativa.
 

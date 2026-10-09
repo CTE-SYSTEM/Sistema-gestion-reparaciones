@@ -18,6 +18,14 @@ export const initializeAdministrationStorage = async () => {
   } finally { await client.end(); }
   await prisma.$executeRaw`INSERT INTO "ConfiguracionAdministracion" (id, valores)
     VALUES (1, CAST(${JSON.stringify(DEFAULT_ADMIN_SETTINGS)} AS JSONB)) ON CONFLICT (id) DO NOTHING`;
+  // Migra únicamente la programación inicial anterior; respeta cambios hechos por el administrador.
+  await prisma.$executeRaw`UPDATE "ConfiguracionAdministracion"
+    SET valores = jsonb_set(jsonb_set(valores, '{respaldos,frecuencia}', '"semanal"'::jsonb), '{respaldos,conservacion_dias}', '28'::jsonb),
+      revision = revision + 1, actualizado_en = now()
+    WHERE id = 1 AND revision = 0 AND valores #>> '{respaldos,frecuencia}' = 'mensual'
+      AND valores #>> '{respaldos,conservacion_dias}' = '0'
+      AND valores #>> '{respaldos,hora}' = '02:00'
+      AND valores #>> '{respaldos,dia_mes}' = '1'`;
 };
 export const getAdminSettings = async () => {
   const [row] = await prisma.$queryRaw`SELECT valores, revision, actualizado_por, actualizado_en

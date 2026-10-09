@@ -20,7 +20,7 @@ Ruta principal: **Administración → Negocio** (`/admin/configuracion`). Los va
 | Campo (`negocio`) | Valor inicial | Qué modifica |
 | --- | --- | --- |
 | `nombre` | Centro Técnico Electrónico | Nombre del taller en los datos de negocio. Es obligatorio. |
-| `correo` | Vacío | Correo de contacto del negocio. Puede quedar vacío; no se usa automáticamente como remitente Brevo. |
+| `correo` | Vacío | Correo de contacto del negocio. Puede quedar vacío; no se usa automáticamente como remitente Resend. |
 | `telefono` | Vacío | Teléfono de contacto mostrado por las vistas que leen la configuración. |
 | `direccion` | Vacío | Dirección del taller. |
 | `garantia_meses` | 3 | Duración predeterminada de nuevas garantías; admite de 1 a 36 meses. |
@@ -69,12 +69,12 @@ Una copia completa local depende de `pg_dump`; en Vercel depende de instantánea
 - **Usuarios y roles:** Administración → Usuarios (`/admin/usuarios`) crea o administra personal. Cada usuario edita su correo y contraseña en **Mi cuenta** (`/mi-cuenta`, con accesos desde cada perfil). Los roles asignables desde el formulario y los roles administrativos permitidos están en [`adminPolicy.js`](../backend/src/utils/adminPolicy.js).
 - **Permisos:** las autorizaciones del servidor están en [`permissions.js`](../backend/src/utils/permissions.js). Para agregar un rol o una facultad hay que revisar también rutas, menús, nombres de rol y datos existentes en [`roles.js`](../backend/src/utils/roles.js), [`backend/src/routes`](../backend/src/routes) y [`frontend/src`](../frontend/src). Cambiar solo un botón no cambia la autorización del servidor.
 - **Recuperación de contraseña:** la pantalla de inicio lleva a `/recuperar-password`. Un código de seis dígitos vence en 10 minutos; se permite una solicitud por minuto y hasta cinco intentos por código. El servidor guarda un hash del código y cierra las sesiones al restablecer la contraseña. Estos valores están en [`passwordRecovery.js`](../backend/src/services/passwordRecovery.js); si se cambia la cantidad de dígitos, actualizar también [`RecuperarPassword.jsx`](../frontend/src/pages/Auth/RecuperarPassword.jsx). No hay recuperación por SMS.
-- **Envío genérico de correos:** [`mailService.js`](../backend/src/services/mailService.js) envía por la API transaccional de Brevo a uno o varios destinatarios; admite texto, HTML o el identificador y parámetros de una plantilla de Brevo. Las plantillas propias del sistema se agrupan en [`mailTemplates.js`](../backend/src/services/mailTemplates.js). Para agregar otra notificación por correo, crear su contenido ahí y llamar `sendTransactionalEmail` desde el servicio del backend que realiza la operación; no enviar desde el navegador.
-- **Remitente y respuestas:** `BREVO_SENDER_EMAIL` debe ser un remitente verificado en Brevo; `BREVO_SENDER_NAME` cambia el nombre visible y `BREVO_REPLY_TO_EMAIL` dirige las respuestas. `negocio.correo` es el contacto del taller y se configura aparte. La clave `BREVO_API_KEY` pertenece exclusivamente al backend.
+- **Envío genérico de correos:** [`mailService.js`](../backend/src/services/mailService.js) envía por la API de Resend a uno o varios destinatarios; admite texto, HTML o el identificador y variables de una plantilla publicada en Resend. Las plantillas propias del sistema se agrupan en [`mailTemplates.js`](../backend/src/services/mailTemplates.js). Para agregar otra notificación por correo, crear su contenido ahí y llamar `sendTransactionalEmail` desde el servicio del backend que realiza la operación; no enviar desde el navegador.
+- **Remitente y respuestas:** `RESEND_FROM_EMAIL` debe pertenecer a un dominio verificado en Resend; `RESEND_FROM_NAME` cambia el nombre visible y `RESEND_REPLY_TO_EMAIL` dirige las respuestas. `negocio.correo` es el contacto del taller y se configura aparte. La clave `RESEND_API_KEY` pertenece exclusivamente al backend.
 
-Para activar el envío real, crear una clave API de Brevo, verificar el remitente o dominio en Brevo, poner `BREVO_API_KEY` y `BREVO_SENDER_EMAIL` en el entorno de la API, desplegarla y solicitar un código desde una cuenta activa cuyo correo sea accesible. Verificar recepción, caducidad, cambio de contraseña y nuevo inicio de sesión. Si el proveedor rechaza el envío, el código recién generado se borra y la pantalla informa un error. Consulte [API de envío de Brevo](https://developers.brevo.com/reference/send-transac-email) y [remitentes y dominios](https://developers.brevo.com/docs/getting-started-with-senders-and-domains).
+Para activar el envío real, verificar un dominio en Resend, configurar `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en el entorno de la API, desplegarla y solicitar un código desde una cuenta activa cuyo correo sea accesible. Verificar recepción, caducidad, cambio de contraseña y nuevo inicio de sesión. Si el proveedor rechaza el envío, el código recién generado se borra y la pantalla informa un error. Consulte [API de envío de Resend](https://resend.com/docs/api-reference/emails/send-email) y [dominios](https://resend.com/docs/dashboard/domains/introduction).
 
-**Estado de esta instalación:** la integración de código existe, pero todavía no hay cuenta de Brevo ni remitente verificado. La clave tampoco está configurada en el entorno local disponible. El envío real desde SGR queda pendiente de crear esa cuenta y configurar las credenciales en la API. El correo de prueba enviado antes directamente desde Gmail solo verificó esa cuenta de correo; no probó el envío de SGR por Brevo.
+**Estado de esta instalación:** el backend local tiene `RESEND_API_KEY` y `RESEND_FROM_EMAIL=onboarding@resend.dev` para probar la recuperación de la cuenta `admin_pruebas_gmail`. Resend aceptó un envío de prueba a su correo, pero la recepción en Gmail debe confirmarse en la bandeja. Sin un dominio propio verificado, el remitente de pruebas solo entrega mensajes al correo de la cuenta Resend; no sirve para recuperaciones de otros usuarios ni avisos a clientes. La dirección `*.vercel.app` de la interfaz no permite administrar los registros DNS necesarios para verificar un remitente. La configuración del despliegue público se gestiona por separado.
 
 ## 5. Variables del backend
 
@@ -90,10 +90,10 @@ Use [`backend/.env.example`](../backend/.env.example) como plantilla local. En p
 | `CORS_ORIGIN`, `FRONTEND_URL` | Orígenes públicos permitidos del frontend. | Acceso del navegador a la API. |
 | `REQUEST_BODY_LIMIT` | `1mb` por defecto. | Límite general de peticiones JSON; las rutas de fotos tienen límites propios. |
 | `PDF_NOMBRE_NEGOCIO` | `Servicio técnico` si falta. | Cabecera del PDF de diagnóstico. |
-| `BREVO_API_KEY` | Clave privada de Brevo. | Envío transaccional. |
-| `BREVO_SENDER_EMAIL` | Correo de remitente verificado. | Envío transaccional. |
-| `BREVO_SENDER_NAME` | `SGR Taller` por defecto. | Nombre visible y asunto de recuperación. |
-| `BREVO_REPLY_TO_EMAIL` | Correo opcional para respuestas. | Respuestas a mensajes transaccionales. |
+| `RESEND_API_KEY` | Clave privada de Resend. | Envío transaccional. |
+| `RESEND_FROM_EMAIL` | Correo de un dominio verificado en Resend. | Envío transaccional. |
+| `RESEND_FROM_NAME` | `SGR Taller` por defecto. | Nombre visible y asunto de recuperación. |
+| `RESEND_REPLY_TO_EMAIL` | Correo opcional para respuestas. | Respuestas a mensajes transaccionales. |
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Datos de bucket privado. | Fotos y, si se activa, respaldos remotos. Las cuatro deben estar completas. |
 | `R2_ENDPOINT` | Endpoint S3 opcional de jurisdicción. | Conexión a Cloudflare R2. |
 | `SERVICE_UPLOAD_DIR` | `uploads/servicios` local por defecto. | Lectura y almacenamiento local de fotos de servicios. |

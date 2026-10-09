@@ -56,12 +56,13 @@ const Login = () => {
         case 'Secretaria':
           targetPath = '/secretaria';
           break;
-        case 'Recepcion': targetPath = '/recepcion/clientes'; break;
-        case 'Bodega': targetPath = '/bodega/repuestos'; break;
+        case 'Recepcion': targetPath = '/recepcion'; break;
+        case 'ServicioCliente': targetPath = '/servicio-cliente'; break;
+        case 'Bodega': targetPath = '/bodega'; break;
         case 'Calidad': targetPath = '/calidad'; break;
         case 'Reclamos': targetPath = '/reclamos'; break;
         case 'Garantias': targetPath = '/garantias'; break;
-        case 'Contabilidad': targetPath = '/contabilidad/facturacion'; break;
+        case 'Contabilidad': targetPath = '/contabilidad'; break;
         case 'TecnicoJefe':
           targetPath = '/tecnico-jefe'; 
           break;
@@ -184,7 +185,7 @@ const Login = () => {
 
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
-              Contrasena
+              Contraseña
             </label>
             <div className="relative">
               <input 
@@ -203,7 +204,7 @@ const Login = () => {
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
-                aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />

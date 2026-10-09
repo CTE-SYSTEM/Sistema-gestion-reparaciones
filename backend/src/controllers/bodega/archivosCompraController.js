@@ -13,6 +13,7 @@ const mimeInfo = {
   'image/jpeg': { ext: '.jpg', valid: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
   'image/png': { ext: '.png', valid: (b) => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) },
   'image/webp': { ext: '.webp', valid: (b) => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' },
+  'application/pdf': { ext: '.pdf', valid: (b) => b.length > 8 && b.toString('ascii', 0, 5) === '%PDF-' && b.subarray(-1024).includes(Buffer.from('%%EOF')) },
 };
 const photoSelect = { id_archivo: true, compra_id: true, nombre_original: true, fecha_subida: true, tipo_mime: true,
   compra: { select: { documento: true, fecha_obtencion: true, proveedor: { select: { nombre: true } }, repuesto: { select: { nombre: true } } } } };
@@ -54,7 +55,7 @@ export const subirFotoCompra = async (req, res) => {
   const mime = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
   const bytes = req.body;
   if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > maxPhotoBytes || !mimeInfo[mime]?.valid(bytes)) {
-    return res.status(400).json({ error: `Adjunte una foto JPG, PNG o WebP de hasta ${photoLimitLabel}` });
+    return res.status(400).json({ error: `Adjunte un comprobante JPG, PNG, WebP o PDF de hasta ${photoLimitLabel}` });
   }
   const compra = await prisma.compras.findUnique({ where: { id_compra: id }, select: { id_compra: true, fecha_obtencion: true } });
   if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
@@ -67,7 +68,7 @@ export const subirFotoCompra = async (req, res) => {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const fileName = `${randomUUID()}${mimeInfo[mime].ext}`;
-  const key = useR2 ? `compras/${year}/${month}/compra-${id}/${fileName}` : fileName;
+  const key = useR2 ? `documentos/compras/${year}/${month}/compra-${id}/${fileName}` : fileName;
   const fullPath = path.join(uploadRoot, fileName);
   let stored = false;
   try {
@@ -93,7 +94,7 @@ export const descargarFotoCompra = async (req, res) => {
   const row = await prisma.archivosCompra.findUnique({ where: { id_archivo: id } });
   if (!row) return res.status(404).json({ error: 'Fotografía no encontrada' });
   try {
-    const bytes = row.ruta_archivo.startsWith('compras/') ? await leerFoto(row.ruta_archivo)
+    const bytes = row.ruta_archivo.startsWith('compras/') || row.ruta_archivo.startsWith('documentos/compras/') ? await leerFoto(row.ruta_archivo)
       : await readFile(path.join(uploadRoot, path.basename(row.ruta_archivo)));
     res.type(row.tipo_mime);
     res.set('Cache-Control', 'private, no-store');

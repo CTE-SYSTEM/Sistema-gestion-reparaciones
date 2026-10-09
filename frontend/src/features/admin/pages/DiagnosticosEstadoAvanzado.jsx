@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Table from '../../../components/Table';
-import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
 import { diagnosticosAdminService, tecnicosAdminService } from '../services';
 import { formatoPresupuesto } from '../../../utils/monedaPresupuesto';
 
@@ -64,7 +63,6 @@ export default function DiagnosticosEstadoAvanzado() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [searchText, setSearchText] = useState('');
-  const [downloading, setDownloading] = useState(false);
   const [editingDiagnostico, setEditingDiagnostico] = useState(null);
 
   const fetchReport = async () => {
@@ -135,28 +133,6 @@ export default function DiagnosticosEstadoAvanzado() {
     },
   ], []);
 
-  const downloadReportCsv = async () => {
-    setDownloading(true);
-    try {
-      await downloadJsonExcel(filteredDiagnosticos, diagnosticoColumnsBase, 'diagnosticos_general.xlsx');
-    } catch (err) {
-      setError('No se pudo descargar el reporte general.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const downloadReportPdf = () => {
-    setDownloading(true);
-    try {
-      downloadJsonPdf(filteredDiagnosticos, diagnosticoColumnsBase, 'diagnosticos_general.pdf', 'Reporte General de Diagnosticos');
-    } catch (err) {
-      setError('No se pudo descargar el reporte general en PDF.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   const handleUpdateDiagnostico = async (event) => {
     event.preventDefault();
     if (!editingDiagnostico) return;
@@ -196,18 +172,10 @@ export default function DiagnosticosEstadoAvanzado() {
           <h1 className="text-2xl font-bold text-slate-800">Diagnosticos por estado</h1>
           <p className="text-gray-400 text-sm mt-0.5">Supervisa, busca y edita diagnosticos desde una sola vista.</p>
         </div>
-        <button
-          type="button"
-          onClick={downloadReportPdf}
-          disabled={downloading || loading || filteredDiagnosticos.length === 0}
-          className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
-        >
-          Generar Reporte General
-        </button>
       </div>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 space-y-6">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-end">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto] lg:items-end">
           <div>
             <span className="text-xs font-bold text-gray-500 uppercase block">Buscador inteligente</span>
             <input
@@ -228,9 +196,6 @@ export default function DiagnosticosEstadoAvanzado() {
           </label>
           <button type="button" onClick={fetchReport} disabled={loading} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:bg-slate-300">
             Consultar
-          </button>
-          <button type="button" onClick={downloadReportCsv} disabled={downloading || filteredDiagnosticos.length === 0} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:bg-slate-300">
-            Excel
           </button>
         </div>
 

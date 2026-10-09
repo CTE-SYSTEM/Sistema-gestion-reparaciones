@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { ClipboardList, FileCheck, Home, LogOut, Menu, Package, RefreshCw, UserRound, Wrench } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 import { useRealtimeNotifications } from '../../../hooks/useRealtimeNotifications';
 import BrandLogo from '../../../components/BrandLogo';
@@ -12,6 +12,7 @@ import OrdenesGrid from '../components/OrdenesGrid';
 import RepuestosTable from '../components/RepuestosTable';
 import { TecnicoDashboardModals } from '../components/sections/TecnicoDashboardModals';
 import ExpedienteTecnico from '../components/ExpedienteTecnico';
+import MiCuenta from '../../admin/pages/MiCuenta';
 import '../../tecnicoJefe/components/supervision.css';
 import '../components/tecnico.css';
 
@@ -25,7 +26,11 @@ const tabs = [
 ];
 export default function TecnicoDashboard() {
   const { user, logout } = useContext(AuthContext);
-  const [activeTab, setActiveTab] = useState('resumen'), [mobile, setMobile] = useState(false);
+  const { pathname, search: routeSearch } = useLocation();
+  const navigate = useNavigate();
+  const accountView = pathname === '/tecnico/mi-cuenta';
+  const requestedTab = new URLSearchParams(routeSearch).get('tab');
+  const [activeTab, setActiveTab] = useState(tabs.some((tab) => tab.id === requestedTab) ? requestedTab : 'resumen'), [mobile, setMobile] = useState(false);
   const [page, setPage] = useState(1), [search, setSearch] = useState(''), [debouncedSearch, setDebouncedSearch] = useState('');
   const [periodo, setPeriodo] = useState('todos'), [grupo, setGrupo] = useState('activos');
   const [estado, setEstado] = useState(''), [prioridad, setPrioridad] = useState('');
@@ -40,7 +45,7 @@ export default function TecnicoDashboard() {
   }, [search, debouncedSearch]);
   const realtime = useRealtimeNotifications({ enabled: Boolean(user?.username), persistent: true, onRefresh: dashboard.actions.invalidate,
     refreshIntervalMs: 60000, refreshOnConnect: true, refreshOnlyDisconnected: true });
-  const go = (tab, group = 'activos') => { setActiveTab(tab); setGrupo(group); setSearch(''); setDebouncedSearch(''); setPage(1); setEstado(''); setPrioridad(''); setMobile(false); setActionError(''); };
+  const go = (tab, group = 'activos') => { if (accountView) navigate(`/tecnico?tab=${tab}`); setActiveTab(tab); setGrupo(group); setSearch(''); setDebouncedSearch(''); setPage(1); setEstado(''); setPrioridad(''); setMobile(false); setActionError(''); };
   const filter = (setter, value) => { setter(value); setPage(1); };
   const changeState = async (id, state) => {
     const orden = dashboard.items.find((r) => r.id === id);
@@ -64,14 +69,14 @@ export default function TecnicoDashboard() {
     {mobile && <button className="jefe-mobile-shade" aria-label="Cerrar navegación" onClick={() => setMobile(false)} />}
     <aside className={'jefe-sidebar ' + (mobile ? 'open' : '')} aria-label="Navegación del técnico">
       <div className="jefe-brand"><BrandLogo className="h-9 w-9" /><div><strong>SGR · Taller</strong><small>Área técnica</small></div></div>
-      <div className="jefe-nav-caption">Mis trabajos asignados</div><nav className="jefe-nav">{tabs.map((t) => <button key={t.id} aria-current={activeTab === t.id ? 'page' : undefined} onClick={() => go(t.id)}><t.icon size={17} /><span>{t.title}</span>{stats[t.count] > 0 && <span className="jefe-nav-count">{stats[t.count]}</span>}</button>)}</nav>
-      <div className="jefe-sidebar-footer"><p>{user?.username}</p><small>Técnico · Ejecución y pruebas</small><Link to="/mi-cuenta" className="mt-3 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-200 hover:bg-indigo-500/20 hover:text-white"><UserRound size={15} /> Mi cuenta</Link><button onClick={logout}><LogOut size={15} /> Cerrar sesión</button></div>
+      <div className="jefe-nav-caption">Mis trabajos asignados</div><nav className="jefe-nav">{tabs.map((t) => <button key={t.id} aria-current={!accountView && activeTab === t.id ? 'page' : undefined} onClick={() => go(t.id)}><t.icon size={17} /><span>{t.title}</span>{stats[t.count] > 0 && <span className="jefe-nav-count">{stats[t.count]}</span>}</button>)}</nav>
+      <div className="jefe-sidebar-footer"><p>{user?.personName || user?.username}</p><small>Técnico · Ejecución y pruebas</small><Link to="/tecnico/mi-cuenta" aria-current={accountView ? 'page' : undefined} className="mt-3 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-200 hover:bg-indigo-500/20 hover:text-white"><UserRound size={15} /> Mi cuenta</Link><button onClick={logout}><LogOut size={15} /> Cerrar sesión</button></div>
     </aside>
     <div className="jefe-workspace">
-      <header className="jefe-topbar"><div className="jefe-topbar-left"><button className="jefe-icon-btn jefe-mobile-menu" aria-label="Abrir navegación" aria-expanded={mobile} onClick={() => setMobile(!mobile)}><Menu size={18} /></button><span>Panel técnico</span><strong>{section.title}</strong></div>
+      <header className="jefe-topbar"><div className="jefe-topbar-left"><button className="jefe-icon-btn jefe-mobile-menu" aria-label="Abrir navegación" aria-expanded={mobile} onClick={() => setMobile(!mobile)}><Menu size={18} /></button><span>Panel técnico</span><strong>{accountView ? 'Mi cuenta' : section.title}</strong></div>
         <div className="jefe-topbar-right"><span className="text-xs">{import.meta.env.VITE_NOTIFICATIONS_MODE === 'poll' ? 'Avisos actualizados periódicamente' : realtime.connected ? 'Avisos conectados' : 'Reconectando avisos'}</span><div className="relative"><NotificationBell count={realtime.unreadCount} connected={realtime.connected} expanded={notificationsOpen} onClick={() => { if (!notificationsOpen) realtime.reloadNotifications(); setNotificationsOpen(!notificationsOpen); }} />{notificationsOpen && <NotificationTray notifications={realtime.notifications} total={realtime.unreadCount} connected={realtime.connected} onClear={realtime.clearNotifications} onRead={realtime.markNotificationRead} clearing={realtime.clearing} loading={realtime.loadingHistory} error={realtime.notificationsError} onClose={() => setNotificationsOpen(false)} onOpen={openNotice} />}</div></div>
       </header>
-      <main className="jefe-main"><NotificationSummary notifications={realtime.notifications} count={realtime.unreadCount} onReview={reviewNotices} onOpen={openNotice} />
+      <main className="jefe-main">{accountView ? <MiCuenta /> : <><NotificationSummary notifications={realtime.notifications} count={realtime.unreadCount} onReview={reviewNotices} onOpen={openNotice} />
         <div className="jefe-heading"><div><div className="jefe-eyebrow">Ejecución técnica</div><h1>{section.title}</h1><p>Equipos, informes, pruebas y piezas de tus trabajos asignados.</p></div><button className="jefe-btn" disabled={dashboard.loading || dashboard.summaryLoading} onClick={dashboard.actions.reload}><RefreshCw size={14} /> Actualizar</button></div>
         {error && <div role="alert" className="jefe-message error">{error}<button onClick={() => { setActionError(''); dashboard.actions.reload(); }}>Reintentar</button></div>}
         <div className="tecnico-periodo"><label>Periodo <select aria-label="Filtrar periodo" value={periodo} onChange={(e) => filter(setPeriodo, e.target.value)}><option value="todos">Todos</option><option value="hoy">Hoy</option><option value="mes">Este mes</option><option value="anio">Este año</option></select></label><small>Fecha de asignación para trabajos activos, de finalización para cerrados y de solicitud para piezas. Hora de Managua.</small></div>
@@ -93,14 +98,14 @@ export default function TecnicoDashboard() {
             <input aria-label="Buscar trabajos técnicos" placeholder={activeTab === 'repuestos' ? 'Buscar pieza o número de orden…' : 'Buscar código, tipo, marca o modelo…'} value={search} onChange={(e) => setSearch(e.target.value)} />
             {activeTab !== 'repuestos' && <select aria-label="Filtrar prioridad" value={prioridad} onChange={(e) => filter(setPrioridad, e.target.value)}><option value="">Todas las prioridades</option><option value="URGENTE">Urgente</option><option value="ALTA">Alta</option><option value="NORMAL">Normal</option></select>}
             {!completed && activeTab !== 'repuestos' && <select aria-label="Filtrar grupo de trabajo" value={grupo} onChange={(e) => filter(setGrupo, e.target.value)}><option value="activos">Todos los activos</option><option value="por_iniciar">Por iniciar</option>{!diagnostics && <><option value="esperando_piezas">Esperando piezas</option><option value="revision_jefe">Pendientes del jefe</option></>}</select>}
-            {activeTab === 'repuestos' && <select aria-label="Filtrar estado de piezas" value={estado} onChange={(e) => filter(setEstado, e.target.value)}><option value="">Todas las solicitudes</option><option value="PENDIENTE">Pendientes de aprobación</option><option value="POR_ENTREGAR">Aprobadas por entregar</option><option value="APROBADO">Aprobadas</option><option value="DENEGADO">Rechazadas</option></select>}
+            {activeTab === 'repuestos' && <select aria-label="Filtrar estado de piezas" value={estado} onChange={(e) => filter(setEstado, e.target.value)}><option value="">Todas las solicitudes</option><option value="PENDIENTE">Pendientes de aprobación</option><option value="POR_ENTREGAR">Aprobadas por entregar</option><option value="SIN_EXISTENCIA">Sin existencias</option><option value="APROBADO">Aprobadas</option><option value="DENEGADO">Rechazadas</option></select>}
           </div>
           {dashboard.loading && <p role="status" className="mb-3 text-sm text-indigo-700">Actualizando sección…</p>}
           {diagnostics ? <DiagnosticosTable items={dashboard.items} loading={dashboard.loading || dashboard.busy} readOnly={completed} onOpenDiagnostico={setModalDiagnostico} onOpenDetalle={(r, intent) => setExpediente({ kind: 'diagnostico', id: r.id, intent })} onReopen={dashboard.actions.reabrirDiagnostico} onIniciarDiagnostico={async (r) => { try { await dashboard.actions.iniciarDiagnostico(r.id); } catch (err) { setActionError(err.response?.data?.error || 'No se pudo iniciar el diagnóstico'); } }} />
             : activeTab === 'repuestos' ? <RepuestosTable solicitudes={dashboard.items} loading={dashboard.loading} onOpenOrden={(id) => setExpediente({ kind: 'orden', id })} />
             : <OrdenesGrid items={dashboard.items} loading={dashboard.loading} busy={dashboard.busy} completed={completed} username={user?.username} onEstadoChange={changeState} onSolicitarPieza={setModalRepuesto} onOpenDetalle={(r) => setExpediente({ kind: 'orden', id: r.id })} />}
           <div className="tecnico-paginacion"><span>{dashboard.meta.total} registros · Página {page}</span><button disabled={page === 1 || dashboard.loading} onClick={() => setPage(page - 1)}>Anterior</button><button disabled={!dashboard.meta.hasMore || dashboard.loading} onClick={() => setPage(page + 1)}>Siguiente</button></div>
-        </>}
+        </>}</>}
       </main>
     </div>
     <TecnicoDashboardModals modalRepuesto={modalRepuesto} modalDiagnostico={modalDiagnostico} modalCierre={modalCierre}

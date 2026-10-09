@@ -7,9 +7,9 @@ const equipo = { id_equipo: 42, tipo: 'Monitor', marca: 'Sámsung', modelo: 'Ody
 test('cada tipo de foto queda dentro del equipo descriptivo y su etapa', () => {
   for (const [tipoArchivo, { folder, kind }] of Object.entries(PHOTO_STORAGE_STAGES)) {
     const key = r2ServiceKey({ kind, serviceId: 18, equipo, tipoArchivo, ext: '.jpg' });
-    assert.ok(key.startsWith(`monitor/samsung-odyssey-g5-equipo-42/${folder}/${kind}-18-`));
+    assert.ok(key.startsWith(`fotos/equipos/monitor-samsung-odyssey-g5-equipo-42/${folder}/${kind}-18-`));
     assert.match(key, /\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-[0-9a-f]{8}\.jpg$/);
-    assert.equal(key.split('/').length, 4);
+    assert.equal(key.split('/').length, 5);
     assert.ok(isR2Key(key));
     assert.ok(!key.startsWith('r2/') && !key.startsWith('servicios/'));
   }
@@ -19,8 +19,8 @@ test('mantiene las visitas en la misma carpeta y distingue sus fotos sin sobresc
   const params = { kind: 'diagnostico', equipo, tipoArchivo: 'FOTO_RECEPCION', ext: '.png' };
   const first = r2ServiceKey({ ...params, serviceId: 18 });
   const second = r2ServiceKey({ ...params, serviceId: 19 });
-  assert.ok(first.startsWith('monitor/samsung-odyssey-g5-equipo-42/recepcion/diagnostico-18-'));
-  assert.ok(second.startsWith('monitor/samsung-odyssey-g5-equipo-42/recepcion/diagnostico-19-'));
+  assert.ok(first.startsWith('fotos/equipos/monitor-samsung-odyssey-g5-equipo-42/recepcion/diagnostico-18-'));
+  assert.ok(second.startsWith('fotos/equipos/monitor-samsung-odyssey-g5-equipo-42/recepcion/diagnostico-19-'));
   assert.equal(r2EquipmentFolderFromKey(first), r2EquipmentFolderFromKey(second));
   assert.notEqual(first, r2ServiceKey({ ...params, serviceId: 18 }));
 });
@@ -29,7 +29,7 @@ test('reutiliza la carpeta del equipo cuando se corrige su descripción o cambia
   const existingKey = r2ServiceKey({ kind: 'diagnostico', serviceId: 18, equipo, tipoArchivo: 'FOTO_RECEPCION', ext: '.png' });
   const corrected = { ...equipo, tipo: 'Pantalla', marca: 'Samsung', modelo: 'Odyssey G7' };
   const key = r2ServiceKey({ kind: 'orden', serviceId: 19, equipo: corrected, tipoArchivo: 'FOTO_REPARACION', ext: '.jpg', existingKey });
-  assert.ok(key.startsWith('monitor/samsung-odyssey-g5-equipo-42/reparacion/orden-19-'));
+  assert.ok(key.startsWith('fotos/equipos/monitor-samsung-odyssey-g5-equipo-42/reparacion/orden-19-'));
   assert.equal(r2EquipmentFolderFromKey(key, 42), r2EquipmentFolderFromKey(existingKey, 42));
   assert.equal(r2EquipmentFolderFromKey(key, 43), null);
 });
@@ -54,7 +54,7 @@ test('sigue leyendo los dos formatos anteriores y reutiliza su carpeta para los 
     assert.ok(isR2Key(existingKey));
     assert.equal(r2EquipmentFolderFromKey(existingKey, 21), 'celular/samsung-galaxy-a32-equipo-21');
     const key = r2ServiceKey({ kind: 'diagnostico', serviceId: 27, equipo: { id_equipo: 21, tipo: 'Teléfono', marca: 'Samsung', modelo: 'Galaxy A32' }, tipoArchivo: 'FOTO_DIAGNOSTICO', ext: '.jpg', existingKey });
-    assert.ok(key.startsWith('celular/samsung-galaxy-a32-equipo-21/diagnostico/diagnostico-27-'));
+    assert.ok(key.startsWith('fotos/equipos/celular-samsung-galaxy-a32-equipo-21/diagnostico/diagnostico-27-'));
   }
 });
 
@@ -62,14 +62,14 @@ test('equipos idénticos tienen carpetas distintas y no reutilizan la carpeta de
   const params = { kind: 'diagnostico', serviceId: 18, equipo, tipoArchivo: 'FOTO_RECEPCION', ext: '.jpg' };
   const first = r2ServiceKey(params);
   const second = r2ServiceKey({ ...params, equipo: { ...equipo, id_equipo: 43 }, existingKey: first });
-  assert.ok(second.startsWith('monitor/samsung-odyssey-g5-equipo-43/recepcion/'));
+  assert.ok(second.startsWith('fotos/equipos/monitor-samsung-odyssey-g5-equipo-43/recepcion/'));
   assert.notEqual(r2EquipmentFolderFromKey(first), r2EquipmentFolderFromKey(second));
 });
 
 test('normaliza nombres largos, caracteres de ruta y datos no especificados', () => {
   const params = { kind: 'diagnostico', serviceId: 18, tipoArchivo: 'FOTO_RECEPCION', ext: '.jpg' };
   const key = r2ServiceKey({ ...params, equipo: { id_equipo: 42, tipo: '../', marca: 'a'.repeat(47) + '/otra', modelo: null } });
-  assert.ok(key.startsWith(`sin-tipo/${'a'.repeat(47)}-sin-modelo-equipo-42/recepcion/`));
+  assert.ok(key.startsWith(`fotos/equipos/sin-tipo-${'a'.repeat(47)}-sin-modelo-equipo-42/recepcion/`));
   assert.ok(isR2Key(key));
   assert.equal(r2EquipmentFolderFromKey(`../${key}`), null);
 });

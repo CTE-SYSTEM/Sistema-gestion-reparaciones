@@ -9,7 +9,7 @@ La barra lateral del administrador muestra Resumen y Centro de reportes como acc
 | Usuarios y acceso | Crear personal, editar rol, activar, desactivar y cambiar contraseñas | `/admin/usuarios` |
 | Negocio | Datos del taller, condiciones y duración de nuevas garantías, margen inicial | `/admin/configuracion` |
 | Reglas del negocio | Plazos, avisos, política de contraseñas, requisitos por página y permisos por rol | `/admin/reglas` |
-| Respaldos | Historial, descargas, comprobación de integridad y programación | `/admin/respaldos` |
+| Respaldos | Historial, descargas, verificación, recuperación y programación | `/admin/respaldos` |
 | Auditoría | Fecha, autor, módulo, motivo y datos anteriores/nuevos | `/admin/auditoria` |
 | Centro de reportes | Categoría, reporte, filtros, resultados, Excel y PDF | `/admin/reportes` |
 
@@ -19,7 +19,7 @@ Mi cuenta exige la contraseña actual para guardar el perfil, cambiar contraseñ
 
 No se puede desactivar la cuenta propia ni cambiar su rol. Los cambios de acceso se serializan para conservar al menos un administrador activo incluso con solicitudes simultáneas. Usuarios permite crear Secretaría, Técnico y Jefe técnico; conserva los administradores existentes y no permite elevar nuevas cuentas a administrador desde ese formulario. Crear un técnico genera su perfil vinculado. La acción **Contraseña** de cada usuario pide la nueva contraseña, su confirmación y la contraseña del administrador; al guardarla invalida las sesiones anteriores de ese usuario.
 
-El correo del perfil permite recibir un código de recuperación desde **¿Olvidaste tu contraseña?** en el inicio de sesión, cuando la API tiene Brevo configurado con una clave y un remitente verificado. El código vence en diez minutos y su uso invalida las sesiones anteriores. La recuperación por SMS no está implementada. Consulte [Parámetros y elementos genéricos de SGR](parametros-genericos-sgr.md#4-usuarios-perfiles-y-correos) para configurar el envío.
+El correo del perfil permite recibir un código de recuperación desde **¿Olvidaste tu contraseña?** en el inicio de sesión, cuando la API tiene Resend configurado con una clave y un remitente de dominio verificado. El código vence en diez minutos y su uso invalida las sesiones anteriores. La recuperación por SMS no está implementada. Consulte [Parámetros y elementos genéricos de SGR](parametros-genericos-sgr.md#4-usuarios-perfiles-y-correos) para configurar el envío.
 
 ## Configuración y reglas
 
@@ -56,7 +56,7 @@ En Vercel la API no mantiene un proceso permanente: una tarea diaria comprueba l
 
 La conservación se expresa en días; cero conserva todo. Solo se retiran copias completas antiguas gestionadas por el servicio, siempre manteniendo la última completa. Los archivos anteriores sin manifiesto y las copias parciales no se eliminan por esta regla.
 
-Las descargas y verificaciones exigen administrador y rutas comprobadas. Verificar comprueba hashes y estructura del archivo PostgreSQL; no restaura datos del taller. Las pruebas de integración sí restauran una copia en otra base temporal y comprueban datos y funciones.
+Las descargas, verificaciones y restauraciones exigen administrador. En el historial, **Cargar esta versión** aparece solo en copias completas restaurables. La pantalla muestra la fecha y exige escribir `RESTAURAR`. El servidor vuelve a comprobar los archivos y crea una copia completa del estado actual antes de recuperar los datos; esa copia se conserva aunque la política de retención hubiera vencido para la versión elegida. La restauración de un `.dump` se hace en una sola transacción de PostgreSQL. Para instantáneas de Neon se solicita la restauración finalizada sobre la rama configurada; si la solicitud falla o su respuesta se pierde, se debe revisar el estado de Neon antes de reintentar. Las fotografías y archivos externos no cambian. Las pruebas de integración restauran únicamente bases temporales, nunca la base del taller.
 
 Compose monta `C:/backup` en `/backup`; `BACKUP_ROOT` define el destino y `BACKUP_DISPLAY_ROOT` su nombre visible. Las fotografías de R2 y archivos locales requieren una copia independiente: la base contiene sus referencias.
 

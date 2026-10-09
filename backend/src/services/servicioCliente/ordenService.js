@@ -44,6 +44,8 @@ export const listarOrdenes = async (query = {}) => {
     { diagnostico: { equipo: { cliente: { nombre: textMatch } } } },
     { diagnostico: { equipo: { marca: textMatch } } },
     { diagnostico: { equipo: { modelo: textMatch } } },
+    { diagnostico: { equipo: { tipo: textMatch } } },
+    { diagnostico: { equipo: { numero_serie: textMatch } } },
   ] } : {};
   const [ordenes, total] = await Promise.all([
     prisma.ordenes.findMany({ where, include: ordenInclude, orderBy: { id_orden: 'desc' }, skip: offset, take: pageSize }),
@@ -59,6 +61,7 @@ export const listarDiagnosticosListosParaOrden = async (query = {}) => {
   const textMatch = { contains: search, mode: 'insensitive' };
   const estadosListos = ['COMPLETADO', 'DIAGNOSTICADO'];
   const whereListos = {
+    calidad_estado: 'APROBADO',
     OR: [
       { estado_del_diagnostico: { in: estadosListos } },
       { estado_del_diagnostico: 'RECHAZADO', estado_equipo: 'ESPERANDO_RETIRO' },
@@ -167,6 +170,9 @@ export const crearOrden = async ({ diagnostico_id, tecnico_id, prioridad, monto_
     if (!diagnostico) throw new Error('Diagnostico no encontrado');
     if (!['COMPLETADO', 'DIAGNOSTICADO'].includes(diagnostico.estado_del_diagnostico)) {
       throw new Error('Solo se pueden crear ordenes desde diagnosticos completados');
+    }
+    if (diagnostico.calidad_estado !== 'APROBADO') {
+      throw Object.assign(new Error('Calidad debe aprobar el diagnóstico antes de crear la orden'), { statusCode: 409 });
     }
     if (!diagnostico.diagnostico_real || Number(diagnostico.presupuesto_estimado || 0) <= 0) {
       throw new Error('Complete informe tecnico y presupuesto antes de crear la orden');

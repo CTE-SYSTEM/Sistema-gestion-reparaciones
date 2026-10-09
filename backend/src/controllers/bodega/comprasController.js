@@ -1,5 +1,5 @@
 import prisma from '../../app/prismaClient.js';
-import { notifyRole } from '../../services/notifications.js';
+import { notifyJefeTecnico, notifyRole } from '../../services/notifications.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
 import { METODOS_PAGO, assertInList } from '../../utils/domainValidation.js';
 import { withAuditUser } from '../../utils/auditContext.js';
@@ -90,7 +90,7 @@ export const createCompra = async (req, res) => {
       return res.status(400).json({ error: 'El metodo de pago es obligatorio' });
     }
 
-    const metodoPagoValidado = assertInList(metodoPago, METODOS_PAGO, 'Metodo de pago');
+    const metodoPagoValidado = assertInList(metodoPago, METODOS_PAGO.filter((method) => method !== 'Pendiente'), 'Metodo de pago');
     const compra = await withAuditUser(req.user, async (tx) => {
       const base = await tx.repuestos.findFirst({
         where: { id_repuesto: repuestoId, descontinuada: false },
@@ -163,6 +163,19 @@ export const createCompra = async (req, res) => {
       message: `La compra #${compra.id_compra} fue registrada.`,
       entity: { kind: 'compra', id: compra.id_compra },
     });
+    const faltantes = await prisma.ordenes_Repuestos.findMany({
+      where: { estado_entrega: 'SIN_EXISTENCIA', estado_aprobacion: { in: ['PENDIENTE', 'APROBADO'] },
+        OR: [{ repuesto_id: compra.repuesto_id }, { pieza_solicitada: { equals: compra.repuesto.nombre, mode: 'insensitive' } }] },
+      select: { id_detalle_repuesto: true, orden_id: true, repuesto_id: true, estado_aprobacion: true },
+    });
+    if (faltantes.length) {
+      const first = faltantes[0];
+      const payload = { type: 'repuesto_revisar_abastecimiento', title: 'Pieza recibida: revisar faltantes',
+        message: `La compra #${compra.id_compra} de ${compra.repuesto.nombre} puede atender ${faltantes.length} solicitud(es) marcadas sin existencias. Revise la pieza y la aprobación antes de entregar.`,
+        severity: 'info', entity: { kind: 'repuesto', id: first.id_detalle_repuesto, orden_id: first.orden_id } };
+      await notifyRole('Bodega', payload);
+      if (faltantes.some((row) => row.estado_aprobacion !== 'APROBADO' || row.repuesto_id !== compra.repuesto_id)) await notifyJefeTecnico(payload);
+    }
     res.status(201).json({ data: compra });
   } catch (error) {
     console.error('Error al crear compra:', error);
@@ -218,7 +231,7 @@ export const updateCompra = async (req, res) => {
       return res.status(400).json({ error: 'El metodo de pago es obligatorio' });
     }
 
-    const metodoPago = assertInList(metodoPagoNormalizado, METODOS_PAGO, 'Metodo de pago');
+    const metodoPago = assertInList(metodoPagoNormalizado, METODOS_PAGO.filter((method) => method !== 'Pendiente'), 'Metodo de pago');
 
     const compra = await withAuditUser(req.user, async (tx) => {
       const actual = await tx.compras.findUnique({ where: { id_compra: compraId } });

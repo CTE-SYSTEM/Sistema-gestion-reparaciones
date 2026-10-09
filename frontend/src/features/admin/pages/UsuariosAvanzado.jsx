@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import Table from '../../../components/Table';
 import { AuthContext } from '../../../context/AuthContext';
 import { Plus, X } from 'lucide-react';
-import { downloadJsonPdf } from '../utils/csvExport';
 import { usuariosService } from '../services';
 
-const ASSIGNABLE_ROLES = ['Recepcion', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad', 'TecnicoJefe', 'Tecnico'];
+const ASSIGNABLE_ROLES = ['Secretaria', 'Recepcion', 'ServicioCliente', 'Bodega', 'Calidad', 'Reclamos', 'Garantias', 'Contabilidad', 'TecnicoJefe', 'Tecnico'];
 const PASSWORD_ADMIN_ROLES = ['admin_pro', 'Administrador', 'Admin'];
 
 export default function UsuariosAvanzado() {
@@ -29,6 +28,7 @@ export default function UsuariosAvanzado() {
   const [successMessage, setSuccessMessage] = useState('');
   const [formData, setFormData] = useState({
     nombre_usuario: '',
+    nombre_persona: '',
     correo_electronico: '',
     password: '',
     rol: 'Recepcion',
@@ -64,6 +64,7 @@ export default function UsuariosAvanzado() {
       const formatted = data.map((u) => ({
         id_usuario: u.id_usuario,
         nombre_usuario: u.nombre_usuario,
+        nombre_persona: u.nombre_persona || '',
         correo_electronico: u.correo_electronico || '-',
         rol: u.rol,
         activo: u.activo ? 'Sí' : 'No',
@@ -106,6 +107,7 @@ export default function UsuariosAvanzado() {
     try {
       await usuariosService.updateUsuario(selectedUsuario.id_usuario, {
         nombre_usuario: selectedUsuario.nombre_usuario,
+        nombre_persona: selectedUsuario.nombre_persona,
         correo_electronico: selectedUsuario.correo_electronico === '-' ? null : selectedUsuario.correo_electronico,
         rol: selectedUsuario.rol,
         activo: selectedUsuario.activo === 'Sí',
@@ -172,6 +174,7 @@ export default function UsuariosAvanzado() {
     try {
       const response = await usuariosService.createUsuario({
         nombre_usuario: formData.nombre_usuario.trim(),
+        nombre_persona: formData.nombre_persona.trim() || null,
         correo_electronico: formData.correo_electronico.trim() || null,
         rol: formData.rol,
         password: formData.password,
@@ -185,6 +188,7 @@ export default function UsuariosAvanzado() {
         setSuccessMessage('Usuario creado correctamente.');
         setFormData({
           nombre_usuario: '',
+          nombre_persona: '',
           correo_electronico: '',
           password: '',
           rol: 'Recepcion',
@@ -217,6 +221,7 @@ export default function UsuariosAvanzado() {
   const columns = useMemo(() => [
     { header: 'ID', accessor: 'id_usuario' },
     { header: 'Usuario', accessor: 'nombre_usuario' },
+    { header: 'Persona', accessor: 'nombre_persona' },
     { header: 'Correo', accessor: 'correo_electronico' },
     { header: 'Rol', accessor: 'rol' },
     { header: 'Activo', accessor: 'activo' },
@@ -263,16 +268,11 @@ export default function UsuariosAvanzado() {
     const term = searchText.trim().toLowerCase();
     if (!term) return usuarios;
     return usuarios.filter((u) => 
-      [u.id_usuario, u.nombre_usuario, u.correo_electronico, u.rol, u.activo].some((field) => 
+      [u.id_usuario, u.nombre_usuario, u.nombre_persona, u.correo_electronico, u.rol, u.activo].some((field) =>
         field?.toString().toLowerCase().includes(term)
       )
     );
   }, [usuarios, searchText]);
-
-  const userReportColumns = columns.filter((column) => column.accessor !== 'acciones');
-  const downloadGeneralReport = () => {
-    downloadJsonPdf(filteredUsuarios, userReportColumns, 'usuarios_general.pdf', 'Reporte General de Usuarios');
-  };
 
   return (
     <div className="p-4 space-y-6 max-w-7xl mx-auto">
@@ -283,14 +283,6 @@ export default function UsuariosAvanzado() {
         </p>
         
         <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={downloadGeneralReport}
-          disabled={filteredUsuarios.length === 0}
-          className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-400 disabled:bg-slate-700 disabled:text-slate-400"
-        >
-          Generar Reporte General
-        </button>
         <button
           type="button"
           onClick={() => {
@@ -351,6 +343,11 @@ export default function UsuariosAvanzado() {
               </label>
 
               <label className="block">
+                <span className="text-xs font-bold text-slate-700">Nombre de la persona</span>
+                <input type="text" name="nombre_persona" maxLength={120} value={formData.nombre_persona} onChange={handleInputChange} className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50" placeholder="Nombre y apellido" />
+              </label>
+
+              <label className="block">
                 <span className="text-xs font-bold text-slate-700">Correo electrónico</span>
                 <input
                   type="email"
@@ -382,12 +379,14 @@ export default function UsuariosAvanzado() {
                   onChange={handleInputChange}
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
                 >
-                  <option value="Recepcion">Recepción y atención</option>
+                  <option value="Secretaria">Operación integral</option>
+                  <option value="Recepcion">Recepción</option>
+                  <option value="ServicioCliente">Servicio al cliente</option>
                   <option value="Bodega">Bodega</option>
                   <option value="Calidad">Control de calidad</option>
                   <option value="Reclamos">Reclamos</option>
                   <option value="Garantias">Garantías</option>
-                  <option value="Contabilidad">Contabilidad y facturación</option>
+                  <option value="Contabilidad">Contabilidad y movimientos</option>
                   <option value="TecnicoJefe">Tecnico Jefe</option>
                   <option value="Tecnico">Tecnico</option>
                 </select>
@@ -496,6 +495,7 @@ export default function UsuariosAvanzado() {
             </div>
 
             <form onSubmit={handleUpdateUsuario} className="space-y-4">
+              <div><label className="block text-sm font-semibold text-slate-700">Nombre de la persona</label><input type="text" maxLength={120} value={selectedUsuario.nombre_persona || ''} onChange={(e) => setSelectedUsuario((prev) => ({ ...prev, nombre_persona: e.target.value }))} className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-50" /></div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700">Nombre de usuario</label>
                 <input
@@ -524,12 +524,14 @@ export default function UsuariosAvanzado() {
                   {!ASSIGNABLE_ROLES.includes(selectedUsuario.rol) && (
                     <option value={selectedUsuario.rol} disabled>{selectedUsuario.rol} (no asignable)</option>
                   )}
-                  <option value="Recepcion">Recepción y atención</option>
+                  <option value="Secretaria">Operación integral</option>
+                  <option value="Recepcion">Recepción</option>
+                  <option value="ServicioCliente">Servicio al cliente</option>
                   <option value="Bodega">Bodega</option>
                   <option value="Calidad">Control de calidad</option>
                   <option value="Reclamos">Reclamos</option>
                   <option value="Garantias">Garantías</option>
-                  <option value="Contabilidad">Contabilidad y facturación</option>
+                  <option value="Contabilidad">Contabilidad y movimientos</option>
                   <option value="TecnicoJefe">Tecnico Jefe</option>
                   <option value="Tecnico">Tecnico</option>
                 </select>

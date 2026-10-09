@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getFlujoAtencion } from '../services/flujoAtencionService';
 import { useInfiniteAreaList } from '../../shared/hooks/useInfiniteAreaList';
+import PageHelp from '../../../components/PageHelp';
 
 const filtros = [
   { id: 'todos', label: 'Todos' },
@@ -23,6 +24,7 @@ const filtros = [
   { id: 'listos-orden', label: 'Listos para orden' },
   { id: 'en-reparacion', label: 'En reparación' },
   { id: 'listos-facturar', label: 'Listos para facturar' },
+  { id: 'listos-entrega', label: 'Listos para entrega' },
   { id: 'entregados', label: 'Entregados' },
   { id: 'con-garantia', label: 'Con garantía' },
 ];
@@ -43,6 +45,7 @@ const estadoColor = {
   'listos-orden': 'bg-violet-50 text-violet-700 border-violet-200',
   'en-reparacion': 'bg-blue-50 text-blue-700 border-blue-200',
   'listos-facturar': 'bg-rose-50 text-rose-700 border-rose-200',
+  'listos-entrega': 'bg-orange-50 text-orange-700 border-orange-200',
   entregados: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'con-garantia': 'bg-teal-50 text-teal-700 border-teal-200',
 };
@@ -60,6 +63,10 @@ const hasStep = (item, key) => {
 
 const formatEquipo = (equipo) =>
   [equipo?.marca, equipo?.modelo].filter(Boolean).join(' ') || equipo?.tipo || 'Equipo sin detalle';
+
+const formatFecha = (value) => value
+  ? new Date(value).toLocaleDateString('es-NI', { timeZone: 'America/Managua', year: 'numeric', month: 'short', day: 'numeric' })
+  : 'Sin fecha de ingreso';
 
 const StatusPill = ({ item }) => (
   <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${estadoColor[item.filtro] || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
@@ -85,21 +92,23 @@ const FlujoAtencion = () => {
     queryFn: getFlujoAtencion,
     search,
     extraParams: { filtro },
+    pageSize: 20,
   });
   const items = flujoQuery.rows;
   const meta = flujoQuery.data?.pages?.[0]?.meta || {};
   const resumen = meta.resumen || {};
   const loading = flujoQuery.isPending;
   const error = flujoQuery.error?.response?.data?.error || (flujoQuery.error ? 'No se pudo cargar el flujo de atención.' : '');
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = flujoQuery;
   useEffect(() => {
     const target = loadMoreRef.current;
-    if (!target || !flujoQuery.hasNextPage || flujoQuery.isFetchingNextPage) return undefined;
+    if (!target || !hasNextPage || isFetchingNextPage) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) flujoQuery.fetchNextPage();
+      if (entry.isIntersecting) fetchNextPage();
     }, { rootMargin: '400px' });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [flujoQuery.hasNextPage, flujoQuery.isFetchingNextPage, flujoQuery.fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Obtener la etiqueta del filtro seleccionado actualmente
   const filtroActivoLabel = useMemo(() => {
@@ -118,7 +127,7 @@ const FlujoAtencion = () => {
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Flujo de Atención</h1>
           <p className="text-xs font-medium text-slate-400">
-            Monitoreo general de estados desde el ingreso hasta la facturación.
+            Cada tarjeta representa una atención. Si un equipo regresa, su nueva visita y orden aparecen por separado.
           </p>
         </div>
 
@@ -130,16 +139,11 @@ const FlujoAtencion = () => {
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 shadow-sm"
-              placeholder="Buscar cliente, equipo..."
+              placeholder="Buscar cliente, equipo, diagnóstico, orden o factura..."
             />
           </label>
           
-          <button
-            type="button"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-1.5 text-xs font-bold text-gray-600 shadow-sm hover:bg-gray-50 shrink-0"
-          >
-            <span>Ayuda</span>
-          </button>
+          <PageHelp compact />
         </div>
       </header>
 
@@ -212,7 +216,7 @@ const FlujoAtencion = () => {
         <section className="space-y-3">
           {items.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-16 text-center text-sm font-bold text-slate-400">
-              No hay equipos en este filtro.
+              No hay atenciones en este filtro.
             </div>
           ) : (
             items.map((item) => (
@@ -224,6 +228,10 @@ const FlujoAtencion = () => {
                       <StatusPill item={item} />
                     </div>
                     <p className="mt-0.5 text-xs font-bold text-slate-600">{formatEquipo(item.equipo)}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Equipo #{item.equipo.id_equipo} · {item.diagnostico ? `Diagnóstico #${item.diagnostico.id_diagnostico}` : 'Aún sin diagnóstico'}
+                      {item.orden ? ` · Orden #${item.orden.id_orden}` : ''} · {formatFecha(item.fecha_atencion)}
+                    </p>
                     <div className="mt-2 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 inline-block font-medium italic">
                       <span className="not-italic font-bold text-slate-400 block text-[9px] uppercase mb-0.5">Falla Reportada:</span>
                       {item.diagnostico?.falla_reportada || 'Sin falla reportada'}
@@ -280,7 +288,7 @@ const FlujoAtencion = () => {
           )}
           {(flujoQuery.hasNextPage || flujoQuery.isFetchingNextPage) && (
             <div ref={loadMoreRef} className="py-3 text-center text-xs text-slate-500">
-              {flujoQuery.isFetchingNextPage ? 'Cargando más equipos…' : `Mostrando ${items.length} de ${meta.total ?? resumen.todos ?? items.length}. Desplázate para ver más.`}
+              {flujoQuery.isFetchingNextPage ? 'Cargando más atenciones…' : `Mostrando ${items.length} de ${meta.total ?? resumen.todos ?? items.length} atenciones. Desplázate para ver más.`}
             </div>
           )}
         </section>

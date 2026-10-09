@@ -13,13 +13,13 @@ import { databaseConnection, getBusinessSettings, recordAdminAction } from './ad
 import { fail } from '../utils/adminPolicy.js';
 import { nextBackupDate, nicaraguaParts, validateBackupLocation } from '../utils/backupSchedule.js';
 import { deleteBackupFile, fetchBackupFile, listRemoteBackupFiles, remoteBackups, signedBackupDownloadUrl, uploadBackupFile } from './backupObjectStorage.js';
-import { createNeonSnapshot, deleteNeonSnapshot, neonSnapshotExists } from './neonSnapshots.js';
+import { createNeonSnapshot, deleteNeonSnapshot, neonSnapshotConfigured, neonSnapshotExists } from './neonSnapshots.js';
 
 const execFileAsync = promisify(execFile);
 
 const CONTAINER_BACKUP_ROOT = path.join(path.sep, 'backup', 'CTE-Backup');
 const BACKUP_ROOT = remoteBackups() ? path.join(os.tmpdir(), 'sgr-backups') : process.env.BACKUP_ROOT || CONTAINER_BACKUP_ROOT;
-const BACKUP_DISPLAY_ROOT = process.env.BACKUP_DISPLAY_ROOT || (remoteBackups() ? 'R2 · respaldos' : BACKUP_ROOT);
+const BACKUP_DISPLAY_ROOT = remoteBackups() ? 'R2 · documentos/respaldos' : process.env.BACKUP_DISPLAY_ROOT || BACKUP_ROOT;
 const PRODUCT_BACKUP_NAME = 'productos';
 let scheduler = null;
 let polling = false;
@@ -314,7 +314,7 @@ export const getBackupDownloadUrl = async (month, file) => {
   return signedBackupDownloadUrl(month, file);
 };
 
-const runBackup = async (user, origin = 'manual') => {
+const runBackup = async (user, origin = 'manual', { skipPrune = false } = {}) => {
   const lock = new pg.Client({ connectionString: databaseConnection(), connectionTimeoutMillis: 10000 });
   let acquired = false;
   let scheduledAttempt = false, scheduleUpdated = false;
@@ -349,7 +349,7 @@ const runBackup = async (user, origin = 'manual') => {
     try {
       const dump = path.join(backupFolder, `db_dump_${timestamp}.dump`);
       try {
-        if (remoteBackups()) {
+        if (remoteBackups() && neonSnapshotConfigured()) {
           const snapshot = await createNeonSnapshot(`sgr-${timestamp}`);
           const snapshotFile = path.join(backupFolder, `neon_snapshot_${timestamp}.json`);
           await fs.writeFile(snapshotFile, JSON.stringify(snapshot, null, 2), 'utf8');
@@ -381,7 +381,7 @@ const runBackup = async (user, origin = 'manual') => {
       await recordAdminAction(user, 'Respaldos', `RESPALDO_${job.estado}`, null, { id: job.id, estado: job.estado }, `Respaldo ${origin}.`);
       if (job.estado === 'COMPLETO') {
         await prisma.$executeRaw`UPDATE "EstadoRespaldos" SET ultimo_exito = now() WHERE id = 1`;
-        try { await pruneBackups((await getBusinessSettings()).respaldos.conservacion_dias); }
+        try { if (!skipPrune) await pruneBackups((await getBusinessSettings()).respaldos.conservacion_dias); }
         catch (error) {
           console.error('[BackupService] Conservación:', error.message);
           job.advertencias.push('La copia se completó, pero no se pudieron retirar todas las copias antiguas.');
@@ -483,14 +483,16 @@ export const getBackupSummary = async () => {
   const [months, jobs, states] = await Promise.all([listBackupFiles(), getBackupJobs(), prisma.$queryRaw`SELECT * FROM "EstadoRespaldos" WHERE id = 1`]);
   return { root: BACKUP_DISPLAY_ROOT, months, jobs, schedule: settings, state: states[0],
     latestComplete: jobs.find((job) => job.estado === 'COMPLETO') || null,
-    coverage: remoteBackups()
-      ? 'La base se recupera desde la instantánea de Neon. Los PDF y Excel están en R2; las fotos requieren su propia política de copias.'
-      : 'PostgreSQL completo cuando hay archivo .dump. Las fotografías requieren una copia independiente.' };
+    coverage: neonSnapshotConfigured()
+      ? 'La base se recupera desde la instantánea de Neon. Los archivos de inventario y el manifiesto están en R2; las fotos requieren su propia política de copias.'
+      : remoteBackups() ? 'La base se recupera desde el archivo PostgreSQL .dump guardado en R2. Las fotos requieren su propia política de copias.'
+        : 'PostgreSQL completo cuando hay archivo .dump. Las fotografías requieren una copia independiente.' };
 };
 export const createBackupNow = async (user) => {
   const latestBackup = await runBackup(user);
   return { ...await getBackupSummary(), latestBackup };
 };
+export const createSafetyBackup = (user) => runBackup(user, 'antes_de_restaurar', { skipPrune: true });
 
 export const verifyBackup = async (month, manifest, user) => {
   const location = await resolveBackupFile(month, manifest);

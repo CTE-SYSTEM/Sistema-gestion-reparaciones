@@ -5,13 +5,13 @@ const router = Router();
 // No olvides el .js al final del import
 import { getEquipos, createEquipo, updateEquipo, deleteEquipo } from '../../../controllers/recepcion/equiposController.js';
 import authMiddleware, { requirePermission } from '../../../middlewares/authMiddleware.js';
-import { PERMISSIONS } from '../../../utils/permissions.js';
+import { PERMISSIONS, requireAnyPermission } from '../../../utils/permissions.js';
 
-router.use(authMiddleware, requirePermission(PERMISSIONS.EQUIPOS_GESTIONAR));
+router.use(authMiddleware);
 
-router.get('/', getEquipos);
-router.post('/', createEquipo);
-router.put('/:id', updateEquipo);
-router.delete('/:id', deleteEquipo);
+router.get('/', requireAnyPermission(PERMISSIONS.EQUIPOS_GESTIONAR, PERMISSIONS.ORDENES_GESTIONAR), getEquipos);
+router.post('/', requirePermission(PERMISSIONS.EQUIPOS_GESTIONAR), createEquipo);
+router.put('/:id', requirePermission(PERMISSIONS.EQUIPOS_GESTIONAR), updateEquipo);
+router.delete('/:id', requirePermission(PERMISSIONS.EQUIPOS_GESTIONAR), deleteEquipo);
 
 export default router;

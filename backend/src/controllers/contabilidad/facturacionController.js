@@ -9,6 +9,7 @@ import {
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { getBusinessSettings } from '../../services/adminSettingsService.js';
+import { precioVentaDetalle, montoRepuestos } from '../../utils/precioRepuestos.js';
 
 const facturaInclude = {
   garantias: true,
@@ -42,31 +43,8 @@ const repuestoSafeSelect = {
 
 const repuestosUsadosInclude = {
   repuestos_usados: {
-    include: { repuesto: { select: repuestoSafeSelect } },
+    include: { repuesto: { select: repuestoSafeSelect }, compra: { select: { id_compra: true, costo_unitario: true, proveedor_id: true } } },
   },
-};
-
-const calcularPrecioVentaRepuesto = (repuesto) => {
-  const repuestoSeguro = repuesto || {};
-  const costo = Number(repuestoSeguro.costo_individual || 0);
-  const gananciaCordobas = Number(repuestoSeguro.ganancia_cordobas || 0);
-  const porcentajeGanancia = Number(repuestoSeguro.porcentaje_de_ganacia || 0);
-
-  if (gananciaCordobas > 0) return costo + gananciaCordobas;
-  if (porcentajeGanancia > 0) return costo + ((costo * porcentajeGanancia) / 100);
-  return costo;
-};
-
-const calcularMontoRepuestos = (repuestosUsados = []) => {
-  const total = repuestosUsados
-    .filter((detalle) => (detalle.estado_aprobacion || '').toUpperCase() === 'APROBADO')
-    .reduce((sum, detalle) => {
-      const cantidad = Number(detalle.cantidad_usada || 0);
-      const precioVenta = calcularPrecioVentaRepuesto(detalle.repuesto);
-      return sum + (cantidad * precioVenta);
-    }, 0);
-
-  return Math.round(total * 100) / 100;
 };
 
 const tieneRepuestosSinAprobar = (orden) =>
@@ -80,9 +58,12 @@ const decimalToNumber = (value) => (value === null || value === undefined ? valu
 const facturaSearchWhere = (search) => (search
   ? {
       OR: [
-        ...(Number.isInteger(Number(search)) ? [{ id_factura: Number(search) }] : []),
+        ...(/^\d+$/.test(search) && Number(search) <= 2147483647 ? [{ id_factura: Number(search) }, { orden_id: Number(search) }] : []),
         { metodo_pago: { contains: search, mode: 'insensitive' } },
         { orden: { diagnostico: { equipo: { cliente: { nombre: { contains: search, mode: 'insensitive' } } } } } },
+        { orden: { diagnostico: { equipo: { marca: { contains: search, mode: 'insensitive' } } } } },
+        { orden: { diagnostico: { equipo: { modelo: { contains: search, mode: 'insensitive' } } } } },
+        { orden: { diagnostico: { equipo: { numero_serie: { contains: search, mode: 'insensitive' } } } } },
         { diagnostico: { equipo: { cliente: { nombre: { contains: search, mode: 'insensitive' } } } } },
       ],
     }
@@ -92,7 +73,12 @@ export const getFacturas = async (req, res) => {
   try {
     const { page, pageSize, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim();
-    const where = facturaSearchWhere(search);
+    const entregaEstado = String(req.query.entregaEstado || '').trim();
+    const where = {
+      ...facturaSearchWhere(search),
+      ...(entregaEstado === 'pendientes' ? { orden: { is: { estado: { not: 'ENTREGADO' } } } } : {}),
+      ...(entregaEstado === 'entregadas' ? { orden: { is: { estado: 'ENTREGADO' } } } : {}),
+    };
     const [facturasRows, total] = await Promise.all([
       prisma.facturas.findMany({
         where,
@@ -162,7 +148,7 @@ export const createFactura = async (req, res) => {
       return res.status(409).json({ error: 'Solo se pueden facturar ordenes finalizadas o irreparables' });
     }
     if (orden.es_garantia) return res.status(409).json({ error: 'El reingreso cubierto se factura automáticamente sin cobro al aprobar calidad' });
-    if (estadoOrden === 'FINALIZADO' && !['APROBADO', 'NO_REQUERIDO'].includes(orden.calidad_estado)) {
+    if (estadoOrden === 'FINALIZADO' && orden.calidad_estado !== 'APROBADO') {
       return res.status(409).json({ error: 'Falta la aprobación de control de calidad' });
     }
 
@@ -182,14 +168,14 @@ export const createFactura = async (req, res) => {
       return res.status(409).json({ error: 'La orden tiene piezas pendientes de registro. Registrelas antes de facturar.' });
     }
 
-    const montoRepuestos = estadoOrden === 'IRREPARABLE' ? 0 : calcularMontoRepuestos(orden.repuestos_usados);
-    const subtotalCalculado = Math.round((montoRepuestos + manoObra + montoDiagnostico) * 100) / 100;
+    const importeRepuestos = estadoOrden === 'IRREPARABLE' ? 0 : montoRepuestos(orden.repuestos_usados);
+    const subtotalCalculado = Math.round((importeRepuestos + manoObra + montoDiagnostico) * 100) / 100;
     const totalCalculado = Math.round((subtotalCalculado + impuestoCalculado) * 100) / 100;
 
     const factura = await withAuditUser(req.user, async (tx) => {
       if (estadoOrden !== 'IRREPARABLE') {
         for (const detalle of orden.repuestos_usados.filter((r) => r.estado_aprobacion === 'APROBADO')) {
-          const precio = Math.round(calcularPrecioVentaRepuesto(detalle.repuesto) * 100) / 100;
+          const precio = precioVentaDetalle(detalle);
           await tx.ordenes_Repuestos.update({ where: { id_detalle_repuesto: detalle.id_detalle_repuesto }, data: {
             precio_unitario_facturado: precio,
             total_facturado: Math.round(Number(detalle.cantidad_usada || 0) * precio * 100) / 100,
@@ -201,7 +187,7 @@ export const createFactura = async (req, res) => {
         data: {
           orden_id: ordenId,
           diagnostico_id: orden.diagnostico_id,
-          monto_repuestos: montoRepuestos,
+          monto_repuestos: importeRepuestos,
           mano_obra: manoObra,
           monto_diagnostico: montoDiagnostico,
           subtotal: subtotalCalculado,
@@ -223,7 +209,7 @@ export const createFactura = async (req, res) => {
       });
     });
 
-    await notifyRoles(['Recepcion', 'Garantias'], {
+    await notifyRoles(['ServicioCliente', 'Garantias'], {
       type: 'factura_creada', title: 'Factura de reparación registrada',
       message: `La factura #${factura.id_factura} de la orden #${ordenId} fue registrada.`,
       entity: { kind: 'factura', id: factura.id_factura, orden_id: ordenId },
@@ -259,7 +245,7 @@ export const getOrdenesParaFacturar = async (req, res) => {
           { estado: 'IRREPARABLE' },
           {
             estado: 'FINALIZADO',
-            calidad_estado: { in: ['APROBADO', 'NO_REQUERIDO'] },
+            calidad_estado: 'APROBADO',
             repuestos_usados: {
               none: {
                 OR: [
@@ -274,15 +260,15 @@ export const getOrdenesParaFacturar = async (req, res) => {
       include: {
         diagnostico: { include: { equipo: { include: { cliente: true } } } },
         tecnico: true,
-        repuestos_usados: { include: { repuesto: { select: repuestoSafeSelect } } },
+        ...repuestosUsadosInclude,
       },
       orderBy: { id_orden: 'desc' },
     });
 
     const ordenesDisponibles = ordenes.map((orden) => {
       const repuestosFacturacion = (orden.repuestos_usados || []).map((detalle) => {
-        const precioUnitario = detalle.precio_unitario_facturado === null
-          ? Math.round(calcularPrecioVentaRepuesto(detalle.repuesto) * 100) / 100
+        const precioUnitario = detalle.precio_unitario_facturado == null
+          ? precioVentaDetalle(detalle)
           : Number(detalle.precio_unitario_facturado);
         return {
           ...detalle,
@@ -293,7 +279,7 @@ export const getOrdenesParaFacturar = async (req, res) => {
       return {
         ...orden,
         facturas: [],
-        monto_repuestos_calculado: orden.estado === 'IRREPARABLE' ? 0 : calcularMontoRepuestos(orden.repuestos_usados),
+        monto_repuestos_calculado: orden.estado === 'IRREPARABLE' ? 0 : montoRepuestos(orden.repuestos_usados),
         repuestos_facturacion: repuestosFacturacion,
       };
     });
@@ -311,6 +297,7 @@ export const getDiagnosticosParaFacturar = async (req, res) => {
   try {
     const diagnosticos = await prisma.diagnosticos.findMany({ where: {
       origen_directo: false, estado_del_diagnostico: { in: ['COMPLETADO', 'DIAGNOSTICADO', 'RECHAZADO'] },
+      calidad_estado: 'APROBADO',
       ordenes: { none: {} }, factura_diagnostico: { is: null },
     }, include: { equipo: { include: { cliente: true } } }, orderBy: { id_diagnostico: 'desc' } });
     res.json({ data: diagnosticos });
@@ -343,6 +330,7 @@ export const createFacturaDiagnostico = async (req, res) => {
       if (diagnostico.origen_directo || !['COMPLETADO', 'DIAGNOSTICADO', 'RECHAZADO'].includes(diagnostico.estado_del_diagnostico) || diagnostico.ordenes.length) {
         throw Object.assign(new Error('Solo puede facturar un diagnóstico completado que no tenga orden de trabajo'), { statusCode: 409 });
       }
+      if (diagnostico.calidad_estado !== 'APROBADO') throw Object.assign(new Error('Calidad debe aprobar el diagnóstico antes de facturarlo'), { statusCode: 409 });
       if (diagnostico.factura_diagnostico) throw Object.assign(new Error('Este diagnóstico ya fue facturado'), { statusCode: 409 });
       const creada = await tx.facturas.create({ data: {
         diagnostico_id: id, monto_diagnostico: monto, monto_repuestos: 0, mano_obra: 0,
@@ -355,7 +343,7 @@ export const createFacturaDiagnostico = async (req, res) => {
       } });
       return creada;
     });
-    await notifyRoles(['Secretaria', 'Recepcion', 'Garantias'], {
+    await notifyRoles(['Secretaria', 'ServicioCliente', 'Garantias'], {
       type: 'factura_creada', title: 'Factura de diagnóstico registrada',
       message: `La factura #${factura.id_factura} del diagnóstico #${id} fue registrada.`,
       entity: { kind: 'factura', id: factura.id_factura, diagnostico_id: id },
@@ -379,9 +367,7 @@ export const getDetalleFacturacion = async (req, res) => {
             },
           },
         },
-        repuestos_usados: {
-          include: { repuesto: { select: repuestoSafeSelect } },
-        },
+        ...repuestosUsadosInclude,
       },
     });
 

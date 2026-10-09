@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Check, X } from 'lucide-react';
-import { notificationActionLabel } from '../utils/notificationInbox';
+import { notificationActionLabel, notificationAreaNames } from '../utils/notificationInbox';
 
 const notificationColors = {
   success: 'border-emerald-100 bg-emerald-50 text-emerald-900',
@@ -41,6 +41,7 @@ export const NotificationTray = ({ notifications, total = notifications.length, 
       {loading && <p role="status" className="text-xs text-slate-500">Recuperando avisos guardados…</p>}
       {!notifications.length && !loading ? <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">No tienes avisos pendientes.</p> : notifications.map((item) => <article key={item.id} className={`rounded-xl border p-3 ${notificationColors[item.severity] || notificationColors.info}`}>
         <h3 className="text-sm font-extrabold">{item.title || 'Actividad'}</h3><p className="mt-1 text-sm leading-relaxed">{item.message}</p>
+        {notificationAreaNames(item).length > 0 && <p className="mt-2 text-xs font-semibold opacity-75">Área: {notificationAreaNames(item).join(' · ')}</p>}
         <time className="mt-2 block text-xs opacity-70">{item.timestamp ? new Date(item.timestamp).toLocaleString('es-NI', { timeZone: 'America/Managua' }) : ''}</time>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           {onOpen && item.entity && <button type="button" onClick={() => onOpen(item)} className="rounded-lg bg-white/70 px-3 py-2 text-xs font-bold underline">{notificationActionLabel(item)}</button>}

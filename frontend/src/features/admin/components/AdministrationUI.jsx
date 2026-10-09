@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50';
-export function AdminPage({ title, description, children, actions }) {
+export function AdminPage({ title, description, children, actions, backTo = '/admin', backLabel = 'Administración' }) {
   const page = useRef(null);
   useLayoutEffect(() => { page.current?.closest('main')?.scrollTo({ top: 0 }); }, []);
   return <div ref={page} className="mx-auto max-w-7xl space-y-6 p-4">
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><Link to="/admin" className="text-xs font-bold text-indigo-600">Administración /</Link>
+      <div><Link to={backTo} className="text-xs font-bold text-indigo-600">{backLabel} /</Link>
         <h1 className="mt-1 text-2xl font-extrabold text-slate-800">{title}</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p></div>{actions}
     </header>{children}

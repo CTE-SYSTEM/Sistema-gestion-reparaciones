@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowRight, Check, ChevronLeft, ChevronRight, ClipboardList, Eye, PackageCheck, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, ClipboardList, Download, Eye, PackageCheck, SlidersHorizontal, X } from 'lucide-react';
 import FotosServicio from '../../shared/components/FotosServicio';
 import { formatoPresupuesto } from '../../../utils/monedaPresupuesto';
 
@@ -113,6 +113,8 @@ function PartHistory({ detail, row }) {
 }
 function Detail({ detail, row, onReview }) {
   const [tab, setTab] = useState('resumen');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const tabsRef = useRef(null);
   const r = detail.registro, d = row.tipo === 'orden' ? r.diagnostico : r;
   const recepcion = [['Cargador', d.estado_cargador], ['Accesorios', d.estado_accesorios],
@@ -124,7 +126,25 @@ function Detail({ detail, row, onReview }) {
     ...(row.tipo === 'orden' ? [['piezas', 'Piezas']] : []), ['fotos', 'Fotografías'],
     ['avances', 'Avances e historial'], ['correcciones', 'Correcciones']];
   const money = (v) => v == null ? 'Sin registrar' : new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(Number(v));
+  const reportable = row.tipo === 'orden'
+    ? ['FINALIZADO', 'ENTREGADO'].includes(r.estado) || (r.estado === 'IRREPARABLE' && r.irreparable_estado === 'APROBADO')
+    : ['COMPLETADO', 'DIAGNOSTICADO', 'APROBADO', 'RECHAZADO'].includes(r.estado_del_diagnostico);
+  const downloadReport = async (format) => {
+    setExportError(''); setExporting(true);
+    try {
+      if (format === 'pdf') {
+        const { exportarExpedientePdf } = await import('../utils/exportarExpedientePdf');
+        await exportarExpedientePdf(detail, row);
+      } else {
+        const { exportarExpedienteExcel } = await import('../utils/exportarExpedienteExcel');
+        await exportarExpedienteExcel(detail, row);
+      }
+    } catch { setExportError('No se pudo generar el informe.'); }
+    finally { setExporting(false); }
+  };
   return <>
+    {reportable && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50 p-3"><p className="text-xs font-semibold text-indigo-900">Informe del expediente cerrado, con diagnóstico, resultado e historial.</p><div className="flex gap-2"><button type="button" disabled={exporting} onClick={() => downloadReport('pdf')} className="jefe-btn primary"><Download size={14} /> {exporting ? 'Generando…' : 'Descargar PDF'}</button><button type="button" disabled={exporting} onClick={() => downloadReport('excel')} className="jefe-btn"><Download size={14} /> Excel</button></div></div>}
+    {exportError && <p role="alert" className="mb-3 text-xs text-red-700">{exportError}</p>}
     <nav ref={tabsRef} className="jefe-detail-tabs" aria-label="Secciones del expediente">{sections.map(([id, title]) => <button key={id} type="button" aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); tabsRef.current?.closest('.jefe-dialog-body')?.scrollTo({ top: 0 }); }}>{title}</button>)}</nav>
     <section className="jefe-detail-pane" aria-label={sections.find(([id]) => id === tab)?.[1]}>
     {tab === 'resumen' && <><dl className="jefe-detail-grid">{[

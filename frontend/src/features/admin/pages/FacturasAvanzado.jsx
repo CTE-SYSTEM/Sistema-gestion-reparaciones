@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Table from '../../../components/Table';
 import { reportesAdminService } from '../services';
-import { downloadJsonExcel, downloadJsonPdf } from '../utils/csvExport';
-import { AdminStatCard, ExportActions } from '../components';
+import { AdminStatCard } from '../components';
 
 const columns = [
   { header: 'ID', accessor: 'id_factura' },
@@ -29,7 +28,6 @@ export default function FacturasAvanzado() {
   const [error, setError] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [downloading, setDownloading] = useState(false);
   
   // Nuevo estado para la búsqueda global multiparámetro
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,45 +86,10 @@ export default function FacturasAvanzado() {
     });
   }, [facturas, searchTerm]);
 
-  // Handlers para descargas utilizando los datos filtrados en pantalla
-  const downloadFacturasCsv = async () => {
-    setDownloading(true);
-    setError('');
-    try {
-      const exportData = facturasFiltradas.map(f => ({
-        ...f,
-        fecha_emision: f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString() : '-',
-        total: `C$ ${f.total.toFixed(2)}`
-      }));
-      await downloadJsonExcel(exportData, columns, `control_facturas_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
-    } catch (err) {
-      setError('No se pudo descargar el reporte.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const downloadFacturasPdf = async () => {
-    setDownloading(true);
-    setError('');
-    try {
-      const exportData = facturasFiltradas.map(f => ({
-        ...f,
-        fecha_emision: f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString() : '-',
-        total: `C$ ${f.total.toFixed(2)}`
-      }));
-      downloadJsonPdf(exportData, columns, `control_facturas_${fromDate || 'desde'}_${toDate || 'hasta'}.pdf`, 'Reporte de control de facturas');
-    } catch (err) {
-      setError('No se pudo descargar el reporte en PDF.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   // Cálculos reactivos basados estrictamente en el array filtrado
-  const totalIngresos = facturasFiltradas.reduce((acc, f) => acc + f.total, 0);
+  const totalFacturado = facturasFiltradas.reduce((acc, f) => acc + f.total, 0);
   const operacionesEfectivo = facturasFiltradas.filter(f => f.metodo_pago.toLowerCase().includes('efectivo')).length;
-  const operationsDigital = facturasFiltradas.length - operacionesEfectivo;
+  const operationsDigital = facturasFiltradas.filter(f => ['transferencia', 'tarjeta'].includes(f.metodo_pago.toLowerCase())).length;
 
   return (
     <div className="p-4 space-y-6 max-w-7xl mx-auto">
@@ -140,9 +103,9 @@ export default function FacturasAvanzado() {
       {/* Grid Dinámico de KPIs Financieros */}
       {!loading && !error && facturas.length > 0 && (
         <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-          <AdminStatCard label="Ingresos Totales (Filtrado)" value={`C$ ${totalIngresos.toFixed(2)}`} tone="text-slate-900" />
-          <AdminStatCard label="Flujo en Efectivo" value={`${operacionesEfectivo} transac.`} />
-          <AdminStatCard label="Bancos / Medios Digitales" value={`${operationsDigital} operaciones`} className="col-span-2 md:col-span-1" />
+          <AdminStatCard label="Total facturado (filtrado)" value={`C$ ${totalFacturado.toFixed(2)}`} tone="text-slate-900" />
+          <AdminStatCard label="Facturas con método efectivo" value={`${operacionesEfectivo} facturas`} />
+          <AdminStatCard label="Transferencia o tarjeta" value={`${operationsDigital} facturas`} className="col-span-2 md:col-span-1" />
         </div>
       )}
 
@@ -202,11 +165,6 @@ export default function FacturasAvanzado() {
               >
                 Consultar
               </button>
-              <ExportActions
-              disabled={downloading || loading || facturasFiltradas.length === 0}
-              onExcel={downloadFacturasCsv}
-              onPdf={downloadFacturasPdf}
-            />
           </div>
           </div>
         </div>
