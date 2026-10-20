@@ -44,7 +44,7 @@ export default function DiagnosticosTable({ items, loading, readOnly, onOpenDiag
         <td className="p-4"><span className="tecnico-cell-label" aria-hidden="true">Acciones</span><div className="flex flex-col items-start gap-2">
           <button type="button" onClick={() => onOpenDetalle?.(d)} className="rounded border px-3 py-2 text-xs">Ver expediente</button>
           {!readOnly && !d.fecha_inicio ? <button disabled={loading} onClick={() => onIniciarDiagnostico(d)} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">Iniciar diagnóstico</button>
-            : <button onClick={() => onOpenDiagnostico({ ...d, readOnly })} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">{readOnly ? 'Ver informe' : d.borrador ? 'Continuar informe' : 'Registrar informe'}</button>}
+            : <button type="button" data-keyboard-id={`diagnostico-informe-${d.id}`} onClick={() => onOpenDiagnostico({ ...d, readOnly })} className="rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">{readOnly ? 'Ver informe' : d.borrador ? 'Continuar informe' : 'Registrar informe'}</button>}
           {readOnly && <ReaperturaDiagnostico diagnostico={d} loading={loading} onReopen={onReopen} onAclarar={(diagnostico) => onOpenDetalle?.(diagnostico, 'aclarar')} />}
         </div></td>
       </tr>)}{!loading && !items.length && <tr><td colSpan={5} className="p-8 text-center text-sm text-slate-500">No hay diagnósticos que coincidan con los filtros.</td></tr>}</tbody>

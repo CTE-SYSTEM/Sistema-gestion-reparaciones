@@ -535,7 +535,7 @@ const Repuestos = () => {
     ) },
     { header: 'Acciones', render: (row) => (
       <div data-tour-target="actions" className={`flex gap-1 ${tourHighlightClass(activeTourTarget === 'actions')}`}>
-        <button type="button" onClick={() => { setEditingRepuesto(row); setShowForm(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar repuesto" aria-label={`Editar repuesto ${row.id_repuesto}`}><Edit className="w-4 h-4" /></button>
+        <button type="button" data-keyboard-open onClick={() => { setEditingRepuesto(row); setShowForm(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar repuesto" aria-label={`Editar repuesto ${row.id_repuesto}`}><Edit className="w-4 h-4" /></button>
         <button type="button" onClick={() => handleDelete(row.id_repuesto)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Descontinuar repuesto" aria-label={`Descontinuar repuesto ${row.id_repuesto}`}><Trash2 className="w-4 h-4" /></button>
       </div>
     ) },
@@ -573,6 +573,7 @@ const Repuestos = () => {
 
         <button
           type="button"
+          data-keyboard-open
           onClick={() => { setEditingRepuesto(null); setShowForm(true); }}
           className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md active:scale-95 transition-all"
         >
@@ -583,7 +584,7 @@ const Repuestos = () => {
     </div>
 
     {error && (
-      <div className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2 text-left">
+      <div role="alert" className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2 text-left">
         <AlertCircle className="w-4 h-4 shrink-0" />
         <span>{error}</span>
       </div>

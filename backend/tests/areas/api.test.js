@@ -53,6 +53,92 @@ if (!databaseName) {
     await prisma.$disconnect();
   });
 
+  test('Facturar y entregar: operación conjunta, entrega posterior y validaciones', async (t) => {
+    const body = (item, extra = {}) => ({ orden_id: item.orden.id_orden, mano_obra: 100,
+      monto_diagnostico: 0, impuestos: 0, metodo_pago: 'Efectivo', entregar_ahora: true,
+      persona_recibe: ' Persona de prueba ', ...extra });
+    await t.test('cada pago completo factura, entrega, inicia garantía y permite reclamar sin foto', async () => {
+      for (const metodo_pago of ['Efectivo', 'Transferencia', 'Tarjeta']) {
+        const item = await order('FINALIZADO', { calidad_estado: 'APROBADO' });
+        const factura = await api('/facturas', { method: 'POST', status: 201, body: body(item, { metodo_pago }) });
+        assert.equal(factura.orden.estado, 'ENTREGADO');
+        assert.equal(factura.orden.persona_recibe, 'Persona de prueba');
+        assert.equal(factura.orden.entregado_por_id, actors.servicioCliente.id_usuario);
+        assert.equal(factura.garantias[0].fecha_inicio, factura.orden.fecha_entrega);
+        assert.ok(new Date(factura.garantias[0].fecha_vencimiento) > new Date(factura.garantias[0].fecha_inicio));
+        assert.equal(await prisma.archivosServicio.count({ where: { orden_id: item.orden.id_orden } }), 0);
+        assert.equal(await prisma.movimientosContables.count({ where: { factura_id: factura.id_factura, tipo: 'COBRO' } }), 1);
+        const claim = await api('/reclamos', { method: 'POST', status: 201, body: {
+          orden_original_id: item.orden.id_orden, descripcion: 'Falla reaparecida después de la entrega' } });
+        assert.equal(claim.garantia_id, factura.garantias[0].id_garantia);
+        await api('/facturas', { method: 'POST', status: 409, body: body(item) });
+        assert.equal(await prisma.facturas.count({ where: { orden_id: item.orden.id_orden } }), 1);
+      }
+    });
+    await t.test('entregar después conserva orden y garantía pendientes, incluso con pago completo', async () => {
+      for (const metodo_pago of ['Efectivo', 'Pendiente']) {
+        const item = await order('FINALIZADO', { calidad_estado: 'APROBADO' });
+        const factura = await api('/facturas', { method: 'POST', status: 201, body: body(item, { metodo_pago, entregar_ahora: false, persona_recibe: '' }) });
+        assert.equal(factura.orden.estado, 'FINALIZADO');
+        assert.equal(factura.orden.fecha_entrega, null);
+        assert.equal(factura.garantias[0].fecha_inicio, null);
+        await api('/reclamos', { method: 'POST', status: 409, body: {
+          orden_original_id: item.orden.id_orden, descripcion: 'No debe admitir reclamo antes de entregar' } });
+      }
+    });
+    await t.test('un pago pendiente revierte factura, garantía y descuento de stock si se solicita entregar', async () => {
+      const item = await order('FINALIZADO', { calidad_estado: 'APROBADO' });
+      const category = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Entrega atómica' } });
+      const piece = await prisma.repuestos.create({ data: { nombre: 'Pieza de prueba atómica', tipo_repuesto_id: category.id_tipo_repuesto, costo_individual: 10, stock_actual: 2 } });
+      const detail = await prisma.ordenes_Repuestos.create({ data: { orden_id: item.orden.id_orden, repuesto_id: piece.id_repuesto, estado_aprobacion: 'APROBADO', cantidad_usada: 1 } });
+      await api('/facturas', { method: 'POST', status: 409, body: body(item, { metodo_pago: 'Pendiente' }) });
+      assert.equal(await prisma.facturas.count({ where: { orden_id: item.orden.id_orden } }), 0);
+      assert.equal((await prisma.repuestos.findUnique({ where: { id_repuesto: piece.id_repuesto } })).stock_actual, 2);
+      assert.equal((await prisma.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: detail.id_detalle_repuesto } })).fecha_facturacion, null);
+      assert.equal((await prisma.ordenes.findUnique({ where: { id_orden: item.orden.id_orden } })).estado, 'FINALIZADO');
+    });
+    await t.test('receptor y opción inválidos o calidad pendiente no generan factura', async () => {
+      const item = await order('FINALIZADO', { calidad_estado: 'APROBADO' });
+      for (const extra of [{ persona_recibe: '' }, { persona_recibe: ' ' }, { persona_recibe: 'x'.repeat(301) }, { entregar_ahora: 'true' }]) {
+        await api('/facturas', { method: 'POST', status: 400, body: body(item, extra) });
+      }
+      await prisma.ordenes.update({ where: { id_orden: item.orden.id_orden }, data: { calidad_estado: 'PENDIENTE' } });
+      await api('/facturas', { method: 'POST', status: 409, body: body(item) });
+      assert.equal(await prisma.facturas.count({ where: { orden_id: item.orden.id_orden } }), 0);
+    });
+    await t.test('una orden irreparable se entrega sin crear garantía de reparación', async () => {
+      const item = await order('IRREPARABLE', { resultado_final: 'IRREPARABLE' });
+      const factura = await api('/facturas', { method: 'POST', status: 201, body: body(item) });
+      assert.equal(factura.orden.estado, 'ENTREGADO');
+      assert.equal(factura.orden.resultado_final, 'IRREPARABLE');
+      assert.equal(factura.garantias.length, 0);
+    });
+  });
+
+  test('Servicio al Cliente entrega sin foto, inicia garantía y permite abrir el reclamo', async () => {
+    const item = await order('FINALIZADO');
+    const factura = await prisma.facturas.create({ data: { orden_id: item.orden.id_orden,
+      diagnostico_id: item.diagnostico.id_diagnostico, mano_obra: 100, subtotal: 100,
+      impuestos: 0, total: 100, metodo_pago: 'Efectivo' } });
+    const pendingGuarantee = await prisma.garantias.findUnique({ where: { factura_id: factura.id_factura } });
+    assert.ok(pendingGuarantee);
+    assert.equal(pendingGuarantee.fecha_inicio, null);
+    const route = `/ordenes/${item.orden.id_orden}/entrega`;
+    await api(route, { method: 'PATCH', body: {}, status: 400 });
+    assert.equal(await prisma.archivosServicio.count({ where: { orden_id: item.orden.id_orden } }), 0);
+    const delivered = await api(route, { method: 'PATCH', body: { persona_recibe: 'Cliente de prueba' } });
+    assert.equal(delivered.estado, 'ENTREGADO');
+    assert.equal(delivered.entregado_por_id, actors.servicioCliente.id_usuario);
+    const garantia = await prisma.garantias.findUnique({ where: { factura_id: factura.id_factura } });
+    assert.equal(garantia.fecha_inicio.toISOString(), delivered.fecha_entrega);
+    assert.ok(garantia.fecha_vencimiento > garantia.fecha_inicio);
+    const claim = await api('/reclamos', { method: 'POST', status: 201,
+      body: { orden_original_id: item.orden.id_orden, descripcion: 'La falla reapareció después de recibir el equipo' } });
+    assert.equal(claim.estado, 'ABIERTO');
+    assert.equal(claim.garantia_id, garantia.id_garantia);
+    await api(route, { method: 'PATCH', body: { persona_recibe: 'Cliente de prueba' }, status: 409 });
+  });
+
   test('Reclamo: Servicio al Cliente abre, Reclamos analiza y Garantías crea un reingreso vinculado', async () => {
     const original = await order('ENTREGADO', { fecha_entrega: new Date() });
     const factura = await prisma.facturas.create({ data: { orden_id: original.orden.id_orden,
@@ -69,11 +155,12 @@ if (!databaseName) {
     const analyzed = await api(`/reclamos/${opened.id_reclamo}/analisis`, { actor: actors.reclamos, method: 'PATCH',
       body: { responsable_tipo: 'TECNICO', analisis: 'La intervención anterior no resolvió la falla original' } });
     assert.equal(analyzed.responsable_tipo, 'TECNICO');
-    await api(`/reclamos/${opened.id_reclamo}/decision`, { actor: actors.reclamos, method: 'PATCH',
+    await api(`/reclamos/${opened.id_reclamo}/decision`, { actor: actors.servicioCliente, method: 'PATCH',
       body: { decision: 'APROBADA', motivo: 'La garantía está vigente y cubre el problema' }, status: 403 });
-    const decided = await api(`/reclamos/${opened.id_reclamo}/decision`, { actor: actors.garantias, method: 'PATCH',
+    const decided = await api(`/reclamos/${opened.id_reclamo}/decision`, { actor: actors.reclamos, method: 'PATCH',
       body: { decision: 'APROBADA', motivo: 'La garantía está vigente y cubre el problema' } });
     assert.equal(decided.cobertura, 'APROBADA');
+    assert.ok((await api('/notificaciones', { actor: actors.servicioCliente })).some((notice) => notice.type === 'reclamo_decidido' && notice.entity?.id === opened.id_reclamo));
     assert.ok(decided.orden_reingreso_id);
     const reentry = await prisma.ordenes.findUnique({ where: { id_orden: decided.orden_reingreso_id } });
     assert.equal(reentry.es_garantia, true); assert.equal(reentry.estado, 'PENDIENTE');
@@ -89,6 +176,25 @@ if (!databaseName) {
     await api(`/reclamos/${opened.id_reclamo}/cerrar`, { actor: actors.reclamos, method: 'PATCH',
       body: { resolucion: 'Se abrió una nueva orden cubierta por garantía' }, status: 409 });
     assert.ok((await api('/notificaciones', { actor: actors.garantias })).some((notice) => notice.entity?.id === opened.id_reclamo));
+  });
+
+  test('Recepción crea una orden directa sin diagnóstico previo y no accede a gestión de órdenes', async () => {
+    const cliente = await prisma.clientes.create({ data: { nombre: 'Cliente orden directa recepción' } });
+    const equipo = await prisma.equipos.create({ data: { cliente_id: cliente.id_cliente, tipo: 'Teléfono', marca: 'Prueba' } });
+    const body = { cliente_id: cliente.id_cliente, equipo_id: equipo.id_equipo, falla_reportada: 'Cambio de pantalla quebrada', monto_autorizado: 1500, autorizado: true };
+    await api('/ordenes/directa', { actor: actors.recepcion, method: 'POST', body: { ...body, autorizado: false }, status: 400 });
+    await api('/ordenes/directa', { actor: actors.recepcion, method: 'POST', body: { ...body, tecnico_id: 1 }, status: 403 });
+    const created = await api('/ordenes/directa', { actor: actors.recepcion, method: 'POST', body, status: 201 });
+    assert.equal(created.estado, 'PENDIENTE');
+    assert.equal(created.tecnico_id, null);
+    assert.equal(created.diagnostico.origen_directo, true);
+    assert.equal(Number(created.monto_autorizado), 1500);
+    await api('/ordenes/directa', { actor: actors.servicioCliente, method: 'POST', body, status: 409 });
+    await api('/ordenes', { actor: actors.recepcion, status: 403 });
+    await api('/ordenes', { actor: actors.recepcion, method: 'POST', body: { diagnostico_id: created.diagnostico_id }, status: 403 });
+    await api(`/ordenes/${created.id_orden}/entrega`, { actor: actors.recepcion, method: 'PATCH', body: { persona_recibe: 'Cliente' }, status: 403 });
+    assert.ok((await api('/ordenes', { actor: actors.servicioCliente })).some((row) => row.id_orden === created.id_orden));
+    assert.ok((await api('/notificaciones', { actor: actors.jefe })).some((notice) => notice.type === 'orden_creada' && notice.entity?.id === created.id_orden));
   });
 
   test('Reclamos busca clientes desde una letra y muestra equipos y órdenes aunque aún no se puedan reclamar', async () => {
@@ -186,6 +292,83 @@ if (!databaseName) {
     assert.equal(delivered.compra_id, compra.id_compra);
   });
 
+  test('Bodega vincula desde la solicitud y exige nueva aprobación antes de entregar', async () => {
+    const item = await order('EN_REPARACION');
+    const categoria = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Identificación desde Bodega' } });
+    const part = await prisma.repuestos.create({ data: { tipo_repuesto_id: categoria.id_tipo_repuesto, nombre: 'Flexor identificado', stock_actual: 2 } });
+    const replacement = await prisma.repuestos.create({ data: { tipo_repuesto_id: categoria.id_tipo_repuesto, nombre: 'Flexor compatible revisado', stock_actual: 0 } });
+    const request = await prisma.ordenes_Repuestos.create({ data: { orden_id: item.orden.id_orden, pieza_solicitada: 'Flexor pantalla modelo específico', cantidad_usada: 1 } });
+    const route = `/bodega/trazabilidad/solicitudes/${request.id_detalle_repuesto}`;
+    await api(`${route}/vincular`, { actor: actors.tecnico, method: 'PATCH', body: { repuesto_id: part.id_repuesto, motivo: 'Compatibilidad verificada' }, status: 403 });
+    const linked = await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { repuesto_id: part.id_repuesto, motivo: 'Modelo y conector coinciden con la solicitud original' } });
+    assert.equal(linked.repuesto_id, part.id_repuesto);
+    assert.equal(linked.pieza_solicitada, request.pieza_solicitada);
+    assert.equal(linked.estado_aprobacion, 'PENDIENTE');
+    await api(`${route}/entregar`, { actor: actors.bodega, method: 'PATCH', body: {}, status: 409 });
+    assert.ok((await api('/notificaciones', { actor: actors.jefe })).some((notice) => notice.type === 'repuesto_solicitado' && notice.entity?.id === request.id_detalle_repuesto));
+    await api(`/jefe-tecnico/repuestos/${request.id_detalle_repuesto}/aprobar`, { actor: actors.jefe, method: 'PATCH', body: { repuesto_id: part.id_repuesto } });
+    const changed = await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { repuesto_id: replacement.id_repuesto, motivo: 'Se rectificó el conector tras leer el detalle de la orden' } });
+    assert.equal(changed.estado_aprobacion, 'PENDIENTE');
+    assert.equal(changed.usuario_aprobador_id, null);
+    assert.equal(changed.repuesto_id, replacement.id_repuesto);
+    await api(`${route}/sin-existencia`, { actor: actors.bodega, method: 'PATCH', body: { motivo: 'El flexor identificado se debe comprar' } });
+    assert.equal((await prisma.ordenes_Repuestos.findUnique({ where: { id_detalle_repuesto: request.id_detalle_repuesto } })).estado_entrega, 'SIN_EXISTENCIA');
+    assert.equal((await prisma.repuestos.findUnique({ where: { id_repuesto: part.id_repuesto } })).stock_actual, 2);
+    assert.equal(await prisma.intervencionesTecnicas.count({ where: { orden_id: item.orden.id_orden, tipo: 'CORRECCION_REPUESTO' } }), 2);
+  });
+
+  test('Identificar la misma pieza conserva aprobación; cambiar o retirar vínculo exige revisión', async () => {
+    const item = await order('EN_REPARACION');
+    const categoria = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Vínculo y aprobación conservada' } });
+    const part = await prisma.repuestos.create({ data: { tipo_repuesto_id: categoria.id_tipo_repuesto, nombre: 'Pieza aprobada identificada', stock_actual: 2 } });
+    const other = await prisma.repuestos.create({ data: { tipo_repuesto_id: categoria.id_tipo_repuesto, nombre: 'Pieza diferente' } });
+    const request = await prisma.ordenes_Repuestos.create({ data: { orden_id: item.orden.id_orden, pieza_solicitada: 'Pieza aprobada sin vínculo', cantidad_usada: 1, estado_aprobacion: 'APROBADO', usuario_aprobador_id: actors.jefe.id_usuario, fecha_aprobacion: new Date() } });
+    const route = `/bodega/trazabilidad/solicitudes/${request.id_detalle_repuesto}`;
+    const payload = { repuesto_id: part.id_repuesto, motivo: 'Se confirmó la pieza y sus especificaciones originales', misma_pieza_confirmada: true };
+    await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { ...payload, cantidad_usada: 2 }, status: 400 });
+    const linked = await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: payload });
+    assert.equal(linked.estado_aprobacion, 'APROBADO');
+    assert.equal(linked.usuario_aprobador_id, request.usuario_aprobador_id);
+    assert.equal(linked.fecha_aprobacion, request.fecha_aprobacion.toISOString());
+    assert.equal(linked.estado_entrega, 'PENDIENTE');
+    await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { ...payload, repuesto_id: other.id_repuesto }, status: 409 });
+    await api(`${route}/desvincular`, { actor: actors.bodega, method: 'PATCH', body: { motivo: 'Vínculo equivocado, volver a identificar' }, status: 400 });
+    const removed = await api(`${route}/desvincular`, { actor: actors.bodega, method: 'PATCH', body: { motivo: 'Vínculo equivocado, volver a identificar', retiro_confirmado: true } });
+    assert.equal(removed.repuesto_id, null);
+    assert.equal(removed.estado_aprobacion, 'PENDIENTE');
+    assert.equal(removed.usuario_aprobador_id, null);
+    assert.equal(removed.pieza_solicitada, request.pieza_solicitada);
+    await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: payload, status: 409 });
+    await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { ...payload, misma_pieza_confirmada: false } });
+    await api(`/jefe-tecnico/repuestos/${request.id_detalle_repuesto}/aprobar`, { actor: actors.jefe, method: 'PATCH', body: { repuesto_id: part.id_repuesto } });
+    await api(`${route}/entregar`, { actor: actors.bodega, method: 'PATCH', body: {} });
+    await api(`${route}/desvincular`, { actor: actors.bodega, method: 'PATCH', body: { motivo: 'Intento de borrar una pieza entregada', retiro_confirmado: true }, status: 409 });
+    await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { ...payload, repuesto_id: other.id_repuesto }, status: 409 });
+    await api(`/jefe-tecnico/repuestos/${request.id_detalle_repuesto}/corregir-entrega`, { actor: actors.bodega, method: 'PATCH', body: { motivo: 'Intento sin autorización de jefatura', entrega_no_realizada: true }, status: 403 });
+    await api(`/jefe-tecnico/repuestos/${request.id_detalle_repuesto}/corregir-entrega`, { actor: actors.jefe, method: 'PATCH', body: { motivo: 'Entrega registrada por error' }, status: 400 });
+    await api(`/jefe-tecnico/repuestos/${request.id_detalle_repuesto}/corregir-entrega`, { actor: actors.jefe, method: 'PATCH', body: { motivo: 'La entrega fue un registro equivocado; no hubo salida física', entrega_no_realizada: true } });
+    await api(`${route}/desvincular`, { actor: actors.bodega, method: 'PATCH', body: { motivo: 'Retiro tras corrección de la entrega equivocada', retiro_confirmado: true } });
+    assert.equal(await prisma.ordenes_Repuestos.count({ where: { id_detalle_repuesto: request.id_detalle_repuesto } }), 1);
+    assert.ok(await prisma.intervencionesTecnicas.count({ where: { orden_id: item.orden.id_orden, tipo: 'CORRECCION_REPUESTO' } }) >= 3);
+  });
+
+  test('Identificar sin stock mantiene la autorización y espera abastecimiento', async () => {
+    const item = await order('EN_REPARACION');
+    const categoria = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Identificación sin stock' } });
+    const part = await prisma.repuestos.create({ data: { tipo_repuesto_id: categoria.id_tipo_repuesto, nombre: 'Pieza autorizada por comprar', stock_actual: 0 } });
+    const request = await prisma.ordenes_Repuestos.create({ data: { orden_id: item.orden.id_orden, pieza_solicitada: part.nombre, cantidad_usada: 1, estado_aprobacion: 'APROBADO', usuario_aprobador_id: actors.jefe.id_usuario } });
+    const route = `/bodega/trazabilidad/solicitudes/${request.id_detalle_repuesto}`;
+    const linked = await api(`${route}/vincular`, { actor: actors.bodega, method: 'PATCH', body: { repuesto_id: part.id_repuesto, misma_pieza_confirmada: true, motivo: 'La pieza corresponde pero está pendiente de compra' } });
+    assert.equal(linked.estado_aprobacion, 'APROBADO');
+    assert.equal(linked.estado_entrega, 'SIN_EXISTENCIA');
+    await api(`${route}/entregar`, { actor: actors.bodega, method: 'PATCH', body: {}, status: 409 });
+    await prisma.repuestos.update({ where: { id_repuesto: part.id_repuesto }, data: { stock_actual: 1 } });
+    const ready = await api(`${route}/revisar-disponibilidad`, { actor: actors.bodega, method: 'PATCH' });
+    assert.equal(ready.estado_aprobacion, 'APROBADO');
+    assert.equal(ready.usuario_aprobador_id, actors.jefe.id_usuario);
+    assert.equal(ready.estado_entrega, 'PENDIENTE');
+  });
+
   test('Bodega entrega desde stock existente cuando no hay compra de origen', async () => {
     const item = await order('EN_REPARACION');
     const categoria = await prisma.categorias_Repuestos.create({ data: { nombre_tipo: 'Stock histórico' } });
@@ -279,7 +462,7 @@ if (!databaseName) {
 
   test('Calidad pagina diagnósticos, conserva el error y notifica al técnico responsable', async () => {
     const item = await order('ASIGNADO');
-    const tecnico = await prisma.tecnicos.create({ data: { usuario_id: actors.tecnico.id_usuario, nombre: 'Técnico de calidad' } });
+    const tecnico = await prisma.tecnicos.upsert({ where: { usuario_id: actors.tecnico.id_usuario }, update: {}, create: { usuario_id: actors.tecnico.id_usuario, nombre: 'Técnico de calidad' } });
     await prisma.diagnosticos.update({ where: { id_diagnostico: item.diagnostico.id_diagnostico }, data: { tecnico_id: tecnico.id_tecnico } });
     const revision = await api(`/calidad/diagnosticos/${item.diagnostico.id_diagnostico}/revision`, { actor: actors.calidad, method: 'POST', status: 201,
       body: { decision: 'CON_ERRORES', parte: 'Placa principal', observacion: 'La prueba de voltaje documentada no corresponde al equipo' } });
@@ -343,6 +526,25 @@ if (!databaseName) {
     assert.ok(activity.some((row) => row.origen === 'Compra' && row.referencia === `#${paidPurchase.id_compra}` && row.efecto_caja === -40));
     assert.equal(activity.reduce((total, row) => total + row.efecto_caja, 0), 60);
     await api('/contabilidad/movimientos', { actor: actors.secretaria, status: 403 });
+  });
+
+  test('Flujo distingue calidad, cancelación y garantía y conserva totales en la segunda página', async () => {
+    const item = await order('FINALIZADO', { calidad_estado: 'PENDIENTE', resultado_final: 'REPARADO' });
+    const { obtenerFlujoAtencion } = await import('../../src/services/recepcion/flujoAtencionService.js');
+    const search = item.cliente.nombre;
+    let flow = await obtenerFlujoAtencion({ search });
+    assert.equal(flow.data.find((row) => row.orden?.id_orden === item.orden.id_orden)?.filtro, 'en-calidad');
+    await prisma.ordenes.update({ where: { id_orden: item.orden.id_orden }, data: { estado: 'CANCELADO', motivo_cancelacion: 'Cancelación solicitada por el cliente de prueba' } });
+    flow = await obtenerFlujoAtencion({ search });
+    assert.equal(flow.data.find((row) => row.orden?.id_orden === item.orden.id_orden)?.filtro, 'cancelados');
+    const first = await obtenerFlujoAtencion({ page: 1, pageSize: 1 });
+    const second = await obtenerFlujoAtencion({ page: 2, pageSize: 1 });
+    assert.ok(first.meta.total > 1);
+    assert.equal(second.meta.total, first.meta.total);
+    assert.notEqual(second.data[0].id, first.data[0].id);
+    const covered = await prisma.ordenes.findFirst({ where: { es_garantia: true, facturas: { some: { metodo_pago: 'GARANTIA' } } }, include: { diagnostico: { include: { equipo: { include: { cliente: true } } } } } });
+    flow = await obtenerFlujoAtencion({ search: covered.diagnostico.equipo.cliente.nombre, pageSize: 100 });
+    assert.equal(flow.data.find((row) => row.orden?.id_orden === covered.id_orden)?.filtro, 'listos-entrega');
   });
 
   test('Administración obtiene reportes de calidad, reclamos y piezas defectuosas', async () => {

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Sistema de gestión para talleres de reparación",
   "scripts": {
+    "test:ergonomia:grupo1": "npm run test:ergonomia --prefix frontend",
+    "test:ergonomia:grupo2": "npm run test:ergonomia --prefix frontend",
+    "test:ergonomia:grupo3": "npm run test:ergonomia --prefix frontend",
     "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
@@ -13,7 +16,7 @@
     "test:secretaria:integracion": "docker compose exec -T backend npm run test:secretaria:integracion",
     "test:jefe:integracion": "docker compose exec -T backend npm run test:jefe:integracion",
     "test:tecnico:integracion": "docker compose exec -T backend npm run test:tecnico:integracion",
-    "test:admin": "npm run test:admin --prefix backend",
+    "test:admin": "npm run test:admin --prefix backend && npm run test:admin --prefix frontend",
     "test:admin:integracion": "docker compose exec -T backend npm run test:admin:integracion",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",

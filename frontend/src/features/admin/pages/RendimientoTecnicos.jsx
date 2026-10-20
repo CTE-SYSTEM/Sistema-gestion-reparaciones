@@ -20,6 +20,8 @@ export default function RendimientoTecnicos() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState({from:'',to:''});
+  const exportMetadata = [{label:'Desde',value:exportPeriod.from || 'Sin límite inicial'},{label:'Hasta',value:exportPeriod.to || 'Sin límite final'}];
 
   const fetchReport = async () => {
     setLoading(true);
@@ -32,6 +34,7 @@ export default function RendimientoTecnicos() {
       const queryString = params.toString();
       const res = await reportesAdminService.getTecnicos(queryString);
       const reportData = res.data?.data || [];
+      setExportPeriod({from:fromDate,to:toDate});
       
       setData(
         reportData.map((item) => ({
@@ -55,7 +58,7 @@ export default function RendimientoTecnicos() {
   const downloadReportCsv = async () => {
     setDownloading(true);
     try {
-      await downloadJsonExcel(data, columns, `rendimiento_tecnicos_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
+      await downloadJsonExcel(data, columns, 'rendimiento_tecnicos.xlsx', {title:'Rendimiento de técnicos',metadata:exportMetadata});
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {
@@ -66,7 +69,7 @@ export default function RendimientoTecnicos() {
   const downloadReportPdf = async () => {
     setDownloading(true);
     try {
-      downloadJsonPdf(data, columns, `rendimiento_tecnicos_${fromDate || 'desde'}_${toDate || 'hasta'}.pdf`, 'Rendimiento de técnicos');
+      downloadJsonPdf(data, columns, 'rendimiento_tecnicos.pdf', 'Rendimiento de técnicos', exportMetadata);
     } catch (err) {
       setError('No se pudo descargar el reporte en PDF.');
     } finally {

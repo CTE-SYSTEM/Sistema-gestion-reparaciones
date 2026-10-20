@@ -15,6 +15,7 @@ const actions = [
   { to: '/recepcion/clientes', title: 'Clientes', description: 'Registrar o buscar a la persona.', icon: Users },
   { to: '/recepcion/equipos', title: 'Equipos', description: 'Registrar o localizar el equipo.', icon: Laptop },
   { to: '/recepcion/diagnostico', title: 'Ingresar equipo', description: 'Documentar una nueva visita y su falla.', icon: ClipboardList },
+  { to: '/recepcion/nueva-orden', title: 'Orden directa', description: 'Ingresar una reparación clara sin diagnóstico previo.', icon: ClipboardList },
 ];
 
 export default function RecepcionDashboard() {

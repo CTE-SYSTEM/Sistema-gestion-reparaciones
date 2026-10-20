@@ -8,6 +8,7 @@ test('Recepción conserva el ingreso y Servicio al Cliente gestiona la orden', (
   assert.equal(hasPermission('Recepcion', PERMISSIONS.DIAGNOSTICOS_GESTIONAR), true);
   assert.equal(hasPermission('Recepcion', PERMISSIONS.DIAGNOSTICOS_ATENDER), false);
   assert.equal(hasPermission('Recepcion', PERMISSIONS.ORDENES_GESTIONAR), false);
+  assert.equal(hasPermission('Recepcion', PERMISSIONS.ORDENES_DIRECTAS_CREAR), true);
   assert.equal(hasPermission('Recepcion', PERMISSIONS.FACTURAS_GESTIONAR), false);
   assert.equal(hasPermission('Recepcion', PERMISSIONS.RECLAMOS_CREAR), false);
 

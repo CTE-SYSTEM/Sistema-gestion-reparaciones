@@ -73,5 +73,5 @@ export async function exportarExpedientePdf(detail, row) {
     pdf.setPage(page); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
     pdf.text(`Página ${page} de ${pages}`, 196, 290, { align: 'right' });
   }
-  pdf.save(`informe-${order ? 'orden' : 'diagnostico'}-${row.id}.pdf`);
+  pdf.save(`informe-${order ? 'orden' : 'diagnostico'}.pdf`);
 }

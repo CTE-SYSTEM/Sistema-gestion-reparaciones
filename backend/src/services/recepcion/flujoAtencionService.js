@@ -4,16 +4,18 @@ import { parsePagination } from '../../utils/pagination.js';
 
 const upper = (value) => String(value || '').toUpperCase();
 
-const FILTROS = new Set(['todos', 'pendientes', 'en-revision', 'listos-orden', 'en-reparacion', 'listos-facturar', 'listos-entrega', 'entregados', 'con-garantia']);
+const FILTROS = new Set(['todos', 'pendientes', 'en-revision', 'listos-orden', 'en-reparacion', 'en-calidad', 'cancelados', 'listos-facturar', 'listos-entrega', 'entregados', 'con-garantia']);
 
 const flujoBase = (search, customerOnly) => Prisma.sql`
   WITH flujo AS (
     SELECT e.id_equipo, d.id_diagnostico, o.id_orden,
       COALESCE(o.fecha_ingreso, d.fecha_hora) AS fecha_atencion,
       CASE
-        WHEN g.id_garantia IS NOT NULL THEN 'con-garantia'
+        WHEN UPPER(COALESCE(o.estado, '')) = 'CANCELADO' THEN 'cancelados'
+        WHEN g.id_garantia IS NOT NULL AND UPPER(COALESCE(o.estado, '')) = 'ENTREGADO' THEN 'con-garantia'
         WHEN UPPER(COALESCE(o.estado, '')) = 'ENTREGADO' OR o.fecha_entrega IS NOT NULL THEN 'entregados'
         WHEN f.id_factura IS NOT NULL THEN 'listos-entrega'
+        WHEN UPPER(COALESCE(o.estado, '')) = 'FINALIZADO' AND o.calidad_estado NOT IN ('APROBADO', 'NO_REQUERIDO') THEN 'en-calidad'
         WHEN o.id_orden IS NOT NULL AND UPPER(o.estado) IN ('FINALIZADO', 'IRREPARABLE') THEN 'listos-facturar'
         WHEN o.id_orden IS NOT NULL THEN 'en-reparacion'
         WHEN UPPER(d.estado_del_diagnostico) IN ('COMPLETADO', 'DIAGNOSTICADO') THEN 'listos-orden'
@@ -66,12 +68,14 @@ const mapOrden = (orden) => {
       estado: orden.estado || 'PENDIENTE',
       prioridad: orden.prioridad,
       fecha_ingreso: orden.fecha_ingreso,
+      calidad_estado: orden.calidad_estado,
       tecnico: orden.tecnico,
     },
     repuestos: {
       total: repuestos.length,
       pendientes: repuestosPendientes,
       aprobados: repuestosAprobados,
+      entregados: repuestos.filter((detalle) => detalle.estado_entrega === 'ENTREGADO').length,
     },
     factura: factura
       ? {
@@ -103,9 +107,7 @@ export const obtenerFlujoAtencion = async ({ filtro = 'todos', search = '', page
       ORDER BY fecha_atencion DESC NULLS LAST, id_orden DESC NULLS LAST,
         id_diagnostico DESC NULLS LAST, id_equipo DESC
       LIMIT ${pagination.pageSize + 1} OFFSET ${pagination.offset}`),
-    pagination.page === 1
-      ? prisma.$queryRaw(Prisma.sql`${base} SELECT filtro, COUNT(*)::int AS total FROM flujo GROUP BY filtro`)
-      : Promise.resolve(null),
+    prisma.$queryRaw(Prisma.sql`${base} SELECT filtro, COUNT(*)::int AS total FROM flujo GROUP BY filtro`),
   ]);
   const hasMore = pageRows.length > pagination.pageSize;
   const visibleRows = pageRows.slice(0, pagination.pageSize);
@@ -123,9 +125,9 @@ export const obtenerFlujoAtencion = async ({ filtro = 'todos', search = '', page
       tecnico: { select: { id_tecnico: true, nombre: true } },
     } }),
     prisma.ordenes.findMany({ where: { id_orden: { in: ordenIds } }, select: {
-      id_orden: true, estado: true, prioridad: true, fecha_ingreso: true,
+      id_orden: true, estado: true, prioridad: true, fecha_ingreso: true, calidad_estado: true,
       tecnico: { select: { id_tecnico: true, nombre: true } },
-      repuestos_usados: { select: { estado_aprobacion: true } },
+      repuestos_usados: { select: { estado_aprobacion: true, estado_entrega: true } },
       facturas: { orderBy: { id_factura: 'desc' }, take: 1, select: {
         id_factura: true, fecha_emision: true, total: true, metodo_pago: true,
         garantias: { orderBy: { id_garantia: 'desc' }, take: 1, select: { id_garantia: true, fecha_inicio: true, fecha_vencimiento: true, duracion_meses: true } },

@@ -6,26 +6,27 @@ import { administracionService, errorText } from '../services/administracionServ
 import { AdminPage, AdminField, AdminButton, AdminNotice, inputClass } from '../components/AdministrationUI';
 
 export default function MiCuenta() {
-  const { user, updateUser, logout } = useContext(AuthContext);
+  const { user, updateUser, syncUser, logout } = useContext(AuthContext);
   const [account, setAccount] = useState(null), [profile, setProfile] = useState({ nombre_usuario: '', nombre_persona: '', correo_electronico: '', password_actual: '' });
   const [passwords, setPasswords] = useState({ password_actual: '', password: '', confirmacion: '' });
   const [minimum, setMinimum] = useState(8), [busy, setBusy] = useState(''), [error, setError] = useState(''), [message, setMessage] = useState('');
-  const [openSection, setOpenSection] = useState('profile');
+  const [openSection, setOpenSection] = useState(null);
   useEffect(() => {
     let active = true;
     administracionService.getCuenta().then(({ data }) => {
       if (!active) return;
       setAccount(data.data); setMinimum(data.password_minimo);
-      setProfile({ nombre_usuario: data.data.nombre_usuario, nombre_persona: data.data.nombre_persona || '', correo_electronico: data.data.correo_electronico || '', password_actual: '' });
+      syncUser(data.data);
+      setProfile({ nombre_usuario: data.data.nombre_usuario, nombre_persona: data.data.nombre_persona || data.data.tecnico?.nombre || '', correo_electronico: data.data.correo_electronico || '', password_actual: '' });
     }).catch(async (e) => { if (active) setError(await errorText(e)); });
     return () => { active = false; };
-  }, []);
+  }, [syncUser]);
   const submit = async (event, operation) => {
     event.preventDefault(); setBusy(operation); setError(''); setMessage('');
     try {
       if (operation === 'profile') {
         const { data } = await administracionService.updateCuenta(profile);
-        setAccount(data.data); updateUser(data.data); setProfile((p) => ({ ...p, password_actual: '' })); setMessage(data.message);
+        setAccount(data.data); updateUser(data.data); setProfile((p) => ({ ...p, password_actual: '' })); setOpenSection(null); setMessage(data.message);
       } else {
         const { data } = operation === 'password'
           ? await administracionService.changePassword(passwords)
@@ -40,13 +41,18 @@ export default function MiCuenta() {
     Bodega: '/bodega', Calidad: '/calidad', Reclamos: '/reclamos', Garantias: '/garantias',
     Contabilidad: '/contabilidad', Tecnico: '/tecnico', TecnicoJefe: '/tecnico-jefe',
   }[user?.rol] || '/admin';
-  const toggleSection = (name) => setOpenSection((current) => current === name ? null : name);
+  const toggleSection = (name) => {
+    setOpenSection((current) => current === name ? null : name);
+    setProfile((current) => ({ ...current, password_actual: '' }));
+    setPasswords({ password_actual: '', password: '', confirmacion: '' });
+  };
 
   return <AdminPage title="Mi cuenta" description="Actualiza tus datos y controla el acceso a tu cuenta."
     backTo={isAdmin ? '/admin' : profileHome} backLabel={isAdmin ? 'Administración' : user?.rol || 'Inicio'} actions={<PageHelp compact />}>
     <AdminNotice error message={error} /><AdminNotice message={message} />
     {!account ? !error && <p className="text-sm text-slate-500">Cargando cuenta…</p> : <>
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-indigo-950 p-5 text-white"><UserRound size={32} /><div><p className="text-lg font-bold">{account.nombre_persona || account.nombre_usuario}</p><p className="text-sm text-indigo-200">@{account.nombre_usuario} · {account.rol === 'Secretaria' ? 'Operación integral' : account.rol}</p></div><span className="ml-auto flex items-center gap-2 rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-bold text-emerald-200"><ShieldCheck size={14} />Cuenta activa</span></div>
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-indigo-950 p-5 text-white"><UserRound size={32} /><div><p className="text-lg font-bold">{account.nombre_mostrado || account.nombre_persona || account.nombre_usuario}</p><p className="text-sm text-indigo-200">@{account.nombre_usuario} · {account.rol === 'Secretaria' ? 'Operación integral' : account.rol}</p><p className="mt-1 text-xs text-indigo-200">{account.correo_electronico || 'Correo sin registrar'}</p></div><span className="ml-auto flex items-center gap-2 rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-bold text-emerald-200"><ShieldCheck size={14} />{account.activo ? 'Cuenta activa' : 'Cuenta inactiva'}</span></div>
+      {account.tecnico && <dl className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">{[['Especialidad', account.tecnico.especialidad], ['Horario', account.tecnico.horario], ['Contacto técnico', account.tecnico.contacto], ['Disponibilidad', account.tecnico.disponibilidad?.replaceAll('_', ' ')]].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-semibold text-slate-800">{value || 'Sin registrar'}</dd></div>)}</dl>}
       <div className="space-y-3">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <button type="button" onClick={() => toggleSection('profile')} aria-expanded={openSection === 'profile'} aria-controls="account-profile-fields" className="flex w-full items-center justify-between gap-4 text-left">

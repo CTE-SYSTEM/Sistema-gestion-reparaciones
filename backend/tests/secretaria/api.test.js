@@ -93,7 +93,8 @@ if (!databaseName) {
   });
   const orderFixture = async (state = 'PENDIENTE') => {
     const data = await ready();
-    const orden = await prisma.ordenes.create({ data: { diagnostico_id: data.diagnostico.id_diagnostico, estado: state, monto_autorizado: 500 } });
+    const orden = await prisma.ordenes.create({ data: { diagnostico_id: data.diagnostico.id_diagnostico, estado: state, monto_autorizado: 500,
+      ...(state === 'FINALIZADO' ? { calidad_estado: 'APROBADO' } : {}) } });
     return { ...data, orden };
   };
   const photo = async (kind, id, type = 'FOTO_RECEPCION', options = {}) => api(`/archivos-servicio/${kind}/${id}`, {
@@ -269,6 +270,35 @@ if (!databaseName) {
       assert.equal(result.headers.get('content-type'), 'application/pdf');
       assert.equal(result.payload.subarray(0, 5).toString(), '%PDF-');
     });
+  });
+
+  test('Recepción solo consulta fotos de diagnósticos y órdenes asignados o iniciados', async () => {
+    const recepcion = await prisma.usuarios.create({ data: { nombre_usuario: unique('recepcion_fotos'), contrasena_hash: 'sin-login', rol: 'Recepcion' } });
+    const auth = jwt.sign({ id: recepcion.id_usuario }, process.env.JWT_SECRET, { expiresIn: '10m' });
+    const technicianUser = await prisma.usuarios.create({ data: { nombre_usuario: unique('tecnico_fotos'), contrasena_hash: 'sin-login', rol: 'Tecnico' } });
+    const tecnico = await prisma.tecnicos.create({ data: { usuario_id: technicianUser.id_usuario, nombre: 'Técnico de fotos' } });
+    const { diagnostico } = await fixture('Monitor');
+    const receipt = (await photo('diagnosticos', diagnostico.id_diagnostico, 'FOTO_RECEPCION', { auth })).payload.data;
+    await prisma.diagnosticos.update({ where: { id_diagnostico: diagnostico.id_diagnostico }, data: { tecnico_id: tecnico.id_tecnico, estado_del_diagnostico: 'ASIGNADO' } });
+    await photo('diagnosticos', diagnostico.id_diagnostico, 'FOTO_RECEPCION', { auth, expected: 409 });
+    await prisma.diagnosticos.update({ where: { id_diagnostico: diagnostico.id_diagnostico }, data: { estado_del_diagnostico: 'EN_REVISION', fecha_inicio: new Date() } });
+    await photo('diagnosticos', diagnostico.id_diagnostico, 'FOTO_DIAGNOSTICO', { auth, expected: 409 });
+    const diagnosisPhoto = (await photo('diagnosticos', diagnostico.id_diagnostico, 'FOTO_DIAGNOSTICO')).payload.data;
+    await prisma.diagnosticos.update({ where: { id_diagnostico: diagnostico.id_diagnostico }, data: { estado_del_diagnostico: 'COMPLETADO', diagnostico_real: 'Revisión del monitor completada' } });
+    const orden = await prisma.ordenes.create({ data: { diagnostico_id: diagnostico.id_diagnostico, tecnico_id: tecnico.id_tecnico, estado: 'EN_REPARACION', monto_autorizado: 100 } });
+    const repair = (await photo('ordenes', orden.id_orden, 'FOTO_REPARACION')).payload.data;
+    const beforeCount = await prisma.archivosServicio.count();
+    await photo('ordenes', orden.id_orden, 'FOTO_REPARACION', { auth, expected: 409 });
+    assert.equal(await prisma.archivosServicio.count(), beforeCount);
+    const diagnosisList = (await api(`/archivos-servicio/diagnosticos/${diagnostico.id_diagnostico}`, { auth })).payload;
+    assert.ok(diagnosisList.contexto.ordenes.some((row) => row.id_orden === orden.id_orden));
+    assert.equal(diagnosisList.contexto.solo_lectura_recepcion, true);
+    assert.ok(diagnosisList.data.some((row) => row.id_archivo === receipt.id_archivo));
+    assert.ok(diagnosisList.data.some((row) => row.id_archivo === diagnosisPhoto.id_archivo));
+    assert.ok((await api(`/archivos-servicio/ordenes/${orden.id_orden}`, { auth })).payload.data.some((row) => row.id_archivo === repair.id_archivo));
+    assert.deepEqual((await api(`/archivos-servicio/${repair.id_archivo}/contenido`, { auth })).payload, png);
+    await photo('ordenes', orden.id_orden, 'FOTO_ENTREGA', { auth, expected: 403 });
+    await photo('ordenes', orden.id_orden, 'FOTO_REPARACION', { auth: deniedToken, expected: 403 });
   });
 
   test('Secretaría: fotografías durante creación y edición', async (t) => {
@@ -529,19 +559,20 @@ if (!databaseName) {
       assert.equal(await prisma.facturas.count({ where: { orden_id: orden.id_orden } }), 0);
       assert.equal((await prisma.repuestos.findUnique({ where: { id_repuesto: repuesto.id_repuesto } })).stock_actual, 1);
     });
-    await t.test('entrega exige persona y foto; inicia garantía y bloquea segunda entrega o cancelación', async () => {
+    await t.test('entrega sin foto exige persona, inicia garantía y bloquea segunda entrega o cancelación', async () => {
       const { orden } = await orderFixture('FINALIZADO');
       const factura = await post('/facturas', { orden_id: orden.id_orden, monto_diagnostico: 50, mano_obra: 500, impuestos: 0, metodo_pago: 'Efectivo' });
       const route = `/ordenes/${orden.id_orden}/entrega`;
       await api(route, { method: 'PATCH', body: {}, expected: 400 });
-      await api(route, { method: 'PATCH', body: { persona_recibe: 'Cliente' }, expected: 409 });
-      await photo('ordenes', orden.id_orden, 'FOTO_ENTREGA');
+      assert.equal(await prisma.archivosServicio.count({ where: { orden_id: orden.id_orden, tipo_archivo: 'FOTO_ENTREGA' } }), 0);
       const delivered = (await api(route, { method: 'PATCH', body: { persona_recibe: 'Cliente', observacion_entrega: 'Recibido conforme' } })).payload.data;
       assert.equal(delivered.estado, 'ENTREGADO');
       assert.equal(delivered.entregado_por_id, userId);
       const guarantee = await prisma.garantias.findUnique({ where: { factura_id: factura.id_factura } });
       assert.equal(guarantee.fecha_inicio.toISOString(), delivered.fecha_entrega);
       assert.ok(guarantee.fecha_vencimiento > guarantee.fecha_inicio);
+      await photo('ordenes', orden.id_orden, 'FOTO_ENTREGA');
+      assert.equal(await prisma.archivosServicio.count({ where: { orden_id: orden.id_orden, tipo_archivo: 'FOTO_ENTREGA' } }), 1);
       await api(route, { method: 'PATCH', body: { persona_recibe: 'Cliente' }, expected: 409 });
       await api(`/ordenes/${orden.id_orden}/cancelar`, { method: 'PATCH', body: { motivo_cancelacion: 'Intento posterior' }, expected: 409 });
       await post('/garantias', { factura_id: factura.id_factura, duracion_meses: 3 }, 409);

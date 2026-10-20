@@ -10,7 +10,8 @@ import { EstadoBadge, PrioridadBadge } from '../components/Diagnostico/badges';
 import { getClientes } from '../services/clientesService';
 import { getEquipos } from '../services/equiposService';
 import { createDiagnostico, getDiagnosticos, updateDiagnostico } from '../services/diagnosticoService';
-import { useInfiniteAreaList } from '../../shared/hooks/useInfiniteAreaList';
+import { usePagedAreaList } from '../../shared/hooks/usePagedAreaList';
+import AreaPagination from '../../shared/components/AreaPagination';
 import { subirFotoServicio } from '../../shared/services/archivosServicioService';
 import FotosServicio from '../../shared/components/FotosServicio';
 import { getHistorialDiagnostico } from '../services/diagnosticoService';
@@ -30,6 +31,24 @@ const receptionFields = [
 
 const resetReception = (form) => {
   for (const field of receptionFields) form[field] = initialFormState[field];
+};
+
+const scrollReceptionContent = (element, { block = 'start' } = {}) => {
+  const container = element?.closest('.app-main-scroll');
+  if (!container) return;
+
+  // scrollIntoView también desplaza los ancestros con overflow:hidden del layout,
+  // dejando el área visible recortada y una franja vacía en la parte inferior.
+  const target = element.getBoundingClientRect();
+  const viewport = container.getBoundingClientRect();
+  const offset = block === 'center'
+    ? (container.clientHeight - target.height) / 2
+    : Number.parseFloat(window.getComputedStyle(element).scrollMarginTop) || 0;
+
+  container.scrollTo({
+    top: container.scrollTop + target.top - viewport.top - container.clientTop - offset,
+    behavior: 'smooth',
+  });
 };
 
 const Diagnostico = () => {
@@ -54,7 +73,7 @@ const Diagnostico = () => {
   const [selectedPhotosId, setSelectedPhotosId] = useState(null);
   const [photosVersion, setPhotosVersion] = useState(0);
   const [historial, setHistorial] = useState([]);
-  const [historialId, setHistorialId] = useState(null);
+  const [activePanel, setActivePanel] = useState(null);
   const [detalleRecepcion, setDetalleRecepcion] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [tourStep, setTourStep] = useState(0);
@@ -65,11 +84,20 @@ const Diagnostico = () => {
   const preselectedClienteId = location.state?.clienteId ? String(location.state.clienteId) : '';
   const preselectedEquipoId = location.state?.equipoId ? String(location.state.equipoId) : '';
   const activeTourTarget = showHelp ? tourSteps[tourStep].target : '';
-  const diagnosticosQuery = useInfiniteAreaList({
+  const historialId = activePanel?.type === 'history' ? activePanel.id : null;
+  const togglePanel = (type, id) => setActivePanel((previous) =>
+    previous?.type === type && previous.id === id ? null : { type, id });
+  const openPhotos = (id) => {
+    setSelectedPhotosId(id);
+    togglePanel('photos', id);
+  };
+  const [page, setPage] = useState(1);
+  const diagnosticosQuery = usePagedAreaList({
     queryKey: ['recepcion', 'diagnosticos'],
     queryFn: getDiagnosticos,
     search: searchTerm,
     extraParams: { filterTecnico },
+    page, onPageChange: setPage, pageSize: 20,
   });
 
   const loadData = async () => {
@@ -95,9 +123,23 @@ const Diagnostico = () => {
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
+    if (!historialId) return;
+    let current = true;
+    setHistorial(null);
+    getHistorialDiagnostico(historialId).then((response) => {
+      if (current) setHistorial(response.data.data || []);
+    }).catch(() => {
+      if (!current) return;
+      setError('No se pudo cargar el historial');
+      setActivePanel(null);
+    });
+    return () => { current = false; };
+  }, [historialId]);
+
+  useEffect(() => {
     if (!showHelp || !activeTourTarget) return;
     const scrollTimer = window.setTimeout(() => {
-      document.querySelector(`[data-tour-target="${activeTourTarget}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      scrollReceptionContent(document.querySelector(`[data-tour-target="${activeTourTarget}"]`), { block: 'center' });
     }, 80);
 
     return () => window.clearTimeout(scrollTimer);
@@ -121,13 +163,13 @@ const Diagnostico = () => {
   }, [message]);
 
   useEffect(() => {
-    if (!selectedPhotosId) return;
-    window.requestAnimationFrame(() => photoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  }, [selectedPhotosId, photosVersion]);
+    if (activePanel?.type !== 'photos') return;
+    window.requestAnimationFrame(() => scrollReceptionContent(photoSectionRef.current));
+  }, [activePanel, photosVersion]);
 
   useEffect(() => {
     if (!isFormOpen && savedPhotoDiagnosisId) {
-      window.requestAnimationFrame(() => photoSummaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      window.requestAnimationFrame(() => scrollReceptionContent(photoSummaryRef.current));
     }
   }, [isFormOpen, savedPhotoDiagnosisId]);
 
@@ -251,7 +293,7 @@ const Diagnostico = () => {
       detalle_accesorios: diag.detalle_accesorios || '',
       observaciones_recepcion: diag.observaciones_recepcion || '',
     });
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollReceptionContent(formRef.current);
   };
 
   const handleSubmit = async (event) => {
@@ -360,7 +402,7 @@ const Diagnostico = () => {
     </div>
 
     {error && (
-      <div className="p-2.5 bg-red-100 text-red-700 rounded-lg flex items-center gap-2 text-xs font-semibold border border-red-200 text-left">
+      <div role="alert" className="p-2.5 bg-red-100 text-red-700 rounded-lg flex items-center gap-2 text-xs font-semibold border border-red-200 text-left">
         <AlertCircle className="w-4 h-4 shrink-0" />
         <span>{error}</span>
       </div>
@@ -398,7 +440,7 @@ const Diagnostico = () => {
     {!isFormOpen && savedPhotoDiagnosisId && photoQueue.photos.length > 0 && <div ref={photoSummaryRef} className="space-y-2 scroll-mt-6">
       <FotosPendientes photos={photoQueue.photos} readOnly title={`Fotos guardadas del diagnóstico #${savedPhotoDiagnosisId}`} contextLabel={photoReceiptContext} />
       <div className="flex justify-end gap-3 text-xs">
-        <button type="button" onClick={() => setSelectedPhotosId(savedPhotoDiagnosisId)} className="font-medium text-indigo-700 underline">Ver todas las fotos del registro</button>
+        <button type="button" onClick={() => openPhotos(savedPhotoDiagnosisId)} className="font-medium text-indigo-700 underline">Ver todas las fotos del registro</button>
         <button type="button" onClick={() => { photoQueue.clearPhotos(); setSavedPhotoDiagnosisId(null); setPhotoReceiptContext(''); }} className="text-slate-600 underline">Cerrar resumen</button>
       </div>
     </div>}
@@ -410,28 +452,23 @@ const Diagnostico = () => {
       filterTecnico={filterTecnico}
       loading={loading}
       onEdit={handleEdit}
-      onPhotos={(id) => setSelectedPhotosId(selectedPhotosId === id ? null : id)}
-      onHistory={async (id) => {
-        try {
-          const response = await getHistorialDiagnostico(id);
-          setHistorial(response.data.data || []);
-          setHistorialId(id);
-        } catch { setError('No se pudo cargar el historial'); }
+      onPhotos={openPhotos}
+      onHistory={(id) => togglePanel('history', id)}
+      onDetails={(diag) => {
+        setDetalleRecepcion(diag);
+        togglePanel('details', diag.id_diagnostico);
       }}
-      onDetails={(diag) => setDetalleRecepcion(detalleRecepcion?.id_diagnostico === diag.id_diagnostico ? null : diag)}
-      onFilterChange={setFilterTecnico}
-      onSearchChange={setSearchTerm}
+      onFilterChange={(value) => { setFilterTecnico(value); setPage(1); }}
+      onSearchChange={(value) => { setSearchTerm(value); setPage(1); }}
       searchTerm={searchTerm}
-      onLoadMore={() => diagnosticosQuery.fetchNextPage()}
-      hasMore={diagnosticosQuery.hasNextPage}
-      isLoadingMore={diagnosticosQuery.isFetchingNextPage}
     />
-    {detalleRecepcion && <section className="rounded-xl border bg-white p-4 text-left text-sm">
+    <AreaPagination label="Paginación de diagnósticos" page={page} onPageChange={setPage} meta={diagnosticosQuery.meta} loading={diagnosticosQuery.isFetching} />
+    {activePanel?.type === 'details' && detalleRecepcion && <section className="rounded-xl border bg-white p-4 text-left text-sm">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="font-semibold">Recepción del diagnóstico #{detalleRecepcion.id_diagnostico} · {detalleRecepcion.equipo?.tipo || 'Equipo'}</h3>
         <button
           type="button"
-          onClick={() => setDetalleRecepcion(null)}
+          onClick={() => setActivePanel(null)}
           className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
           aria-label="Cerrar detalles de recepción"
           title="Cerrar detalles de recepción"
@@ -461,8 +498,10 @@ const Diagnostico = () => {
       <p className="mt-1"><strong>Observaciones de recepción:</strong> {detalleRecepcion.observaciones_recepcion || 'Sin observaciones'}</p>
       <p className="mt-1"><strong>Estado físico del equipo:</strong> {detalleRecepcion.estado_equipo?.replaceAll('_', ' ') || 'EN_TALLER'}</p>
     </section>}
-    {selectedPhotosId && <div ref={photoSectionRef} className="scroll-mt-6"><FotosServicio key={`${selectedPhotosId}-${photosVersion}`} kind="diagnosticos" id={selectedPhotosId} /></div>}
-    {historialId && <HistorialEstados rows={historial} />}
+    {selectedPhotosId && <div ref={photoSectionRef} hidden={activePanel?.type !== 'photos'} className="scroll-mt-6"><FotosServicio key={`${selectedPhotosId}-${photosVersion}`} kind="diagnosticos" id={selectedPhotosId} receptionView /></div>}
+    {historialId && <section className="rounded-xl border bg-white p-4"><h3 className="mb-3 font-semibold">Historial del diagnóstico #{historialId} · {diagnosticosQuery.rows.find((row) => row.id_diagnostico === historialId)?.equipo?.cliente?.nombre || 'Cliente del expediente'}</h3>{historial === null
+      ? <p role="status" className="text-sm text-slate-500">Cargando historial…</p>
+      : <HistorialEstados rows={historial} />}</section>}
   </div>
 );
 };

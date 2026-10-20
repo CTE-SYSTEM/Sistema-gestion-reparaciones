@@ -13,12 +13,12 @@ router.use(authMiddleware, requirePermission(PERMISSIONS.REPUESTOS_TRAZAR));
 router.get('/solicitudes', async (req, res, next) => {
   try {
     const estado = String(req.query.estado || 'ACTIVAS').toUpperCase();
-    if (!['ACTIVAS', 'POR_ENTREGAR', 'POR_APROBAR', 'SIN_EXISTENCIA', 'ENTREGADO', 'TODOS'].includes(estado)) return res.status(400).json({ error: 'Estado de solicitud inválido' });
+    if (!['ACTIVAS', 'POR_ENTREGAR', 'POR_APROBAR', 'SIN_EXISTENCIA', 'ENTREGADO', 'DENEGADO', 'TODOS'].includes(estado)) return res.status(400).json({ error: 'Estado de solicitud inválido' });
     const { page, pageSize, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim().slice(0, 100);
     const numeric = parsePositiveId(search);
     const where = {
-      ...(estado === 'TODOS' ? {} : estado === 'ENTREGADO' ? { estado_entrega: 'ENTREGADO' }
+      ...(estado === 'TODOS' ? {} : estado === 'DENEGADO' ? { estado_aprobacion: 'DENEGADO' } : estado === 'ENTREGADO' ? { estado_entrega: 'ENTREGADO' }
         : estado === 'SIN_EXISTENCIA' ? { estado_entrega: 'SIN_EXISTENCIA', estado_aprobacion: { in: ['PENDIENTE', 'APROBADO'] } }
           : estado === 'POR_ENTREGAR' ? { estado_entrega: 'PENDIENTE', estado_aprobacion: 'APROBADO' }
             : estado === 'POR_APROBAR' ? { estado_entrega: 'PENDIENTE', estado_aprobacion: 'PENDIENTE' }
@@ -40,7 +40,7 @@ router.get('/solicitudes', async (req, res, next) => {
         compra: { include: { proveedor: { select: { nombre: true } } } },
         tecnico_solicitante: { select: { nombre: true } },
         usuario_entregador: { select: { nombre_persona: true, nombre_usuario: true } },
-        orden: { select: { id_orden: true, estado: true, tecnico: { select: { nombre: true } }, diagnostico: { select: { equipo: { select: { tipo: true, marca: true, modelo: true, numero_serie: true, cliente: { select: { nombre: true } } } } } } } },
+        orden: { select: { id_orden: true, estado: true, tecnico: { select: { nombre: true } }, diagnostico: { select: { falla_reportada: true, diagnostico_real: true, equipo: { select: { tipo: true, marca: true, modelo: true, numero_serie: true, cliente: { select: { nombre: true } } } } } } } },
       },
       orderBy: { id_detalle_repuesto: 'desc' }, skip: offset, take: pageSize,
     }), prisma.ordenes_Repuestos.count({ where })]);
@@ -76,6 +76,8 @@ router.patch('/solicitudes/:id/entregar', requirePermission(PERMISSIONS.REPUESTO
   return procesarRepuesto('entregar')(req, res, next);
 });
 router.patch('/solicitudes/:id/sin-existencia', requirePermission(PERMISSIONS.REPUESTOS_ENTREGAR), procesarRepuesto('sin-existencia'));
+router.patch('/solicitudes/:id/vincular', requirePermission(PERMISSIONS.REPUESTOS_ENTREGAR), procesarRepuesto('vincular'));
+router.patch('/solicitudes/:id/desvincular', requirePermission(PERMISSIONS.REPUESTOS_ENTREGAR), procesarRepuesto('desvincular'));
 router.patch('/solicitudes/:id/revisar-disponibilidad', requirePermission(PERMISSIONS.REPUESTOS_ENTREGAR), procesarRepuesto('revisar-disponibilidad'));
 
 export default router;

@@ -73,6 +73,52 @@ if (!databaseName) {
     assert.equal(audit.data[0].usuario_id, actor.id_usuario); assert.equal(audit.data[0].observacion, 'Ajuste administrativo de prueba');
     assert.equal((await api('/admin_pro/dashboard')).data.garantiaAvisoDias, 15);
   });
+  test('Negocio rechaza escrituras sin permiso y entradas inválidas sin cambiar la revisión', async () => {
+    const before = (await api('/admin_pro/configuracion')).data;
+    const valid = { revision: before.revision, motivo: 'Cambio de contacto de prueba', valores: { negocio: { nombre: 'Taller no autorizado' } } };
+    await api('/admin_pro/configuracion', { method: 'PUT', token: null, body: valid, status: 401 });
+    await api('/admin_pro/configuracion', { method: 'PUT', token: denied.token, body: valid, status: 403 });
+    for (const body of [
+      { ...valid, motivo: '' }, { ...valid, motivo: '    ' }, { ...valid, motivo: 'x'.repeat(1001) },
+      { ...valid, revision: -1 }, { ...valid, revision: String(before.revision) },
+      { ...valid, valores: { negocio: { nombre: ' ' } } },
+      { ...valid, valores: { negocio: { correo: 'correo-invalido' } } },
+      { ...valid, valores: { negocio: { garantia_meses: 37 } } },
+      { ...valid, valores: { negocio: { margen_repuesto_porcentaje: -1 } } },
+      { ...valid, valores: { negocio: { logo_url: '/logo.png' } } },
+    ]) await api('/admin_pro/configuracion', { method: 'PUT', body, status: 400 });
+    assert.deepEqual((await api('/admin_pro/configuracion')).data, before);
+  });
+  test('Dos guardados simultáneos de Negocio conservan un solo ganador y permiten reintentar', async () => {
+    const before = (await api('/admin_pro/configuracion')).data;
+    try {
+      const names = ['Taller concurrente A', 'Taller concurrente B'];
+      const results = await Promise.all(names.map(async (nombre) => {
+        const response = await fetch(`${base}/admin_pro/configuracion`, {
+          method: 'PUT', signal: AbortSignal.timeout(90000),
+          headers: { Authorization: `Bearer ${actor.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ revision: before.revision, motivo: `Prueba simultánea ${nombre}`, valores: { negocio: { nombre } } }),
+        });
+        return { status: response.status, body: await response.json(), nombre };
+      }));
+      assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+      const winner = results.find((r) => r.status === 200);
+      const current = (await api('/admin_pro/configuracion')).data;
+      assert.equal(current.revision, before.revision + 1);
+      assert.deepEqual(current.valores, { ...before.valores, negocio: { ...before.valores.negocio, nombre: winner.nombre } });
+      const retried = await api('/admin_pro/configuracion', { method: 'PUT', body: {
+        revision: current.revision, motivo: 'Reintento con revisión actualizada', valores: { negocio: { correo: ' taller@example.test ', telefono: ' +505 8888-0000 ', direccion: ' Managua ' } },
+      } });
+      assert.equal(retried.data.revision, current.revision + 1);
+      assert.equal(retried.data.valores.negocio.correo, 'taller@example.test');
+      assert.equal(retried.data.valores.negocio.telefono, '+505 8888-0000');
+      assert.equal(retried.data.valores.negocio.direccion, 'Managua');
+      assert.equal(retried.data.valores.negocio.nombre, winner.nombre);
+    } finally {
+      const current = (await api('/admin_pro/configuracion')).data;
+      await api('/admin_pro/configuracion', { method: 'PUT', body: { revision: current.revision, motivo: 'Restituir configuración tras escenario concurrente', valores: before.valores } });
+    }
+  });
   test('Cuentas del personal cumplen contraseña mínima y las respuestas ocultan hashes', async () => {
     await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'corta', rol: 'Tecnico', password: '1234' }, status: 400 });
     await api('/admin_pro/usuarios', { method: 'POST', body: { nombre_usuario: 'elevada', rol: 'Administrador', password }, status: 400 });
@@ -180,7 +226,7 @@ if (!databaseName) {
     assert.equal(diagnosisRow.getCell(4).value, '00123456');
     assert.equal(diagnosisRow.getCell(10).value, 125.5);
 
-    const parts = await checkWorkbook(`/admin_pro/ordenes/${fresh.orden.id_orden}/repuestos/reporte`, `repuestos-orden-${fresh.orden.id_orden}.xlsx`);
+    const parts = await checkWorkbook(`/admin_pro/ordenes/${fresh.orden.id_orden}/repuestos/reporte`, 'repuestos-orden.xlsx');
     const partRow = parts.getRows(5, parts.rowCount - 4).find((row) => row.getCell(4).value === detail.id_detalle_repuesto);
     assert.equal(partRow.getCell(5).value, '=2+3');
     assert.equal(partRow.getCell(5).type, ExcelJS.ValueType.String);

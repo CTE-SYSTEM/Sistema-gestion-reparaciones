@@ -410,7 +410,8 @@ export default function Ganancias() {
     { label: 'Repuestos sin stock', value: activos.repuestos_sin_stock || 0 },
   ]), [activos]);
 
-  const reportFilename = `ganancias_${fromDate || 'general'}_${toDate || 'general'}`;
+  const reportFilename = 'ganancias';
+  const exportMetadata = [{ label: 'Desde', value: fromDate || 'Sin límite inicial' }, { label: 'Hasta', value: toDate || 'Sin límite final' }, { label: 'Agrupación', value: activePeriod }];
   const generalReportRange = useMemo(() => (
     getReportRange(generalReportPeriod, generalReportDate)
   ), [generalReportDate, generalReportPeriod]);
@@ -494,7 +495,7 @@ export default function Ganancias() {
     setDownloading(true);
     setError('');
     try {
-      await downloadJsonExcel(detail, detailColumns, `${reportFilename}.xlsx`);
+      await downloadJsonExcel(detail, detailColumns, `${reportFilename}.xlsx`, { title: 'Reporte de ganancias', metadata: exportMetadata });
     } catch {
       setError('No se pudo descargar el reporte de ganancias.');
     } finally {
@@ -506,8 +507,8 @@ export default function Ganancias() {
     setDownloading(true);
     setError('');
     try {
-      if (format === 'pdf') downloadJsonPdf(rows, columns, `${filename}.pdf`, title);
-      else await downloadJsonExcel(rows, columns, `${filename}.xlsx`);
+      if (format === 'pdf') downloadJsonPdf(rows, columns, `${filename}.pdf`, title, exportMetadata);
+      else await downloadJsonExcel(rows, columns, `${filename}.xlsx`, { title, metadata: exportMetadata });
     } catch {
       setError(`No se pudo exportar ${title.toLowerCase()}.`);
     } finally {
@@ -519,7 +520,7 @@ export default function Ganancias() {
     setDownloading(true);
     setError('');
     try {
-      downloadJsonPdf(detail, detailColumns, `${reportFilename}.pdf`, 'Reporte de Ganancias');
+      downloadJsonPdf(detail, detailColumns, `${reportFilename}.pdf`, 'Reporte de Ganancias', exportMetadata);
     } catch {
       setError('No se pudo descargar el reporte de ganancias en PDF.');
     } finally {
@@ -543,7 +544,7 @@ export default function Ganancias() {
 
       downloadSectionedPdf({
         title: 'Reporte General de Ganancias',
-        filename: `ganancias_reporte_general_${generalReportRange.from}_${generalReportRange.to}.pdf`,
+        filename: 'ganancias-reporte-general.pdf',
         description: 'Reporte completo del módulo de ganancias con resumen, alertas, márgenes, activos, costos, rentabilidad y movimientos.',
         metadata: [
           { label: 'Periodo', value: generalReportRange.label },
@@ -898,8 +899,8 @@ export default function Ganancias() {
                 </div>
                 <ExportActions
                   disabled={downloading || profitability.length === 0}
-                  onExcel={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad_${activePeriod}`, 'Rentabilidad por Etapa')}
-                  onPdf={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad_${activePeriod}`, 'Rentabilidad por Etapa', 'pdf')}
+                  onExcel={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad`, 'Rentabilidad por Etapa')}
+                  onPdf={() => exportSection(profitability, profitabilityColumns, `${reportFilename}_rentabilidad`, 'Rentabilidad por Etapa', 'pdf')}
                 />
               </div>
               <div className="overflow-x-auto">

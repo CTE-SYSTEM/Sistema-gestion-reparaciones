@@ -23,6 +23,8 @@ const correctionTypes = {
   corregir: 'CORRECCION_REPUESTO', 'retirar-aprobacion': 'RETIRAR_APROBACION',
   reabrir: 'REABRIR_SOLICITUD', 'corregir-entrega': 'CORREGIR_ENTREGA', devolver: 'DEVOLUCION_REPUESTO',
   'sin-existencia': 'PIEZA_SIN_EXISTENCIA', 'revisar-disponibilidad': 'DISPONIBILIDAD_REVISADA',
+  vincular: 'CORRECCION_REPUESTO',
+  desvincular: 'CORRECCION_REPUESTO',
 };
 const average = (rows, start, end) => {
   const values = rows.filter((r) => r[start] && r[end] && new Date(r[end]) >= new Date(r[start])).map((r) => (new Date(r[end]) - new Date(r[start])) / 3600000);
@@ -179,6 +181,37 @@ export const accionRepuesto = (value, accion, payload, user) => withAuditUser(us
     const detalle = String(payload.motivo || '').trim();
     if (detalle.length > 500) fail(400, 'La observación no debe superar 500 caracteres');
     return finish({ estado_entrega: 'SIN_EXISTENCIA' }, detalle || 'Bodega confirmó que no hay una pieza disponible para esta solicitud');
+  }
+  if (accion === 'desvincular') {
+    if (r.estado_entrega === 'ENTREGADO' || r.estado_aprobacion === 'DENEGADO') fail(409, 'Una entrega o rechazo debe corregirse antes de retirar el vínculo');
+    if (!r.repuesto_id) fail(409, 'La solicitud ya está sin pieza vinculada');
+    const motivo = motivoObligatorio(payload.motivo);
+    if (payload.retiro_confirmado !== true) fail(400, 'Confirme el retiro del vínculo y de su aprobación');
+    await lockRepuestos(tx, [r.repuesto_id]);
+    return finish({ repuesto_id: null, estado_aprobacion: 'PENDIENTE', estado_entrega: 'PENDIENTE',
+      fecha_aprobacion: null, usuario_aprobador_id: null, fecha_rechazo: null, motivo_rechazo: null,
+      compra_id: null, fecha_entrega: null, usuario_entregador_id: null }, motivo);
+  }
+  if (accion === 'vincular') {
+    if (r.estado_entrega === 'ENTREGADO' || r.estado_aprobacion === 'DENEGADO') fail(409, 'No se puede vincular una solicitud entregada o rechazada');
+    const repuestoId = idValue(payload.repuesto_id);
+    const motivo = motivoObligatorio(payload.motivo);
+    if (payload.cantidad_usada != null && Number(payload.cantidad_usada) !== Number(r.cantidad_usada)) fail(400, 'La identificación no permite cambiar la cantidad aprobada; solicite revisión al jefe');
+    const conservar = payload.misma_pieza_confirmada === true;
+    if (conservar && (r.repuesto_id || r.estado_aprobacion !== 'APROBADO')) fail(409, 'Solo puede conservarse la aprobación al identificar una solicitud aprobada que aún no tenía vínculo. Actualice la solicitud');
+    if (repuestoId === r.repuesto_id) fail(409, 'Seleccione una pieza distinta de la ya vinculada');
+    await lockRepuestos(tx, [r.repuesto_id, repuestoId]);
+    const part = await tx.repuestos.findUnique({ where: { id_repuesto: repuestoId } });
+    if (!part || !part.activo || part.descontinuada) fail(404, 'Seleccione una pieza activa del catálogo');
+    if (conservar) {
+      const disponible = await stockDisponible(tx, repuestoId, id);
+      return finish({ repuesto_id: repuestoId, estado_entrega: disponible >= Number(r.cantidad_usada) ? 'PENDIENTE' : 'SIN_EXISTENCIA',
+        compra_id: null, fecha_entrega: null, usuario_entregador_id: null }, `Identificación de la misma pieza y cantidad; se conserva la aprobación original. ${motivo}`);
+    }
+    return finish({ repuesto_id: repuestoId, estado_aprobacion: 'PENDIENTE',
+      estado_entrega: 'PENDIENTE', fecha_aprobacion: null, usuario_aprobador_id: null,
+      fecha_rechazo: null, motivo_rechazo: null, compra_id: null,
+      fecha_entrega: null, usuario_entregador_id: null }, motivo);
   }
   if (accion === 'revisar-disponibilidad') {
     if (r.estado_entrega !== 'SIN_EXISTENCIA') fail(409, 'Esta solicitud no está marcada como faltante');

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { handleChoiceNavigationKeyDown } from '../../shared/components/choiceKeyboardNavigation';
 import { diagnosticosAdminService, equiposAdminService, ordenesAdminService, tecnicosAdminService } from '../services';
 
 const DIAGNOSTICO_ESTADOS = ['PENDIENTE', 'INGRESADO', 'EN_REVISION', 'DIAGNOSTICADO', 'COMPLETADO', 'APROBADO', 'RECHAZADO'];
@@ -200,13 +201,14 @@ export default function HistorialEquipo() {
             placeholder="Buscador inteligente: ID, nombre, telefono o correo..."
             className="mt-4 w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-indigo-500"
           />
-          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+          <div onKeyDown={handleChoiceNavigationKeyDown} className="mt-4 max-h-72 space-y-2 overflow-y-auto">
             {loading ? (
               <p className="py-6 text-center text-sm text-gray-400">Cargando clientes...</p>
             ) : clientesFiltrados.map((cliente) => (
               <button
                 key={cliente.id_cliente}
                 type="button"
+                data-keyboard-open="#historial-equipos"
                 onClick={() => {
                   setSelectedClienteId(cliente.id_cliente);
                   setSelectedEquipo(null);
@@ -221,7 +223,7 @@ export default function HistorialEquipo() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div id="historial-equipos" className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-black uppercase text-indigo-600">Paso 2</p>
           <h2 className="mt-1 text-lg font-bold text-slate-800">Equipos vinculados</h2>
           <p className="mt-1 text-xs font-semibold text-gray-400">{selectedCliente ? selectedCliente.nombre : 'Selecciona un cliente para continuar.'}</p>
@@ -234,7 +236,7 @@ export default function HistorialEquipo() {
               className="mt-4 w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-indigo-500"
             />
           )}
-          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+          <div onKeyDown={handleChoiceNavigationKeyDown} className="mt-4 max-h-72 space-y-2 overflow-y-auto">
             {!selectedClienteId ? (
               <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 p-6 text-center text-xs text-gray-400">Esperando cliente.</div>
             ) : equiposDelCliente.length === 0 ? (
@@ -270,7 +272,7 @@ export default function HistorialEquipo() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <section data-keyboard-form={selectedEquipo && !historyLoading ? '' : undefined} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase text-indigo-600">Paso 4</p>
@@ -299,7 +301,7 @@ export default function HistorialEquipo() {
                     <p className="mt-1 text-xs font-semibold text-gray-400">{item.fecha ? new Date(item.fecha).toLocaleString() : 'Sin fecha'} - {item.tecnico}</p>
                     <p className="mt-3 max-w-4xl whitespace-pre-wrap text-sm text-slate-700">{item.descripcion}</p>
                   </div>
-                  <button type="button" onClick={() => openEdit(item)} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">
+                  <button type="button" data-keyboard-id={`historial-${item.tipo}-${item.id}`} onClick={() => openEdit(item)} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">
                     Editar
                   </button>
                 </div>
@@ -310,7 +312,7 @@ export default function HistorialEquipo() {
       </section>
 
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-label={`Editar ${editing.tipo} ${editing.id}`} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-xl font-bold text-slate-800">Editar {editing.tipo} #{editing.id}</h3>
             <form onSubmit={saveEdit} className="mt-5 grid gap-4 md:grid-cols-2">
@@ -375,7 +377,7 @@ export default function HistorialEquipo() {
                   {saving ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
-              {editMessage && <div className="md:col-span-2 text-center text-sm font-semibold text-indigo-600">{editMessage}</div>}
+              {editMessage && <div role={editMessage === 'Cambios guardados correctamente.' ? 'status' : 'alert'} className="md:col-span-2 text-center text-sm font-semibold text-indigo-600">{editMessage}</div>}
             </form>
           </div>
         </div>

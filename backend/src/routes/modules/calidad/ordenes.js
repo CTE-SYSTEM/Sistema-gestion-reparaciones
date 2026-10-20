@@ -5,6 +5,7 @@ import { PERMISSIONS } from '../../../utils/permissions.js';
 import { withAuditUser } from '../../../utils/auditContext.js';
 import { notifyJefeTecnico, notifyRoles, notifyTecnico } from '../../../services/notifications.js';
 import { parsePositiveId } from '../../../utils/domainValidation.js';
+import { parsePagination } from '../../../utils/pagination.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -14,15 +15,18 @@ const completedDiagnoses = { estado_del_diagnostico: { in: ['COMPLETADO', 'DIAGN
 const reviewableOrders = { estado: 'FINALIZADO', calidad_estado: { in: ['PENDIENTE', 'NO_REQUERIDO'] }, facturas: { none: {} } };
 const equipmentSearch = (search) => ({ OR: ['tipo', 'marca', 'modelo', 'numero_serie'].map((field) => ({ [field]: { contains: search, mode: 'insensitive' } })).concat([{ cliente: { nombre: { contains: search, mode: 'insensitive' } } }]) });
 const listQuery = (req, diagnostic) => {
-  const page = Math.max(1, Math.min(100000, parseInt(req.query.page, 10) || 1));
+  const { page, pageSize, offset } = parsePagination(req.query);
   const search = String(req.query.search || '').trim().slice(0, 150);
   const filters = [diagnostic && req.query.vista !== 'pendientes'
     ? { OR: [completedDiagnoses, { calidad_estado: 'RECHAZADO' }] }
     : diagnostic ? completedDiagnoses : completedOrders];
   if (req.query.vista === 'pendientes') filters.push(diagnostic ? { calidad_estado: 'PENDIENTE' } : reviewableOrders);
+  if (req.query.vista === 'historial') filters.push(diagnostic
+    ? { intervenciones: { some: { tipo: 'REVISION_CALIDAD' } } }
+    : { revisiones_calidad: { some: {} } });
   if (search) filters.push({ OR: [diagnostic ? { equipo: equipmentSearch(search) } : { diagnostico: { equipo: equipmentSearch(search) } },
     ...(parsePositiveId(search) ? [{ [diagnostic ? 'id_diagnostico' : 'id_orden']: parsePositiveId(search) }] : [])] });
-  return { where: { AND: filters }, page, skip: (page - 1) * 20, take: 20 };
+  return { where: { AND: filters }, page, skip: offset, take: pageSize };
 };
 
 router.get('/resumen', requirePermission(PERMISSIONS.CALIDAD_VER), async (_req, res, next) => {
@@ -49,7 +53,7 @@ router.get('/diagnosticos', requirePermission(PERMISSIONS.CALIDAD_VER), async (r
           select: { id_intervencion: true, motivo: true, datos_nuevos: true, fecha_hora: true, usuario: { select: { nombre_usuario: true } } } } },
       orderBy: { id_diagnostico: 'desc' }, skip: query.skip, take: query.take,
     })]);
-    res.json({ data: diagnosticos, meta: { total, page: query.page, hasNextPage: query.page * 20 < total } });
+    res.json({ data: diagnosticos, meta: { total, page: query.page, pageSize: query.take, hasNextPage: query.page * query.take < total } });
   } catch (error) { next(error); }
 });
 
@@ -97,11 +101,11 @@ router.get('/ordenes', requirePermission(PERMISSIONS.CALIDAD_VER), async (req, r
         facturas: { select: { id_factura: true }, take: 1 },
         revisiones_calidad: { orderBy: { id_revision: 'desc' }, take: 5, select: { id_revision: true, decision: true, observacion: true, pruebas: true, fecha_revision: true, usuario: { select: { nombre_usuario: true } } } },
         tecnico: { select: { usuario_id: true, nombre: true } },
-        diagnostico: { select: { equipo: { select: { tipo: true, marca: true, modelo: true, numero_serie: true } } } },
+        diagnostico: { select: { equipo: { select: { tipo: true, marca: true, modelo: true, numero_serie: true, cliente: { select: { nombre: true } } } } } },
       },
       orderBy: { id_orden: 'desc' }, skip: query.skip, take: query.take,
     })]);
-    res.json({ data: ordenes, meta: { total, page: query.page, hasNextPage: query.page * 20 < total } });
+    res.json({ data: ordenes, meta: { total, page: query.page, pageSize: query.take, hasNextPage: query.page * query.take < total } });
   } catch (error) { next(error); }
 });
 

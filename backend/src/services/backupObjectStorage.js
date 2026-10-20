@@ -70,6 +70,6 @@ export const signedBackupDownloadUrl = async (month, name) => {
   const key = await findKey(client, bucket, month, name);
   return getSignedUrl(client, new GetObjectCommand({
     Bucket: bucket, Key: key,
-    ResponseContentDisposition: `attachment; filename="${name}"`,
+    ResponseContentDisposition: `attachment; filename="${/\.(pdf|xlsx)$/i.test(name) ? `respaldo-inventario.${name.split('.').pop().toLowerCase()}` : name}"`,
   }), { expiresIn: 300 });
 };

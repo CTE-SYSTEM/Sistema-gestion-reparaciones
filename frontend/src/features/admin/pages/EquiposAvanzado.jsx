@@ -18,6 +18,7 @@ const columns = [
         <button
           type="button"
           onClick={row.onEdit}
+          data-keyboard-id={`editar-equipo-admin-${row.id_equipo}`}
           className="rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 shadow-sm"
         >
           Editar
@@ -214,7 +215,7 @@ export default function EquiposAvanzado() {
 
       {/* Modal de edición */}
       {editingEquipo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-label="Editar equipo" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl">
             <div className="mb-4">
               <h3 className="text-xl font-bold text-slate-800">Editar equipo</h3>
@@ -256,7 +257,7 @@ export default function EquiposAvanzado() {
                 </button>
               </div>
 
-              {equipoEditMessage && <div className="text-center text-sm font-semibold text-indigo-600">{equipoEditMessage}</div>}
+              {equipoEditMessage && <div role={equipoEditMessage === 'Equipo actualizado correctamente.' ? 'status' : 'alert'} className="text-center text-sm font-semibold text-indigo-600">{equipoEditMessage}</div>}
             </form>
           </div>
         </div>

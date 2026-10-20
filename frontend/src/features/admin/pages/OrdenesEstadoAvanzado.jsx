@@ -19,6 +19,8 @@ export default function OrdenesEstadoAvanzado() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState({from:'',to:''});
+  const exportMetadata = [{label:'Desde',value:exportPeriod.from || 'Sin límite inicial'},{label:'Hasta',value:exportPeriod.to || 'Sin límite final'}];
 
   const fetchReport = async () => {
     setLoading(true);
@@ -31,6 +33,7 @@ export default function OrdenesEstadoAvanzado() {
       const queryString = params.toString();
       const res = await reportesAdminService.getOrdenesEstado(queryString);
       setData(res.data?.data || []);
+      setExportPeriod({from:fromDate,to:toDate});
     } catch (err) {
       setError('No se pudo cargar el reporte de órdenes por estado.');
     } finally {
@@ -46,7 +49,7 @@ export default function OrdenesEstadoAvanzado() {
     setDownloading(true);
     setError('');
     try {
-      await downloadJsonExcel(data, columns, `ordenes_estado_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
+      await downloadJsonExcel(data, columns, 'ordenes_estado.xlsx', {title:'Órdenes por estado',metadata:exportMetadata});
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {
@@ -58,7 +61,7 @@ export default function OrdenesEstadoAvanzado() {
     setDownloading(true);
     setError('');
     try {
-      downloadJsonPdf(data, columns, `ordenes_estado_${fromDate || 'desde'}_${toDate || 'hasta'}.pdf`, 'Órdenes por estado');
+      downloadJsonPdf(data, columns, 'ordenes_estado.pdf', 'Órdenes por estado', exportMetadata);
     } catch (err) {
       setError('No se pudo descargar el reporte en PDF.');
     } finally {

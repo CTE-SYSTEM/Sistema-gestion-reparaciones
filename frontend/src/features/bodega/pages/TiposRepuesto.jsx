@@ -235,7 +235,7 @@ const TiposRepuesto = () => {
       render: (row) => (
         <div className="flex gap-2">
           <div data-tour-target="actions" className={`flex gap-2 ${tourHighlightClass(activeTourTarget === 'actions')}`}>
-            <button type="button" onClick={() => { setEditingTipo(row); setShowForm(true); }} className="rounded p-1 text-blue-600 hover:bg-blue-50 transition-colors" title="Editar" aria-label={`Editar tipo ${row.id_tipo_repuesto}`}>
+            <button type="button" data-keyboard-open onClick={() => { setEditingTipo(row); setShowForm(true); }} className="rounded p-1 text-blue-600 hover:bg-blue-50 transition-colors" title="Editar" aria-label={`Editar tipo ${row.id_tipo_repuesto}`}>
               <Edit className="h-4 w-4" />
             </button>
             <button type="button" onClick={() => handleDelete(row.id_tipo_repuesto)} className="rounded p-1 text-red-600 hover:bg-red-50 transition-colors" title="Eliminar" aria-label={`Eliminar tipo ${row.id_tipo_repuesto}`}>
@@ -279,6 +279,7 @@ const TiposRepuesto = () => {
 
         <button
           type="button"
+          data-keyboard-open
           onClick={() => { setEditingTipo(null); setShowForm(true); }}
           className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md active:scale-95 transition-all"
         >
@@ -289,7 +290,7 @@ const TiposRepuesto = () => {
     </div>
 
     {error && (
-      <div className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2">
+      <div role="alert" className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2">
         <span>{error}</span>
       </div>
     )}

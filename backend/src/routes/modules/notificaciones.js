@@ -35,6 +35,12 @@ router.get('/', async (req, res) => {
         AND p.estado_aprobacion = 'PENDIENTE' AND p.estado_entrega <> 'ENTREGADO'
         AND o.estado NOT IN ('FINALIZADO', 'ENTREGADO', 'CANCELADO', 'IRREPARABLE')
     )) OR
+    (n.contenido->>'type' = 'repuesto_sin_existencia' AND EXISTS (
+      SELECT 1 FROM "Ordenes_Repuestos" p JOIN "Ordenes" o ON o.id_orden = p.orden_id
+      WHERE p.id_detalle_repuesto::text = (n.contenido #>> '{entity,id}')
+        AND p.estado_entrega = 'SIN_EXISTENCIA' AND p.estado_aprobacion <> 'DENEGADO'
+        AND o.estado NOT IN ('FINALIZADO', 'ENTREGADO', 'CANCELADO', 'IRREPARABLE')
+    )) OR
     (n.contenido->>'type' = 'orden_irreparable_pendiente' AND EXISTS (
       SELECT 1 FROM "Ordenes" o
       WHERE o.id_orden::text = (n.contenido #>> '{entity,id}')
@@ -42,6 +48,9 @@ router.get('/', async (req, res) => {
     ))
   )`;
   const actionableServicio = Prisma.sql`(${role} <> 'serviciocliente' OR
+    (n.contenido->>'type' IN ('reclamo_analizado', 'reclamo_decidido', 'reclamo_cerrado') AND EXISTS (
+      SELECT 1 FROM "Reclamos" r WHERE r.id_reclamo::text = (n.contenido #>> '{entity,id}')
+    )) OR
     (n.contenido->>'type' = 'diagnostico_completado' AND EXISTS (
       SELECT 1 FROM "Diagnosticos" d WHERE d.id_diagnostico::text = (n.contenido #>> '{entity,id}')
         AND d.estado_del_diagnostico IN ('COMPLETADO', 'DIAGNOSTICADO')

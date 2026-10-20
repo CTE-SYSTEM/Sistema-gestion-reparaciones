@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { documentFilename } from '../utils/reportIdentity';
 
 const root = '/admin_pro';
 export const administracionService = {
@@ -23,7 +24,7 @@ export const administracionService = {
 
 export const saveBlob = (blob, name) => {
   const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.href = url; link.download = name;
+  link.href = url; link.download = /\.(pdf|xlsx)$/i.test(name) ? documentFilename(name, name.split('.').pop().toLowerCase()) : name;
   document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };

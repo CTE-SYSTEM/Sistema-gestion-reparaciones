@@ -17,8 +17,9 @@ const formFixture = (definitions = ['INPUT', 'INPUT', 'BUTTON']) => {
     const options = typeof definition === 'string' ? { tagName: definition } : definition;
     const element = {
       disabled: false, tabIndex: 0, type: 'text', dataset: {}, ...options,
-      matches: () => ['INPUT', 'SELECT', 'TEXTAREA'].includes(options.tagName),
-      closest: (selector) => selector === 'form' ? form : (options.hidden ? {} : null),
+      matches: (selector) => selector === ':disabled' ? Boolean(options.disabled)
+        : selector.split(',').map((part) => part.trim().toUpperCase()).includes(options.tagName),
+      closest: (selector) => selector.startsWith('form') ? form : (options.hidden ? {} : null),
       getClientRects: () => options.invisible ? [] : [{}],
       focus: () => { focused = index; },
     };

@@ -52,15 +52,19 @@ export const procesarRepuesto = (accion) => respond(async (req) => {
     title: shortage ? 'Pieza sin existencias' : reviewed ? 'Existencia revisada' : accion === 'entregar' ? 'Pieza entregada al taller' : `Solicitud de repuesto: ${accion}`,
     severity: shortage ? 'warning' : 'info',
     message: shortage
-      ? `Bodega registró que faltan ${r.cantidad_usada || 1} unidad(es) de ${pieza} para la orden #${r.orden_id}. Revise la solicitud #${r.id_detalle_repuesto}.`
+      ? !r.repuesto_id ? `La solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id} está pendiente de identificar y vincular al catálogo.` : `Bodega registró que faltan ${r.cantidad_usada || 1} unidad(es) de ${pieza} para la orden #${r.orden_id}. Revise la solicitud #${r.id_detalle_repuesto}.`
       : reviewed ? `Bodega volvió a comprobar ${pieza} para la orden #${r.orden_id}; la solicitud puede continuar hacia la entrega.`
       : accion === 'entregar'
       ? `${r.cantidad_usada || 1} × ${pieza} de la orden #${r.orden_id}${nombreEquipo ? ` para ${nombreEquipo}` : ''} ya está disponible. Compra #${r.compra_id || 'sin identificar'}.`
+      : accion === 'vincular' ? `Bodega identificó ${pieza} para la solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id}. ${r.estado_aprobacion === 'APROBADO' ? r.estado_entrega === 'SIN_EXISTENCIA' ? 'Conserva su aprobación y espera abastecimiento.' : 'Conserva su aprobación y está pendiente de entrega.' : 'Falta la revisión del jefe; todavía no está entregada.'}`
+      : accion === 'desvincular' ? `Se retiró el vínculo de la solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id}. Quedó pendiente de identificación y revisión.`
       : `La solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id} fue procesada. ${r.motivo_rechazo || ''}`,
     entity: { kind: 'repuesto', id: r.id_detalle_repuesto, orden_id: r.orden_id } };
   await notifyTecnico(r.tecnico_solicitante || r.orden.tecnico, payload);
   if (r.tecnico_solicitante?.id_tecnico !== r.orden.tecnico?.id_tecnico) await notifyTecnico(r.orden.tecnico, payload);
   if (shortage) await notifyJefeTecnico(payload);
+  if (['vincular', 'desvincular'].includes(accion) && r.estado_aprobacion === 'PENDIENTE') await notifyJefeTecnico({ ...payload, type: 'repuesto_solicitado', title: 'Solicitud de pieza por revisar', message: `Bodega actualizó el vínculo de la solicitud #${r.id_detalle_repuesto} de la orden #${r.orden_id}. Revise antes de entregar.` });
+  if (accion === 'vincular' && r.estado_aprobacion === 'APROBADO' && r.estado_entrega === 'SIN_EXISTENCIA') await notifyJefeTecnico({ ...payload, type: 'repuesto_sin_existencia' });
   if (['aprobar', 'entregar', 'devolver', 'sin-existencia', 'revisar-disponibilidad'].includes(accion)) await notifyRole('Bodega', payload);
   return r;
 }, 'Acción de repuesto registrada correctamente');

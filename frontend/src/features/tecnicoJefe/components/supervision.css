@@ -13,6 +13,15 @@
 .jefe-nav-caption { font-size:10px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:#8295b8; padding:12px; }
 .jefe-nav { display:flex; flex:1; min-height:0; overflow-y:auto; flex-direction:column; gap:5px; }.jefe-nav button { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:9px; background:transparent; color:#c2cce0; padding:11px 12px; text-align:left; font-size:12px; }.jefe-nav button:hover { background:#1b2c4d; color:#fff; }.jefe-nav button[aria-current=page] { color:#fff; background:#4f46e5; }.jefe-nav-count { margin-left:auto; font-size:10px; background:#ffffff18; padding:1px 6px; border-radius:5px; font-variant-numeric:tabular-nums; }
 .jefe-sidebar-footer { flex-shrink:0; margin-top:auto; border-top:1px solid #2a3852; padding:18px 12px 0; }.jefe-sidebar-footer p { color:#fff; font-size:12px; font-weight:600; overflow-wrap:anywhere; }.jefe-sidebar-footer small { display:block; font-size:10px; margin-top:4px; color:#94a5c2; }.jefe-sidebar-footer button { margin-top:16px; display:flex; align-items:center; gap:8px; border:0; color:#c2cce0; background:transparent; font-size:12px; }
+.jefe-brand,.jefe-nav-caption { flex-shrink:0; }
+.jefe-nav { overflow-x:hidden; padding:4px 7px 8px 3px; margin:0 -7px 12px -3px; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#63789d transparent; overscroll-behavior-y:contain; scroll-padding-block:8px; }
+.jefe-nav > button { flex-shrink:0; }
+.jefe-nav button svg { flex-shrink:0; }
+.jefe-nav::-webkit-scrollbar { width:6px; }
+.jefe-nav::-webkit-scrollbar-track { background:transparent; margin-block:6px; }
+.jefe-nav::-webkit-scrollbar-thumb { background:#63789d; border-radius:999px; }
+.jefe-nav::-webkit-scrollbar-thumb:hover { background:#94a5c2; }
+.jefe-nav::-webkit-scrollbar-button { display:none; width:0; height:0; }
 .jefe-sidebar-footer button { width:100%; padding:9px 10px; border-radius:9px; text-align:left; transition:background-color .2s ease,color .2s ease,transform .2s ease; }
 .jefe-sidebar-footer button svg { transition:transform .2s ease; }
 .jefe-sidebar-footer button:focus-visible { background:rgba(239,68,68,.15); color:#fecaca; }

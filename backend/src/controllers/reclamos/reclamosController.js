@@ -22,7 +22,7 @@ export const listarReclamos = async (req, res) => {
     const search = String(req.query.search || '').trim();
     const id = /^\d+$/.test(search) && Number(search) <= 2147483647 ? parsePositiveId(search) : null;
     const where = {
-      ...(estado && estado !== 'TODOS' ? { estado } : {}),
+      ...(estado === 'ACTIVOS' ? { estado: { not: 'CERRADO' } } : estado && estado !== 'TODOS' ? { estado } : {}),
       ...(search ? { OR: [
         ...(id ? [{ id_reclamo: id }, { orden_original_id: id }] : []),
         { descripcion: { contains: search, mode: 'insensitive' } },

@@ -4,6 +4,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 import { useRealtimeNotifications } from '../../../hooks/useRealtimeNotifications';
 import BrandLogo from '../../../components/BrandLogo';
+import PageHelp from '../../../components/PageHelp';
+import { technicianHelp } from '../../../components/technicalHelp';
 import { NotificationTray } from '../../../components/NotificationTray';
 import { NotificationBell, NotificationSummary, NotificationToast } from '../../../components/NotificationAttention';
 import { useTecnicoDashboard } from '../hooks/useTecnicoDashboard';
@@ -79,7 +81,7 @@ export default function TecnicoDashboard() {
       <main className="jefe-main">{accountView ? <MiCuenta /> : <><NotificationSummary notifications={realtime.notifications} count={realtime.unreadCount} onReview={reviewNotices} onOpen={openNotice} />
         <div className="jefe-heading"><div><div className="jefe-eyebrow">Ejecución técnica</div><h1>{section.title}</h1><p>Equipos, informes, pruebas y piezas de tus trabajos asignados.</p></div><button className="jefe-btn" disabled={dashboard.loading || dashboard.summaryLoading} onClick={dashboard.actions.reload}><RefreshCw size={14} /> Actualizar</button></div>
         {error && <div role="alert" className="jefe-message error">{error}<button onClick={() => { setActionError(''); dashboard.actions.reload(); }}>Reintentar</button></div>}
-        <div className="tecnico-periodo"><label>Periodo <select aria-label="Filtrar periodo" value={periodo} onChange={(e) => filter(setPeriodo, e.target.value)}><option value="todos">Todos</option><option value="hoy">Hoy</option><option value="mes">Este mes</option><option value="anio">Este año</option></select></label><small>Fecha de asignación para trabajos activos, de finalización para cerrados y de solicitud para piezas. Hora de Managua.</small></div>
+        <PageHelp compact help={technicianHelp[activeTab]} /><div className="tecnico-periodo"><label>Periodo <select aria-label="Filtrar periodo" value={periodo} onChange={(e) => filter(setPeriodo, e.target.value)}><option value="todos">Todos</option><option value="hoy">Hoy</option><option value="mes">Este mes</option><option value="anio">Este año</option></select></label><small>Fecha de asignación para trabajos activos, de finalización para cerrados y de solicitud para piezas. Hora de Managua.</small></div>
         {activeTab === 'resumen' ? <>
           <div className="jefe-stats">{[
             ['diagnosticos_activos', 'Diagnósticos activos', ClipboardList, 'diagnosticos'],
@@ -104,7 +106,7 @@ export default function TecnicoDashboard() {
           {diagnostics ? <DiagnosticosTable items={dashboard.items} loading={dashboard.loading || dashboard.busy} readOnly={completed} onOpenDiagnostico={setModalDiagnostico} onOpenDetalle={(r, intent) => setExpediente({ kind: 'diagnostico', id: r.id, intent })} onReopen={dashboard.actions.reabrirDiagnostico} onIniciarDiagnostico={async (r) => { try { await dashboard.actions.iniciarDiagnostico(r.id); } catch (err) { setActionError(err.response?.data?.error || 'No se pudo iniciar el diagnóstico'); } }} />
             : activeTab === 'repuestos' ? <RepuestosTable solicitudes={dashboard.items} loading={dashboard.loading} onOpenOrden={(id) => setExpediente({ kind: 'orden', id })} />
             : <OrdenesGrid items={dashboard.items} loading={dashboard.loading} busy={dashboard.busy} completed={completed} username={user?.username} onEstadoChange={changeState} onSolicitarPieza={setModalRepuesto} onOpenDetalle={(r) => setExpediente({ kind: 'orden', id: r.id })} />}
-          <div className="tecnico-paginacion"><span>{dashboard.meta.total} registros · Página {page}</span><button disabled={page === 1 || dashboard.loading} onClick={() => setPage(page - 1)}>Anterior</button><button disabled={!dashboard.meta.hasMore || dashboard.loading} onClick={() => setPage(page + 1)}>Siguiente</button></div>
+          <div className="tecnico-paginacion"><span>{dashboard.meta.total} registros · Página {page} de {Math.max(1, Math.ceil((dashboard.meta.total || 0) / (dashboard.meta.pageSize || 20)))}</span><button disabled={page === 1 || dashboard.loading} onClick={() => setPage(page - 1)}>Anterior</button><button disabled={!dashboard.meta.hasMore || dashboard.loading} onClick={() => setPage(page + 1)}>Siguiente</button></div>
         </>}</>}
       </main>
     </div>

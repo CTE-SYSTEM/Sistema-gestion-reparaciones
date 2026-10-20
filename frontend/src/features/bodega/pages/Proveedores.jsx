@@ -96,7 +96,7 @@ const ProveedorForm = ({ onSubmit, onCancel, initialData = null, activeTourTarge
         </div>
       </div>
 
-      {formError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
+      {formError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
 
       <div className="flex justify-end gap-3 pt-4">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
@@ -230,7 +230,7 @@ const Proveedores = () => {
       accessor: 'acciones',
       render: (row) => (
         <div data-tour-target="actions" className={`flex gap-2 whitespace-nowrap ${tourHighlightClass(activeTourTarget === 'actions')}`}>
-          <button type="button" onClick={() => { setEditingProveedor(row); setShowForm(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Editar" aria-label={`Editar proveedor ${row.id_proveedor}`}><Edit className="w-4 h-4" /></button>
+          <button type="button" data-keyboard-open onClick={() => { setEditingProveedor(row); setShowForm(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Editar" aria-label={`Editar proveedor ${row.id_proveedor}`}><Edit className="w-4 h-4" /></button>
           <button type="button" onClick={() => handleDelete(row.id_proveedor)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Desactivar" aria-label={`Desactivar proveedor ${row.id_proveedor}`}><Trash2 className="w-4 h-4" /></button>
         </div>
       ),
@@ -271,6 +271,7 @@ const Proveedores = () => {
 
         <button
           type="button"
+          data-keyboard-open
           onClick={() => { setEditingProveedor(null); setShowForm(true); }}
           className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md active:scale-95 transition-all"
         >
@@ -281,7 +282,7 @@ const Proveedores = () => {
     </div>
 
     {error && (
-      <div className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2 text-left">
+      <div role="alert" className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2 text-left">
         <span>{error}</span>
       </div>
     )}

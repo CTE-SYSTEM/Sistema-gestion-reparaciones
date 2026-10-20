@@ -1,0 +1,11 @@
+.accounting-mark:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.accounting-mark:hover { opacity: .8; }
+.accounting-bar { animation: accounting-enter 420ms ease-out; transform-origin: center bottom; transform-box: fill-box; }
+.accounting-line { animation: accounting-reveal 450ms ease-out; }
+.accounting-new { animation: accounting-highlight 1800ms ease-out; }
+@keyframes accounting-enter { from { transform: scaleY(.1); opacity: .3; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes accounting-reveal { from { opacity: .1; } to { opacity: 1; } }
+@keyframes accounting-highlight { from { background-color: var(--accent-bg); } to { background-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .accounting-bar,.accounting-line,.accounting-new { animation: none; } }
+.accounting-chart-scroll { overflow-x: auto; }
+@media (max-width: 639px) { .accounting-chart-scroll svg { min-width: 560px; } }

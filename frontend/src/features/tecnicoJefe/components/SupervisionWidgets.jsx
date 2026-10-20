@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, ClipboardList, Download, Eye, PackageCheck, SlidersHorizontal, X } from 'lucide-react';
 import FotosServicio from '../../shared/components/FotosServicio';
+import KeyboardWorkspace from '../../shared/components/KeyboardWorkspace';
 import { formatoPresupuesto } from '../../../utils/monedaPresupuesto';
 
 export const label = (v) => ({ EN_REVISION: 'En diagnóstico', EN_REPARACION: 'En reparación', ESPERANDO_PIEZA: 'Esperando pieza', NO_SOLICITADO: 'Sin solicitud', NO_DISPONIBLE: 'No disponible', DIAGNOSTICADO: 'Completado', DENEGADO: 'Rechazado' }[v] || String(v || 'Pendiente').toLowerCase().replaceAll('_', ' ').replace(/^./, (s) => s.toUpperCase()));
@@ -179,12 +180,26 @@ export function SupervisionDialog({ state }) {
   const { dialog, detail, detailLoading, busy, formError, data, submit, closeDialog, refreshDetail } = state;
   const { action, row } = dialog, ref = useRef(null);
   const [values, setValues] = useState({ tecnico_id: '', prioridad: label(row.prioridad || 'Normal'), tipo: 'REASIGNACION', motivo: '', decision: 'APROBADO', disponibilidad: row.disponibilidad || 'DISPONIBLE', observacion_disponibilidad: row.observacion_disponibilidad || '', repuesto_id: String(row.repuesto_id || ''), cantidad_usada: row.cantidad_usada || 1, observacion_final: '', enciende_salida: '', usa_corriente_ac_salida: '', entrega_no_realizada: false, devolucion_total_confirmada: false });
-  useEffect(() => { const el = ref.current; el.showModal(); return () => el.close(); }, []);
+  useEffect(() => {
+    const el = ref.current;
+    const origin = el.ownerDocument.activeElement;
+    const workspace = origin?.closest('[data-keyboard-workspace]');
+    el.showModal();
+    el.querySelector('select:not(:disabled),input:not([type="hidden"]):not(:disabled),textarea:not(:disabled)')?.focus();
+    return () => {
+      el.close();
+      requestAnimationFrame(() => {
+        if (el.ownerDocument.activeElement !== el.ownerDocument.body) return;
+        const fallback = workspace?.querySelector('input[placeholder],input[type="search"],button');
+        (origin?.isConnected ? origin : fallback)?.focus();
+      });
+    };
+  }, []);
   const set = (name) => (e) => setValues((v) => ({ ...v, [name]: e.target.value }));
   const titles = { detalle: 'Detalle e historial', historial_repuesto: 'Historial de la solicitud', reasignar: 'Corregir asignación', asignar: 'Asignar técnico', prioridad: 'Modificar prioridad', intervencion: 'Intervención excepcional', disponibilidad: 'Disponibilidad del técnico', aprobar: 'Aprobar solicitud', rechazar: 'Rechazar solicitud', entregar: 'Registrar entrega de repuesto', corregir: 'Corregir pieza o cantidad', irreparable: 'Revisar irreparabilidad', ...Object.fromEntries(correctionActions.map(([key, , title]) => [key, title])) };
   const readOnly = ['detalle', 'historial_repuesto'].includes(action);
   const techSelect = <label className="jefe-field">Técnico responsable<select required className="jefe-select" value={values.tecnico_id} onChange={set('tecnico_id')}><option value="">Selecciona un técnico disponible</option>{data.tecnicos.filter((t) => t.disponibilidad === 'DISPONIBLE' && t.id_tecnico !== row.tecnico?.id_tecnico).map((t) => <option key={t.id_tecnico} value={t.id_tecnico}>{t.nombre} · {t.diagnosticos_activos + t.ordenes_activas} trabajos activos</option>)}</select></label>;
-  return createPortal(<dialog ref={ref} className="jefe-dialog" aria-labelledby="jefe-dialog-title" onCancel={(e) => { e.preventDefault(); closeDialog(); }}><div className="jefe-dialog-header"><div><h2 id="jefe-dialog-title">{titles[action]}</h2><small>{row.id ? `${row.tipo === 'orden' ? 'Orden' : 'Diagnóstico'} #${row.id} · ${row.equipo_nombre}` : row.nombre || `Solicitud #${row.id_detalle_repuesto} · Orden #${row.orden_id}`}</small></div><button type="button" className="jefe-icon-btn" aria-label="Cerrar diálogo" disabled={busy} onClick={closeDialog}><X size={17} /></button></div><form onSubmit={(e) => { e.preventDefault(); if (!readOnly) submit(values); }}><div className="jefe-dialog-body">{formError && <div className="jefe-message error" role="alert">{formError}</div>}
+  return createPortal(<KeyboardWorkspace enabled showHelp={false}><dialog ref={ref} className="jefe-dialog" aria-labelledby="jefe-dialog-title" onCancel={(e) => { e.preventDefault(); closeDialog(); }}><div className="jefe-dialog-header"><div><h2 id="jefe-dialog-title">{titles[action]}</h2><small>{row.id ? `${row.tipo === 'orden' ? 'Orden' : 'Diagnóstico'} #${row.id} · ${row.equipo_nombre}` : row.nombre || `Solicitud #${row.id_detalle_repuesto} · Orden #${row.orden_id}`}</small></div><button type="button" className="jefe-icon-btn" aria-label="Cerrar diálogo" disabled={busy} onClick={closeDialog}><X size={17} /></button></div><form onSubmit={(e) => { e.preventDefault(); if (!readOnly) submit(values); }}><div className="jefe-dialog-body">{formError && <div className="jefe-message error" role="alert">{formError}</div>}
     {action === 'detalle' && (detailLoading ? <p>Cargando el historial…</p> : detail ? <Detail detail={detail} row={row} onReview={refreshDetail} /> : null)}
     {action === 'historial_repuesto' && (detailLoading ? <p>Cargando el historial…</p> : detail ? <PartHistory detail={detail} row={row} /> : null)}
     {['aprobar', 'rechazar'].includes(action) && <section className="jefe-info" aria-label="Contexto de la orden"><strong>Orden #{row.orden_id} · {equipoSolicitud(row)}</strong><p className="mt-2 whitespace-pre-wrap"><b>Falla reportada:</b> {row.orden?.diagnostico?.falla_reportada || 'Sin falla registrada'}</p><p className="mt-2 whitespace-pre-wrap"><b>Informe técnico:</b> {row.orden?.diagnostico?.diagnostico_real || 'Sin informe registrado'}</p><p className="mt-2"><b>Pieza solicitada:</b> {row.repuesto?.nombre || row.pieza_solicitada || 'Sin descripción'} · {row.cantidad_usada} unidad(es)</p></section>}
@@ -201,5 +216,5 @@ export function SupervisionDialog({ state }) {
     {action === 'devolver' && <><div className="jefe-info warning">Registra la devolución total de {row.cantidad_usada} unidad(es) al almacén. La solicitud volverá a revisión y se liberará la reserva para decidir si se usará nuevamente o se rechazará.</div><label className="jefe-confirm"><input type="checkbox" required checked={values.devolucion_total_confirmada} onChange={(e) => setValues((v) => ({ ...v, devolucion_total_confirmada: e.target.checked }))} />Confirmo que recibí todas las unidades y están en condiciones de volver al almacén.</label></>}
     {action === 'irreparable' && <><div className="jefe-info">Justificación del técnico: {row.justificacion_irreparable}</div><label className="jefe-field">Decisión<select className="jefe-select" value={values.decision} onChange={set('decision')}><option value="APROBADO">Confirmar irreparabilidad</option><option value="RECHAZADO">Devolver a reparación</option></select></label></>}
     {['intervencion', 'reasignar', 'rechazar', 'corregir', 'irreparable', 'prioridad', ...correctionActions.map(([key]) => key)].includes(action) && <label className="jefe-field">{action === 'rechazar' ? 'Motivo del rechazo' : 'Motivo de la acción'}<textarea required maxLength={2000} className="jefe-input" value={values.motivo} onChange={set('motivo')} /></label>}
-    </div><div className="jefe-dialog-footer"><button type="button" className="jefe-btn" disabled={busy} onClick={closeDialog}>{readOnly ? 'Cerrar' : 'Cancelar'}</button>{!readOnly && <button className="jefe-btn primary" type="submit" disabled={busy}>{busy ? 'Registrando…' : action === 'intervencion' ? 'Registrar intervención' : 'Confirmar'}</button>}</div></form></dialog>, document.body);
+    </div><div className="jefe-dialog-footer"><button type="button" className="jefe-btn" disabled={busy} onClick={closeDialog}>{readOnly ? 'Cerrar' : 'Cancelar'}</button>{!readOnly && <button className="jefe-btn primary" type="submit" disabled={busy}>{busy ? 'Registrando…' : action === 'intervencion' ? 'Registrar intervención' : 'Confirmar'}</button>}</div></form></dialog></KeyboardWorkspace>, document.body);
 }

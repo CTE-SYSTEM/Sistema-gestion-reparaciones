@@ -107,6 +107,7 @@ export const useRealtimeNotifications = ({
     socket?.on('connect_error', () => { if (active) setConnected(false); });
     socket?.on('notificacion', (notification) => {
       if (!active || seenIdsRef.current.has(notification.id) || readIdsRef.current.has(notification.id)) return;
+      window.dispatchEvent(new CustomEvent('sgr:data-changed', { detail: notification }));
       seenIdsRef.current.add(notification.id);
       arrivalsRef.current.set(notification.id, { notification, sequence: ++sequenceRef.current });
       setInbox((previous) => ({ items: mergeNotifications([notification], previous.items, maxNotifications), total: previous.total + 1 }));

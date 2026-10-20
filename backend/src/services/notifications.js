@@ -67,6 +67,8 @@ const technicalTitles = {
   repuesto_aprobar: 'Pieza aprobada', repuesto_rechazar: 'Pieza rechazada',
   repuesto_entregar: 'Pieza entregada', repuesto_corregir: 'Solicitud de pieza actualizada',
   repuesto_sin_existencia: 'Pieza sin existencias', repuesto_disponibilidad_revisada: 'Existencia de pieza revisada',
+  repuesto_vincular: 'Pieza identificada por Bodega',
+  repuesto_desvincular: 'Vínculo de pieza retirado',
   calidad_rechazada: 'Control de calidad solicita corrección',
   calidad_diagnostico_error: 'Calidad encontró un error en el diagnóstico',
   'repuesto_retirar-aprobacion': 'Aprobación de pieza retirada', repuesto_reabrir: 'Solicitud de pieza en revisión',
@@ -84,7 +86,7 @@ const technicalPayload = (payload) => {
   } : null;
   return {
     type: Object.hasOwn(technicalTitles, payload.type) ? payload.type : 'trabajo_actualizado',
-    title, message: ['repuesto_entregar', 'repuesto_sin_existencia', 'repuesto_disponibilidad_revisada', 'calidad_rechazada', 'calidad_diagnostico_error'].includes(payload.type)
+    title, message: ['repuesto_entregar', 'repuesto_sin_existencia', 'repuesto_disponibilidad_revisada', 'repuesto_vincular', 'repuesto_desvincular', 'calidad_rechazada', 'calidad_diagnostico_error'].includes(payload.type)
       ? String(payload.message || title).slice(0, 500)
       : `${title}${entity?.orden_id || entity?.id ? ` · Referencia #${entity.orden_id || entity.id}` : ''}. Consulta el expediente técnico.`,
     severity: ['info', 'success', 'warning', 'error'].includes(payload.severity) ? payload.severity : 'info', entity,
@@ -94,7 +96,7 @@ const technicalPayload = (payload) => {
 const deliver = async (role, payload, userId) => {
   const targetRole = notificationRole(role);
   // Servicio al Cliente recibe avisos cuando puede crear una orden o emitir una factura.
-  if (targetRole === 'serviciocliente' && !['diagnostico_completado', 'calidad_aprobada', 'irreparable_confirmado'].includes(payload.type)) return null;
+  if (targetRole === 'serviciocliente' && !['diagnostico_completado', 'calidad_aprobada', 'irreparable_confirmado', 'reclamo_analizado', 'reclamo_decidido', 'reclamo_cerrado'].includes(payload.type)) return null;
   const notification = {
     ...(targetRole === 'tecnico' ? technicalPayload(payload) : payload),
     id: randomUUID(), timestamp: new Date().toISOString(), destinatario_rol: targetRole,

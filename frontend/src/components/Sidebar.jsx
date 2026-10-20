@@ -73,6 +73,7 @@ const allMenuItems = [
   { name: 'Clientes', to: '/secretaria/clientes', roles: ['Secretaria'], icon: ContactRound, group: 'Recepción' },
   { name: 'Equipos', to: '/secretaria/equipos', roles: ['Secretaria'], icon: MonitorCog, group: 'Recepción' },
   { name: 'Diagnóstico', to: '/secretaria/diagnostico', roles: ['Secretaria'], icon: ClipboardPenLine, group: 'Recepción' },
+  { name: 'Orden directa', to: '/secretaria/orden-directa', roles: ['Secretaria'], icon: FilePlus2, group: 'Recepción' },
   { name: 'Nueva orden', to: '/secretaria/nueva-orden', roles: ['Secretaria'], icon: FilePlus2, group: 'Servicio al cliente' },
   { name: 'Flujo de atención', to: '/secretaria/flujo-atencion', roles: ['Secretaria'], icon: SquareKanban, group: 'Servicio al cliente' },
   { name: 'Facturación y entrega', to: '/secretaria/facturacion', roles: ['Secretaria'], icon: Receipt, group: 'Servicio al cliente' },
@@ -85,12 +86,12 @@ const allMenuItems = [
   { name: 'Control de calidad', to: '/calidad', roles: ['Secretaria'], icon: ClipboardCheck, group: 'Calidad y posventa' },
   { name: 'Reclamos', to: '/reclamos', roles: ['Secretaria'], icon: ClipboardList, group: 'Calidad y posventa' },
   { name: 'Garantías', to: '/garantias', roles: ['Secretaria'], icon: ShieldCheck, group: 'Calidad y posventa' },
-  { name: 'Reportes del taller', to: '/secretaria/reportes', roles: ['Secretaria'], icon: FileText },
 
   { name: 'Inicio', to: '/recepcion', roles: ['Recepcion'], icon: LayoutDashboard },
   { name: 'Clientes', to: '/recepcion/clientes', roles: ['Recepcion'], icon: ContactRound },
   { name: 'Equipos', to: '/recepcion/equipos', roles: ['Recepcion'], icon: MonitorCog },
   { name: 'Recepción', to: '/recepcion/diagnostico', roles: ['Recepcion'], icon: ClipboardPenLine },
+  { name: 'Orden directa', to: '/recepcion/nueva-orden', roles: ['Recepcion'], icon: FilePlus2 },
   { name: 'Flujo de atención', to: '/recepcion/flujo-atencion', roles: ['Recepcion'], icon: SquareKanban },
   { name: 'Inicio', to: '/servicio-cliente', roles: ['ServicioCliente'], icon: LayoutDashboard },
   { name: 'Nueva orden', to: '/servicio-cliente/nueva-orden', roles: ['ServicioCliente'], icon: FilePlus2 },
@@ -130,7 +131,6 @@ const secretaryMenu = [
   { type: 'group', name: 'Servicio al cliente', icon: Receipt },
   { type: 'group', name: 'Bodega', icon: Boxes },
   { type: 'group', name: 'Calidad y posventa', icon: ShieldCheck },
-  { type: 'link', item: allMenuItems.find((item) => item.to === '/secretaria/reportes') },
 ].map((section) => section.type === 'group'
   ? { ...section, items: allMenuItems.filter((item) => item.roles.includes('Secretaria') && item.group === section.name) }
   : section);

@@ -34,6 +34,14 @@ La configuración se guarda en PostgreSQL con revisión, autor, fecha y motivo o
 
 La auditoría es de consulta. El API elimina contraseñas, hashes y tokens de los detalles, también cuando fueron guardados por versiones anteriores.
 
+## Facturación y entrega de equipos
+
+En Servicio al Cliente y Secretaría, una nueva factura de orden pagada ofrece **Facturar y entregar** como acción predeterminada. Precarga el nombre del cliente como receptor y permite cambiarlo. Se guardan factura, cobro, estado `ENTREGADO`, responsable y fechas de garantía en una misma transacción; la foto sigue siendo opcional. Si falla la entrega, se revierte toda la operación, incluidos los movimientos de inventario.
+
+La opción **Entregar después** emite únicamente la factura. Si se selecciona **Pendiente de pago**, la entrega queda para después de completar el cobro. Se conserva **Registrar entrega** en el historial para esos casos y las facturas anteriores. Las facturas de solo diagnóstico conservan su flujo propio y no entregan una orden. No se actualizan retroactivamente las órdenes ya facturadas.
+
+La API de facturas de órdenes acepta `entregar_ahora` booleano y `persona_recibe` para la acción conjunta. Las llamadas anteriores que omiten `entregar_ahora` conservan la facturación sin entrega. El formulario actual siempre envía explícitamente la opción elegida.
+
 ## Reportes
 
 Hay 35 opciones en siete categorías: Resumen general, Operación, Finanzas, Inventario y compras, Clientes y garantías, Técnicos y Control administrativo. Cada reporte muestra sus filtros; los historiales de equipo, repuesto y orden exigen un identificador. La tabla presenta veinte filas por página.
@@ -61,6 +69,8 @@ Las descargas, verificaciones y restauraciones exigen administrador. En el histo
 Compose monta `C:/backup` en `/backup`; `BACKUP_ROOT` define el destino y `BACKUP_DISPLAY_ROOT` su nombre visible. Las fotografías de R2 y archivos locales requieren una copia independiente: la base contiene sus referencias.
 
 ## Instalación y validación
+
+La revisión de escenarios de Negocio, resultados y pendientes está en [Escenarios y pruebas de Negocio](escenarios-pruebas-negocio.md). El mapa de ubicaciones de marca y el prompt para unificar logos, nombres y colores está en [Prompt de identidad visual](prompt-identidad-visual.md). Guardar nombre/contacto en Negocio todavía no actualiza la identidad visual global.
 
 Al iniciar el backend, `initializeAdministrationStorage()` aplica `02_administracion.sql` de forma aditiva: agrega `Usuarios.sesion_version`, `ConfiguracionAdministracion` y `EstadoRespaldos`, conserva datos y configura la emisión de nuevas garantías. También actualiza las funciones de auditoría para omitir hashes de contraseñas en nuevos movimientos. Los cargadores SQL y PowerShell incluyen el archivo administrativo. No hace falta ejecutar un reinicio de semillas ni una sincronización con pérdida de datos.
 

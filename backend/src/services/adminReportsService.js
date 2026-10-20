@@ -6,6 +6,7 @@ import { getGananciasData } from '../controllers/admin_pro/analiticaController.j
 import { fail, redactAuditData } from '../utils/adminPolicy.js';
 import { dateRange, positiveId } from '../utils/adminFilters.js';
 import { ORDEN_ESTADOS } from '../utils/domainValidation.js';
+import { getAccountingActivity, getCurrentReceivables } from './contabilidadService.js';
 
 const report = (id, categoria, nombre, filtros = [], descripcion = '') => ({ id, categoria, nombre, filtros, descripcion });
 export const REPORT_CATALOG = [
@@ -17,6 +18,8 @@ export const REPORT_CATALOG = [
   report('diagnosticos_detalle', 'Operación', 'Detalle de diagnósticos', ['fechas', 'tecnico']),
   report('repuestos_orden', 'Operación', 'Repuestos de una orden', ['orden']),
   report('facturacion', 'Finanzas', 'Facturación por período', ['fechas']),
+  report('flujo_caja', 'Finanzas', 'Flujo de caja por período', ['fechas'], 'Misma fuente que el dashboard y sus movimientos.'),
+  report('cartera_pendiente', 'Finanzas', 'Cartera pendiente de todos los años', [], 'Saldo actual, no saldo histórico a una fecha pasada.'),
   report('actividad_financiera', 'Finanzas', 'Actividad financiera del taller', ['fechas'], 'Reúne facturas, compras y entradas o salidas de dinero existentes; distingue el importe documentado del movimiento de caja.'),
   report('movimientos_contables', 'Finanzas', 'Cobros, devoluciones y gastos', ['fechas'], 'Movimientos de dinero realmente registrados.'),
   report('ganancias_resumen', 'Finanzas', 'Resumen de ganancias', ['fechas']),
@@ -94,6 +97,20 @@ export const loadAdminReport = async (tipo, query = {}) => {
     dias: query.dias == null || query.dias === '' ? settings.reglas.garantia_aviso_dias : positiveId(query.dias, 'Días', false) };
   if (params.dias > 365) fail(400, 'El aviso admite como máximo 365 días.');
   let rows;
+  if (tipo === 'flujo_caja') {
+    const result = await getAccountingActivity(query, { complete: true });
+    return { data: result.data, columns: reportColumns(result.data), reporte: definition,
+      filtros: result.filtros, generado_en: result.generado_en, total: result.meta.total,
+      resumen_financiero: { entradas_caja: result.summary.ingresos, salidas_caja: result.summary.egresos, neto_caja: result.summary.neto },
+      nota: 'Mismos registros y filtros que el dashboard. Compras pagadas y cobros históricos se identifican por su origen. El flujo no equivale a utilidad.' };
+  }
+  if (tipo === 'cartera_pendiente') {
+    const data = await getCurrentReceivables();
+    return { data, columns: reportColumns(data), reporte: definition, filtros: { corte: 'Saldo actual de todos los años' },
+      generado_en: new Date().toISOString(), total: data.length,
+      resumen_financiero: { cartera_total: Math.round(data.reduce((sum,row)=>sum+row.pendiente,0)*100)/100 },
+      nota: 'Saldo actual de facturas pendientes de todos los años; no es una reconstrucción del saldo a la fecha de emisión.' };
+  }
   if (queries[tipo]) rows = await prisma.$queryRaw(queries[tipo](params));
   else if (['inventario', 'stock_bajo'].includes(tipo)) {
     rows = await prisma.$queryRaw`SELECT r.id_repuesto, r.nombre AS repuesto, cr.nombre_tipo AS categoria,

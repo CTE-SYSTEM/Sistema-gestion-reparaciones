@@ -803,3 +803,16 @@ textarea {
   }
 }
 
+ .page-help-target {
+  position: relative;
+  z-index: 45;
+  outline: 4px solid #818cf8;
+  outline-offset: 4px;
+  background-color: white;
+  border-radius: 0.75rem;
+ }
+/* Recorrido por teclado del grupo operativo. */
+.keyboard-help { margin: 0 0 .5rem; padding: .5rem .75rem; font-size: .75rem; color: #475569; background: #f1f5f9; border-radius: .5rem; }
+[data-keyboard-workspace] :is(input,select,textarea,button,a,summary,[tabindex]):focus-visible {
+  outline: 3px solid #4f46e5; outline-offset: 3px;
+}

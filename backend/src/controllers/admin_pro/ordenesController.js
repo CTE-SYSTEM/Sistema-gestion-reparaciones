@@ -178,7 +178,7 @@ export const downloadRepuestosPorOrdenAdmin = async (req, res) => {
     ]);
 
     const excel = await createAdminExcel({ title: `Repuestos de la orden ${ordenId}`, headers, rows });
-    const filename = `repuestos-orden-${ordenId}.xlsx`;
+    const filename = 'repuestos-orden.xlsx';
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

@@ -119,7 +119,7 @@ export const exportarExpedienteExcel = async (detail, row) => {
   const url = URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `informe-${order ? 'orden' : 'diagnostico'}-${row.id}.xlsx`;
+  link.download = `informe-${order ? 'orden' : 'diagnostico'}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

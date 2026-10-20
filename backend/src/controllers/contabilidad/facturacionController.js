@@ -10,6 +10,7 @@ import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js'
 import { withAuditUser } from '../../utils/auditContext.js';
 import { getBusinessSettings } from '../../services/adminSettingsService.js';
 import { precioVentaDetalle, montoRepuestos } from '../../utils/precioRepuestos.js';
+import { entregarOrden } from '../../services/servicioCliente/entregaOrdenService.js';
 
 const facturaInclude = {
   garantias: true,
@@ -116,6 +117,14 @@ export const createFactura = async (req, res) => {
       metodo_pago,
     } = req.body;
     const ordenId = parsePositiveId(orden_id);
+    const entregarAhora = req.body.entregar_ahora === true;
+    if (req.body.entregar_ahora !== undefined && typeof req.body.entregar_ahora !== 'boolean') {
+      return res.status(400).json({ error: 'Indique si entrega el equipo ahora o después' });
+    }
+    const personaRecibe = typeof req.body.persona_recibe === 'string' ? req.body.persona_recibe.trim() : '';
+    if (entregarAhora && (!personaRecibe || personaRecibe.length > 300)) {
+      return res.status(400).json({ error: 'Indique quién recibe el equipo (hasta 300 caracteres)' });
+    }
 
     if (!ordenId) {
       return res.status(400).json({ error: 'La orden es obligatoria' });
@@ -173,6 +182,11 @@ export const createFactura = async (req, res) => {
     const totalCalculado = Math.round((subtotalCalculado + impuestoCalculado) * 100) / 100;
 
     const factura = await withAuditUser(req.user, async (tx) => {
+      await tx.$queryRaw`SELECT id_orden FROM "Ordenes" WHERE id_orden = ${ordenId} FOR UPDATE`;
+      const actual = await tx.ordenes.findUnique({ where: { id_orden: ordenId }, select: { estado: true, calidad_estado: true } });
+      if (!actual || actual.estado !== orden.estado || actual.calidad_estado !== orden.calidad_estado) {
+        throw Object.assign(new Error('La orden cambió. Recargue antes de facturar'), { statusCode: 409 });
+      }
       if (estadoOrden !== 'IRREPARABLE') {
         for (const detalle of orden.repuestos_usados.filter((r) => r.estado_aprobacion === 'APROBADO')) {
           const precio = precioVentaDetalle(detalle);
@@ -203,6 +217,9 @@ export const createFactura = async (req, res) => {
         } });
       }
 
+      if (entregarAhora) await entregarOrden(tx, { ordenId, usuarioId: req.user.id, persona: personaRecibe,
+        observacion: req.body.observacion_entrega });
+
       return tx.facturas.findUnique({
         where: { id_factura: facturaCreada.id_factura },
         include: facturaInclude,
@@ -215,9 +232,15 @@ export const createFactura = async (req, res) => {
       entity: { kind: 'factura', id: factura.id_factura, orden_id: ordenId },
     });
 
+    if (entregarAhora) await notifyRoles(['Secretaria', 'Garantias', 'Contabilidad'], {
+      type: 'equipo_entregado', title: 'Equipo entregado al facturar',
+      message: `La orden #${ordenId} fue facturada y entregada.`, entity: { kind: 'orden', id: ordenId },
+    });
+
     res.status(201).json({ data: factura });
   } catch (error) {
     console.error('Error al crear factura:', error);
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     if (String(error.message || '').includes('Stock insuficiente')) {
       return res.status(409).json({ error: 'Stock insuficiente para facturar los repuestos de la orden' });
     }

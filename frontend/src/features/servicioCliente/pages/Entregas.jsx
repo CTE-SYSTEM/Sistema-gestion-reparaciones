@@ -55,10 +55,10 @@ export default function Entregas() {
     {selected && <form onSubmit={submit} className="space-y-3 rounded-xl border bg-white p-4">
       <div className="flex items-center justify-between gap-2"><h2 className="font-bold">Entrega de orden #{selected.orden_id}</h2><button type="button" onClick={() => setSelected(null)} className="text-sm text-slate-600 underline">Cerrar</button></div>
       <p className="text-sm">Calidad: {selected.orden?.calidad_estado || 'sin registro'} · Pago: {saldo ? Number(saldo.pendiente) > 0 ? `pendiente C$ ${Number(saldo.pendiente).toFixed(2)}` : 'completo' : 'consultando…'}</p>
-      <FotosServicio kind="ordenes" id={selected.orden_id} tipoInicial="FOTO_ENTREGA" allowedTypes={['FOTO_ENTREGA']} />
+      <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-semibold">Agregar fotos de entrega (opcional)</summary><FotosServicio kind="ordenes" id={selected.orden_id} tipoInicial="FOTO_ENTREGA" allowedTypes={['FOTO_ENTREGA']} /></details>
       <label className="block text-sm">Persona que recibe<input required value={persona} onChange={(e) => setPersona(e.target.value)} className="mt-1 block w-full rounded border p-2" /></label>
       <label className="block text-sm">Observación<textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} className="mt-1 block w-full rounded border p-2" /></label>
-      <p className="text-xs text-slate-600">Guarda la foto antes de confirmar. El sistema exige una foto de entrega.</p>
+      <p className="text-xs text-slate-600">La fotografía es opcional; puede confirmar la entrega sin adjuntarla.</p>
       <button disabled={saving || !saldo || Number(saldo.pendiente) > 0 || (selected.orden?.estado === 'FINALIZADO' && !['APROBADO', 'NO_REQUERIDO'].includes(selected.orden?.calidad_estado))} className="rounded bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? 'Guardando…' : 'Confirmar entrega'}</button>
     </form>}
   </section>;

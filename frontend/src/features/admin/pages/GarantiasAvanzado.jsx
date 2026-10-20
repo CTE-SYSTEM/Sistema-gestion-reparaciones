@@ -428,7 +428,7 @@ export default function GarantiasAvanzado() {
           </div>
 
           {/* Panel Lateral de Acción sobre el Equipo Seleccionado */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-4 h-fit">
+          <div data-keyboard-form className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-4 h-fit">
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase">Equipo seleccionado</label>
               <select
@@ -479,6 +479,7 @@ export default function GarantiasAvanzado() {
                 type="button"
                 disabled={!selectedEquipo || isProcessing || selectedEquipo?.accion === 'Sin factura'}
                 onClick={() => handleEquipoGarantiaAction(selectedEquipo)}
+                data-keyboard-primary
                 className="w-full px-4 py-2 rounded-xl bg-indigo-600 text-xs font-bold text-white hover:bg-indigo-700 transition shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
                 {selectedEquipo?.garantia ? 'Confirmar Revalidación' : 'Asignar Nueva Garantía'}

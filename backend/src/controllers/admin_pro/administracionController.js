@@ -16,10 +16,13 @@ export const adminError = (res, error, fallback = 'No se pudo completar la opera
   console.error('[Administración]', error.message);
   return res.status(500).json({ error: fallback });
 };
+const technicianProfile = { id_tecnico: true, nombre: true, especialidad: true, horario: true, contacto: true, disponibilidad: true };
 const publicUser = (user) => ({
   id_usuario: user.id_usuario, nombre_usuario: user.nombre_usuario, nombre_persona: user.nombre_persona,
+  nombre_mostrado: user.nombre_persona || user.tecnico?.nombre || user.nombre_usuario,
   correo_electronico: user.correo_electronico, rol: user.rol,
   fecha_creacion: user.fecha_creacion, activo: user.activo,
+  tecnico: user.rol === 'Tecnico' ? user.tecnico || null : null,
 });
 const confirmPassword = async (tx, id, password) => {
   const user = await tx.usuarios.findUnique({ where: { id_usuario: id } });
@@ -28,7 +31,8 @@ const confirmPassword = async (tx, id, password) => {
 };
 export const getMyAccount = async (req, res) => {
   try {
-    const user = await prisma.usuarios.findUnique({ where: { id_usuario: req.user.id } });
+    const user = await prisma.usuarios.findUnique({ where: { id_usuario: req.user.id }, include: { tecnico: { select: technicianProfile } } });
+    if (!user) fail(404, 'Cuenta no encontrada.');
     res.json({ data: publicUser(user), permisos: getRolePermissions(user.rol), password_minimo: (await getBusinessSettings()).reglas.password_minimo });
   } catch (error) { adminError(res, error); }
 };
@@ -41,9 +45,11 @@ export const updateMyAccount = async (req, res) => {
     if (nombre_persona !== undefined && (typeof nombre_persona !== 'string' || nombre_persona.length > 120)) fail(400, 'Indique un nombre de hasta 120 caracteres.');
     const user = await withAuditUser(req.user, async (tx) => {
       await confirmPassword(tx, req.user.id, password_actual);
-      return tx.usuarios.update({ where: { id_usuario: req.user.id }, data: {
+      const updated = await tx.usuarios.update({ where: { id_usuario: req.user.id }, data: {
         nombre_usuario: nombre_usuario.trim(), ...(nombre_persona !== undefined ? { nombre_persona: nombre_persona.trim() || null } : {}), correo_electronico: correo_electronico.trim() || null,
       } });
+      if (updated.rol === 'Tecnico' && updated.nombre_persona) await tx.tecnicos.updateMany({ where: { usuario_id: req.user.id }, data: { nombre: updated.nombre_persona } });
+      return { ...updated, tecnico: await tx.tecnicos.findUnique({ where: { usuario_id: req.user.id }, select: technicianProfile }) };
     });
     res.json({ data: publicUser(user), message: 'Datos de la cuenta actualizados.' });
   } catch (error) { adminError(res, error); }

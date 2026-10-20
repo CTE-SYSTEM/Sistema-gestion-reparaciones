@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Table from '../../../components/Table';
 import { Plus, Search, Edit, ArrowRight, HelpCircle } from 'lucide-react';
 import { GuidedTour, tourHighlightClass } from '../../shared/components/GuidedTour';
 import { createCliente, getClientes, updateCliente } from '../services/clientesService';
-import { useInfiniteAreaList } from '../../shared/hooks/useInfiniteAreaList';
+import { usePagedAreaList } from '../../shared/hooks/usePagedAreaList';
+import AreaPagination from '../../shared/components/AreaPagination';
 import { handleFormNavigationKeyDown } from '../../shared/components/formKeyboardNavigation';
 
 const emptyCliente = {
@@ -239,6 +240,7 @@ const FormActions = ({ onCancel, isEditing, activeTourTarget, isFormInvalid }) =
 
 const Clientes = () => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [editingCliente, setEditingCliente] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
@@ -249,10 +251,12 @@ const Clientes = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
 
-  const clientesQuery = useInfiniteAreaList({
+  const [page, setPage] = useState(1);
+  const clientesQuery = usePagedAreaList({
     queryKey: ['recepcion', 'clientes'],
     queryFn: getClientes,
     search: searchTerm,
+    page, onPageChange: setPage, pageSize: 20,
   });
   const clientes = clientesQuery.rows;
   const loadClientes = () => clientesQuery.refetch();
@@ -337,6 +341,7 @@ const Clientes = () => {
       <div className="flex gap-1">
         <button
           type="button"
+          data-keyboard-open
           onClick={() => { setEditingCliente(row); setShowForm(true); }}
           className="p-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
           title="Editar"
@@ -366,7 +371,7 @@ const Clientes = () => {
 
       if (action === 'next' && response?.data?.data?.id_cliente) {
         const idNuevo = response.data.data.id_cliente;
-        navigate('/recepcion/equipos', { state: { clienteId: idNuevo, nombreCliente: payload.nombre } });
+        navigate(pathname.startsWith('/secretaria/') ? '/secretaria/equipos' : '/recepcion/equipos', { state: { clienteId: idNuevo, nombreCliente: payload.nombre } });
       } else if (action === 'save' && !editingCliente) {
         setMessage('Cliente registrado correctamente.');
         setShowForm(true);
@@ -422,6 +427,7 @@ const Clientes = () => {
         </button>
 
         <button
+          data-keyboard-open
           onClick={() => { setEditingCliente(null); setShowForm(true); }}
           className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-xs transition-all"
         >
@@ -432,7 +438,7 @@ const Clientes = () => {
     </div>
 
     {error && (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 text-left">
+      <div role="alert" className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 text-left">
         {error}
       </div>
     )}
@@ -470,7 +476,7 @@ const Clientes = () => {
           type="text"
           placeholder="Buscar por nombre, teléfono o correo..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
           className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-all"
         />
       </div>
@@ -487,12 +493,11 @@ const Clientes = () => {
         <Table
           columns={columnas}
           data={filteredClientes}
-          onLoadMore={() => clientesQuery.fetchNextPage()}
-          hasMore={clientesQuery.hasNextPage}
-          isLoadingMore={clientesQuery.isFetchingNextPage}
+          pagination={false}
         />
       )}
     </div>
+    <AreaPagination label="Paginación de clientes" page={page} onPageChange={setPage} meta={clientesQuery.meta} loading={clientesQuery.isFetching} />
   </div>
 );
 };

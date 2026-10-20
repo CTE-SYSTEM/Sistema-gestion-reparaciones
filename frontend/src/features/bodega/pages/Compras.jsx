@@ -149,7 +149,7 @@ const CompraForm = ({ onSubmit, onCancel, proveedores = [], repuestos = [], acti
         {ticketFotos.length > 0 && <ul className="space-y-1 text-xs">{ticketFotos.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded border bg-white p-2"><span className="truncate">{file.name}</span><button type="button" onClick={() => setTicketFotos((previous) => previous.filter((_, i) => i !== index))} className="text-red-700 underline">Quitar</button></li>)}</ul>}
       </div>
 
-      {formError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
+      {formError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
 
       <div className="flex justify-end gap-3 pt-4">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
@@ -352,7 +352,7 @@ const Compras = () => {
     </div>
 
     {error && (
-      <div className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2 text-left">
+      <div role="alert" className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-semibold rounded-r-lg flex items-center gap-2 text-left">
         <span>{error}</span>
       </div>
     )}

@@ -15,6 +15,7 @@ export const login = async (req, res) => {
     // 1. Buscar usuario por nombre_usuario (tal cual tu schema Prisma)
     const usuario = await prisma.usuarios.findUnique({
       where: { nombre_usuario: username },
+      include: { tecnico: { select: { nombre: true } } },
     });
 
     if (!usuario) {
@@ -47,6 +48,7 @@ export const login = async (req, res) => {
         id: usuario.id_usuario,
         nombre: usuario.nombre_usuario,
         nombre_persona: usuario.nombre_persona,
+        nombre_mostrado: usuario.nombre_persona || usuario.tecnico?.nombre || usuario.nombre_usuario,
         rol: usuario.rol,
       },
     });

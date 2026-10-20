@@ -68,6 +68,14 @@ const flujoAtencionHelp = {
 };
 
 export const helpByPath = {
+  '/recepcion/nueva-orden': {
+    title: 'Ayuda de orden directa', description: 'Ingrese una reparación conocida sin diagnóstico previo.',
+    steps: [
+      ['Seleccionar equipo', 'Busque al cliente y elija uno de sus equipos. Registre primero los datos si todavía no existen.', 'form'],
+      ['Autorizar la reparación', 'Describa el trabajo, indique prioridad y monto y confirme la autorización del cliente. Si la falla es incierta, ingrese el equipo para diagnóstico.', 'textarea'],
+      ['Crear y documentar', 'Crear orden directa envía el trabajo al jefe para asignación. Puede agregar fotos antes de que se asigne o inicie; después quedan solo para consulta.', 'button[type="submit"]'],
+    ],
+  },
   '/garantias': {
     title: 'Ayuda de garantías',
     description: 'Consulte la cobertura de los equipos y gestione su vigencia.',
@@ -462,11 +470,11 @@ export const helpByPath = {
   '/contabilidad/facturacion': facturasConsultaHelp,
   '/servicio-cliente/facturacion': {
     title: 'Facturación de Servicio al Cliente',
-    description: 'Emite la factura después de la aprobación de calidad y antes de entregar el equipo.',
+    description: 'Factura y entrega el equipo después de la aprobación de calidad, o deja la entrega para después.',
     steps: [
       ['1. Elige el servicio', 'Selecciona una orden finalizada o un diagnóstico terminado sin orden.'],
       ['2. Revisa el cobro', 'Confirma diagnóstico, repuestos, mano de obra, impuestos y método de pago.'],
-      ['3. Emite la factura', 'Guarda e imprime el comprobante. La entrega se registra después en Entregas.'],
+      ['3. Factura y entrega', 'Confirma quién recibe el equipo y pulsa Facturar y entregar. Si lo retirarán luego, marca Entregar después; un pago pendiente también deja pendiente la entrega.'],
     ],
   },
   '/servicio-cliente/entregas': {
@@ -475,7 +483,7 @@ export const helpByPath = {
     steps: [
       ['1. Busca la entrega', 'Busca por factura, orden, cliente o equipo entre las entregas pendientes.'],
       ['2. Revisa el expediente', 'Comprueba calidad y saldo de la factura antes de continuar.'],
-      ['3. Documenta la salida', 'Guarda la fotografía de entrega e indica quién recibe el equipo.'],
+      ['3. Documenta la salida', 'Indica quién recibe el equipo. Si lo deseas, agrega una fotografía de entrega; es opcional.'],
       ['4. Confirma', 'Registra la entrega cuando todos los datos estén completos.'],
     ],
   },
@@ -492,9 +500,10 @@ export const helpByPath = {
     title: 'Ayuda de reclamos',
     description: 'Analiza reclamos y registra su resolución.',
     steps: [
-      ['1. Busca el expediente', 'Busca por reclamo, orden, cliente o problema.'],
-      ['2. Registra el análisis', 'Indica el origen del problema y la evidencia.'],
-      ['3. Cierra el caso', 'Documenta la resolución y la comunicación al cliente.'],
+      ['1. Busca el expediente', 'Busca por reclamo, orden, cliente o problema. Nuevo reclamo abre el formulario; Cancelar descarta la selección sin crear un caso.', 'input[type="search"], button[aria-controls="nuevo-reclamo"]'],
+      ['2. Registra el análisis', 'Indica el responsable y documenta la evidencia del problema. Servicio al Cliente registra el caso; Reclamos analiza y decide.', 'article'],
+      ['3. Decide la cobertura', 'Revisa la garantía y guarda el motivo. Una aprobación crea una orden de garantía con monto cero; un rechazo conserva la causa, por ejemplo daño por líquido documentado.', 'article'],
+      ['4. Cierra el caso', 'Documenta la resolución y la comunicación al cliente. Si hubo reingreso, entrega el equipo antes del cierre.', 'article'],
     ],
   },
   '/garantias/reclamos': {
@@ -680,3 +689,32 @@ export const helpByPath = {
     ],
   },
 };
+
+helpByPath['/secretaria/orden-directa'] = helpByPath['/recepcion/nueva-orden'];
+
+helpByPath['/calidad'] = {
+  title: 'Ayuda de control de calidad', description: 'Separa el trabajo pendiente del historial de revisiones.',
+  steps: [
+    ['Pendientes e historial', 'Pendientes muestra servicios por revisar. Historial contiene servicios que tienen una revisión registrada, incluyendo devoluciones al técnico.', 'header'],
+    ['Buscar un servicio', 'Busca por orden, diagnóstico, cliente, equipo o serie. Se muestran diez registros por lista y el total de páginas.', 'input[type="search"]'],
+    ['Revisar y documentar', 'Abre el servicio, consulta las pruebas y registra el resultado y la observación. Si devuelves al técnico, identifica la parte con error.', 'article'],
+    ['Consultar revisiones', 'En el expediente puedes consultar el resultado, quién revisó y el historial de observaciones.', 'article'],
+  ],
+};
+helpByPath['/bodega/entregas'] = {
+  title: 'Ayuda de entrega de piezas', description: 'Confirma la entrega física después de la aprobación del jefe.',
+  steps: [
+    ['Buscar solicitudes', 'Busca por orden, cliente, equipo, serie o pieza. Filtra pendientes del jefe, aprobadas, sin existencias, entregadas o rechazadas.', 'input[type="search"]'],
+    ['Revisar origen', 'Actualiza las compras disponibles y selecciona el origen antes de confirmar la entrega.', 'article'],
+    ['Identificar o cambiar pieza', 'Bodega puede vincular el catálogo desde la solicitud. Si confirma que es la misma pieza y cantidad ya aprobadas, conserva la aprobación. Cambiar la pieza o retirar el vínculo exige nueva revisión y un motivo.', 'article'],
+    ['Resolver faltantes y excepciones', 'Sin stock, la pieza aprobada espera abastecimiento. Una pieza entregada no puede desvincularse directamente: jefatura debe corregir una entrega equivocada o registrar la devolución con motivo y confirmación.', 'article'],
+    ['Corregir y reintentar', 'Si falla una operación, la observación permanece y puedes reintentar. La lista se actualiza con avisos y cada minuto mientras la pantalla está visible.', 'article'],
+  ],
+};
+// Los pasos señalan controles visibles sin ejecutar acciones que guarden datos.
+for (const [path, help] of Object.entries(helpByPath)) {
+  if (!path.startsWith('/servicio-cliente')) continue;
+  help.steps = help.steps.map(([title, text, selector], index) => [title, text, selector || (
+    /busca|filtra/i.test(title) ? 'input[type="search"], input[placeholder]' : index === 0 ? 'header, h1' : 'form, article, table'
+  )]);
+}

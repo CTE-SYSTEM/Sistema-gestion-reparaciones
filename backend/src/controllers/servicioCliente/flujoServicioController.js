@@ -2,8 +2,8 @@ import { crearInformeDiagnostico } from '../../services/recepcion/diagnosticoPdf
 import prisma from '../../app/prismaClient.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { notifyRoles } from '../../services/notifications.js';
-import { saldoFactura } from '../contabilidad/movimientosController.js';
 import { CONTACTO_ESTADOS, parsePositiveId } from '../../utils/domainValidation.js';
+import { entregarOrden } from '../../services/servicioCliente/entregaOrdenService.js';
 
 const badId = (res) => res.status(400).json({ error: 'Identificador inválido' });
 
@@ -109,7 +109,7 @@ export const descargarDocumentoDiagnostico = async (req, res) => {
   }
   if (d.calidad_estado !== 'APROBADO') return res.status(409).json({ error: 'Calidad debe aprobar el diagnóstico antes de descargar el informe para el cliente' });
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="diagnostico-${id}.pdf"`);
+  res.setHeader('Content-Disposition', 'attachment; filename="informe-diagnostico.pdf"');
   const doc = crearInformeDiagnostico(d);
   doc.pipe(res);
   doc.end();
@@ -121,28 +121,9 @@ export const registrarEntregaOrden = async (req, res) => {
     if (!id) return badId(res);
     const persona = String(req.body.persona_recibe || '').trim();
     if (!persona) return res.status(400).json({ error: 'Indique quién recibió el equipo' });
-    const data = await withAuditUser(req.user, async (tx) => {
-      const orden = await tx.ordenes.findUnique({ where: { id_orden: id }, include: { facturas: true } });
-      if (!orden) return null;
-      if (!['FINALIZADO', 'IRREPARABLE'].includes(orden.estado) || !orden.facturas.length) {
-        const error = new Error('La orden debe estar finalizada y facturada antes de entregarla'); error.statusCode = 409; throw error;
-      }
-      if (orden.estado === 'FINALIZADO' && !['APROBADO', 'NO_REQUERIDO'].includes(orden.calidad_estado)) {
-        const error = new Error('Control de calidad debe aprobar la orden antes de la entrega'); error.statusCode = 409; throw error;
-      }
-      const saldo = await saldoFactura(tx, orden.facturas[0]);
-      if (saldo.pendiente > 0) { const error = new Error('Registre el pago completo antes de entregar el equipo'); error.statusCode = 409; throw error; }
-      const fotoEntrega = await tx.archivosServicio.count({ where: { orden_id: id, tipo_archivo: 'FOTO_ENTREGA' } });
-      if (!fotoEntrega) { const error = new Error('Adjunte una foto de entrega antes de confirmar la salida'); error.statusCode = 409; throw error; }
-      const entregada = await tx.ordenes.update({ where: { id_orden: id }, data: {
-        estado: 'ENTREGADO', entregado_por_id: req.user.id, persona_recibe: persona,
-        observacion_entrega: String(req.body.observacion_entrega || '').trim() || null,
-      } });
-      await tx.$executeRaw`UPDATE "Garantias" g SET fecha_inicio = ${entregada.fecha_entrega},
-        fecha_vencimiento = ${entregada.fecha_entrega} + (COALESCE(g.duracion_meses, 3) || ' months')::interval
-        FROM "Facturas" f WHERE g.factura_id = f.id_factura AND f.orden_id = ${id}`;
-      return entregada;
-    });
+    const data = await withAuditUser(req.user, (tx) => entregarOrden(tx, {
+      ordenId: id, usuarioId: req.user.id, persona, observacion: req.body.observacion_entrega,
+    }));
     if (!data) return res.status(404).json({ error: 'Orden no encontrada' });
     await notifyRoles(['Secretaria', 'Garantias', 'Contabilidad'], {
       type: 'equipo_entregado', title: 'Equipo entregado',

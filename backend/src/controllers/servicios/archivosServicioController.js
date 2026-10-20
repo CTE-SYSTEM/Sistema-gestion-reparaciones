@@ -6,6 +6,7 @@ import { parsePositiveId } from '../../utils/domainValidation.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
 import { hasPermission, PERMISSIONS } from '../../utils/permissions.js';
 import { normalizeRole } from '../../utils/roles.js';
+import { receptionPhotosReadOnly } from '../../utils/receptionPhotos.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { cierreCorregible, validarCorreccionCierre } from '../../utils/correccionCierre.js';
 import { assertTrabajoPropio, auditMotivo, fail, lockTrabajo, motivoObligatorio } from '../../utils/tecnicoWorkflow.js';
@@ -76,6 +77,9 @@ const technicianOwns = async (userId, kind, id) => {
 };
 
 export const autorizarArchivos = (kind) => async (req, res, next) => {
+  if (normalizeRole(req.user?.rol) === 'recepcion' && (req.method === 'GET'
+    || (kind === 'diagnostico' && ['FOTO_RECEPCION', 'FOTO_DIAGNOSTICO'].includes(req.headers['x-tipo-archivo']))
+    || (kind === 'orden' && req.headers['x-tipo-archivo'] === 'FOTO_REPARACION'))) return next();
   if (req.method === 'GET' && hasPermission(req.user?.rol, PERMISSIONS.JEFE_TECNICO_VER)) return next();
   if (kind === 'diagnostico' && hasPermission(req.user?.rol, PERMISSIONS.DIAGNOSTICOS_ATENDER)
     && (req.method === 'GET' || ['FOTO_RECEPCION', 'FOTO_SALIDA_SIN_REPARAR'].includes(req.headers['x-tipo-archivo']))) return next();
@@ -95,6 +99,7 @@ export const autorizarContenido = async (req, res, next) => {
   if (!id) return res.status(400).json({ error: 'Identificador inválido' });
   const archivo = await prisma.archivosServicio.findUnique({ where: { id_archivo: id }, select: { diagnostico_id: true, orden_id: true, visible_tecnico: true } });
   if (!archivo) return res.status(404).json({ error: 'Fotografía no encontrada' });
+  if (normalizeRole(req.user?.rol) === 'recepcion') return next();
   if (hasPermission(req.user?.rol, PERMISSIONS.JEFE_TECNICO_VER)) return next();
   const kind = archivo.diagnostico_id ? 'diagnostico' : 'orden';
   if (kind === 'diagnostico' && hasPermission(req.user?.rol, PERMISSIONS.DIAGNOSTICOS_ATENDER)) return next();
@@ -110,6 +115,17 @@ export const autorizarContenido = async (req, res, next) => {
 export const listarArchivos = (kind) => async (req, res) => {
   const id = parsePositiveId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Identificador inválido' });
+  const equipoSelect = { id_equipo: true, tipo: true, marca: true, modelo: true, numero_serie: true, cliente: { select: { nombre: true } } };
+  const servicio = kind === 'diagnostico'
+    ? await prisma.diagnosticos.findUnique({ where: { id_diagnostico: id }, select: { tecnico_id: true, fecha_inicio: true, estado_del_diagnostico: true, equipo: { select: equipoSelect }, ordenes: { select: { id_orden: true, estado: true }, orderBy: { id_orden: 'desc' } } } })
+    : await prisma.ordenes.findUnique({ where: { id_orden: id }, select: { tecnico_id: true, fecha_inicio_reparacion: true, estado: true, diagnostico_id: true, diagnostico: { select: { equipo: { select: equipoSelect } } } } });
+  if (!servicio) return res.status(404).json({ error: 'Servicio no encontrado' });
+  const contexto = req.photoTechnician ? { servicio_id: id, tipo: kind } : {
+    servicio_id: id, tipo: kind, diagnostico_id: kind === 'diagnostico' ? id : servicio.diagnostico_id,
+    equipo: servicio.equipo || servicio.diagnostico?.equipo,
+    solo_lectura_recepcion: receptionPhotosReadOnly(kind, servicio),
+    ...(kind === 'diagnostico' ? { ordenes: servicio.ordenes } : {}),
+  };
   const where = { ...(kind === 'diagnostico' ? { diagnostico_id: id } : { orden_id: id }),
     ...(req.photoTechnician ? { OR: [{ visible_tecnico: true }, { usuario_id: req.user.id }] } : {}) };
   const data = await prisma.archivosServicio.findMany({ where, orderBy: { id_archivo: 'desc' },
@@ -120,7 +136,7 @@ export const listarArchivos = (kind) => async (req, res) => {
   }) : [];
   const excepciones = new Map(correcciones.map((c) => [c.datos_nuevos?.id_archivo, c.datos_nuevos?.es_excepcion === true]));
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ data: req.photoTechnician ? data.map((r) => ({
+  return res.json({ contexto, data: req.photoTechnician ? data.map((r) => ({
     id_archivo: r.id_archivo, tipo_archivo: r.tipo_archivo, fecha_subida: r.fecha_subida,
     visible_tecnico: r.visible_tecnico, nombre_original: `Fotografía técnica ${r.id_archivo}.webp`,
     correccion_cierre: excepciones.has(r.id_archivo), es_excepcion: excepciones.get(r.id_archivo) || false,
@@ -136,8 +152,8 @@ export const subirArchivo = (kind) => async (req, res) => {
   if (req.photoTechnician && !['FOTO_DIAGNOSTICO', 'FOTO_REPARACION'].includes(tipo_archivo)) {
     return res.status(403).json({ error: 'El técnico solo puede agregar fotos del diagnóstico o reparación asignados' });
   }
-  if (kind === 'diagnostico' && normalizeRole(req.user?.rol) === 'recepcion' && tipo_archivo !== 'FOTO_RECEPCION') {
-    return res.status(403).json({ error: 'Recepción solo puede agregar fotos del ingreso' });
+  if (kind === 'diagnostico' && normalizeRole(req.user?.rol) === 'recepcion' && !['FOTO_RECEPCION', 'FOTO_DIAGNOSTICO'].includes(tipo_archivo)) {
+    return res.status(403).json({ error: 'Recepción puede agregar fotos de recepción o diagnóstico' });
   }
   const bytes = req.body;
   if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > maxPhotoBytes || !mimeInfo[tipo_mime]?.valid(bytes)) {
@@ -147,6 +163,7 @@ export const subirArchivo = (kind) => async (req, res) => {
     ? await prisma.diagnosticos.findUnique({
       where: { id_diagnostico: id },
       select: {
+        tecnico_id: true, fecha_inicio: true, estado_del_diagnostico: true, ordenes: { select: { id_orden: true } },
         estado_equipo: true,
         equipo: { select: { id_equipo: true, tipo: true, marca: true, modelo: true } },
       },
@@ -155,6 +172,7 @@ export const subirArchivo = (kind) => async (req, res) => {
       where: { id_orden: id },
       select: {
         estado: true,
+        fecha_inicio_reparacion: true,
         tecnico_id: true, irreparable_estado: true, fecha_finalizacion: true, fecha_cierre: true, fecha_entrega: true,
         facturas: { select: { id_factura: true } },
         diagnostico: {
@@ -165,6 +183,9 @@ export const subirArchivo = (kind) => async (req, res) => {
       },
     });
   if (!servicio) return res.status(404).json({ error: 'Servicio no encontrado' });
+  if (normalizeRole(req.user?.rol) === 'recepcion' && receptionPhotosReadOnly(kind, servicio)) {
+    return res.status(409).json({ error: 'El trabajo ya está asignado o iniciado. Recepción solo puede consultar sus fotografías.' });
+  }
   const isCorrection = req.photoTechnician && kind === 'orden' && tipo_archivo === 'FOTO_REPARACION' && cierreCorregible(servicio);
   const settings = isCorrection ? (await getBusinessSettings()).reglas : null;
   let correctionReason = '';
@@ -221,6 +242,13 @@ export const subirArchivo = (kind) => async (req, res) => {
     uploaded = true;
     const data = await withAuditUser(req.user, async (tx) => {
       let correction;
+      if (normalizeRole(req.user?.rol) === 'recepcion') {
+        await lockTrabajo(tx, kind, id);
+        const current = kind === 'diagnostico'
+          ? await tx.diagnosticos.findUnique({ where: { id_diagnostico: id }, select: { tecnico_id: true, fecha_inicio: true, estado_del_diagnostico: true, ordenes: { select: { id_orden: true } } } })
+          : await tx.ordenes.findUnique({ where: { id_orden: id }, select: { tecnico_id: true, fecha_inicio_reparacion: true, estado: true } });
+        if (receptionPhotosReadOnly(kind, current)) fail(409, 'El trabajo ya está asignado o iniciado. Recepción solo puede consultar sus fotografías.');
+      }
       if (req.photoTechnician && kind === 'orden' && tipo_archivo === 'FOTO_REPARACION') {
         await lockTrabajo(tx, 'orden', id);
         const current = await tx.ordenes.findUnique({ where: { id_orden: id }, select: {

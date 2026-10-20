@@ -22,6 +22,8 @@ export default function ComprasAvanzado() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState({from:'',to:''});
+  const exportMetadata = [{label:'Desde',value:exportPeriod.from || 'Sin límite inicial'},{label:'Hasta',value:exportPeriod.to || 'Sin límite final'}];
 
   const fetchCompras = async () => {
     setLoading(true);
@@ -32,6 +34,7 @@ export default function ComprasAvanzado() {
       if (toDate) query.push(`fecha_fin=${toDate}`);
       const res = await reportesAdminService.getCompras(query.join('&'));
       const data = res.data?.data || [];
+      setExportPeriod({from:fromDate,to:toDate});
       
       setCompras(
         data.map((item) => ({
@@ -57,7 +60,7 @@ export default function ComprasAvanzado() {
   const downloadComprasCsv = async () => {
     setDownloading(true);
     try {
-      await downloadJsonExcel(compras, columns, `compras_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
+      await downloadJsonExcel(compras, columns, 'compras.xlsx', { title: 'Reporte de compras', metadata: exportMetadata });
     } catch (err) {
       setError('No se pudo descargar el reporte de compras.');
     } finally {
@@ -68,7 +71,7 @@ export default function ComprasAvanzado() {
   const downloadComprasPdf = async () => {
     setDownloading(true);
     try {
-      downloadJsonPdf(compras, columns, `compras_${fromDate || 'desde'}_${toDate || 'hasta'}.pdf`, 'Reporte de Compras');
+      downloadJsonPdf(compras, columns, 'compras.pdf', 'Reporte de Compras', exportMetadata);
     } catch (err) {
       setError('No se pudo descargar el reporte en PDF.');
     } finally {

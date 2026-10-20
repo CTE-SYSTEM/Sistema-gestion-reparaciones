@@ -8,22 +8,29 @@ const tipos = {
   diagnosticos: [['FOTO_RECEPCION', 'Recepción'], ['FOTO_DIAGNOSTICO', 'Diagnóstico'], ['FOTO_SALIDA_SIN_REPARAR', 'Salida sin reparar']],
   ordenes: [['FOTO_REPARACION', 'Reparación'], ['FOTO_ENTREGA', 'Entrega']],
 };
-export default function FotosServicio({ kind, id, tipoInicial, allowedTypes, readOnly = false, reviewOnly = false, onReview, correccion = null, title = 'Fotografías del servicio' }) {
+export default function FotosServicio({ kind, id, tipoInicial, allowedTypes, readOnly = false, receptionView = false, reviewOnly = false, onReview, correccion = null, title = 'Fotografías del servicio' }) {
   const { user } = useContext(AuthContext);
   const role = String(user?.rol || '').normalize('NFD').replace(/[\u0300-\u036f\s_-]/g, '').toLowerCase();
   const canViewAll = ['secretaria', 'recepcion', 'serviciocliente', 'tecnicojefe', 'administrador', 'adminpro'].includes(role);
-  const canReview = (!readOnly || reviewOnly) && ['secretaria', 'recepcion', 'tecnicojefe', 'administrador', 'adminpro'].includes(role);
-  const opciones = allowedTypes ? tipos[kind].filter(([value]) => allowedTypes.includes(value)) : tipos[kind];
+  const receptionTypes = kind === 'diagnosticos' ? ['FOTO_RECEPCION', 'FOTO_DIAGNOSTICO'] : ['FOTO_REPARACION'];
+  const opciones = tipos[kind].filter(([value]) => (!allowedTypes || allowedTypes.includes(value)) && (role !== 'recepcion' || receptionTypes.includes(value)));
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  useEffect(() => { setSelectedOrder(null); }, [kind, id]);
   const [archivos, setArchivos] = useState([]), [tipo, setTipo] = useState(tipoInicial || opciones[0]?.[0]);
+  const [contexto, setContexto] = useState(null);
+  const receptionLocked = (receptionView || role === 'recepcion') && (!contexto || contexto.solo_lectura_recepcion);
+  const photoReadOnly = readOnly || receptionLocked;
+  const canReview = !receptionLocked && (!readOnly || reviewOnly) && ['secretaria', 'recepcion', 'tecnicojefe', 'administrador', 'adminpro'].includes(role);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [preview, setPreview] = useState(null);
   const [reviewed, setReviewed] = useState(false), [motivo, setMotivo] = useState(''), [busy, setBusy] = useState(false), [stage, setStage] = useState('');
   const queue = usePhotoQueue();
-  const reload = async () => { if (id) setArchivos((await listarFotosServicio(kind, id)).data.data || []); };
-  useEffect(() => { let current = true; listarFotosServicio(kind, id).then((r) => { if (current) setArchivos(r.data.data || []); }).catch(() => { if (current) setError('No se pudieron cargar las fotografías'); }); return () => { current = false; }; }, [kind, id]);
+  const reload = async () => { if (id) { const { data } = await listarFotosServicio(kind, id); setArchivos(data.data || []); setContexto(data.contexto || null); } };
+  useEffect(() => { let current = true; setContexto(null); setArchivos([]); setPreview(null); listarFotosServicio(kind, id).then((r) => { if (current) { setArchivos(r.data.data || []); setContexto(r.data.contexto || null); } }).catch(() => { if (current) setError('No se pudieron cargar las fotografías'); }); return () => { current = false; }; }, [kind, id]);
   useEffect(() => { if (tipoInicial) setTipo(tipoInicial); }, [tipoInicial]);
   const previewUrl = preview?.url;
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   const upload = async () => {
+    if (photoReadOnly) return;
     setError(''); setNotice('');
     if (correccion && !correccion.motivo?.trim()) { setError('Indique el motivo de la corrección antes de guardar fotos.'); return; }
     if (correccion?.requiere_excepcion && !correccion.excepcion) { setError('Confirme que la carga de fotos es excepcional.'); return; }
@@ -57,7 +64,18 @@ export default function FotosServicio({ kind, id, tipoInicial, allowedTypes, rea
   const reviewable = preview && ['FOTO_RECEPCION', 'FOTO_DIAGNOSTICO', 'FOTO_REPARACION'].includes(preview.archivo.tipo_archivo);
   return <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">{title}</h3>{!readOnly && <button type="button" onClick={() => reload().catch(() => setError('No se pudo actualizar la lista'))} className="text-xs underline">Actualizar fotos</button>}</div>
-    {!readOnly && <><label className="block text-xs">Etapa<select aria-label="Tipo de fotografía" value={tipo} disabled={queue.photos.length > 0 || queue.isBusy} onChange={(e) => setTipo(e.target.value)} className="ml-2 rounded border bg-white p-2">{opciones.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-950">
+      <strong>{kind === 'diagnosticos' ? 'Visita / diagnóstico' : 'Orden'} #{id}</strong>
+      {contexto?.equipo && <p>Cliente: {contexto.equipo.cliente?.nombre || 'Sin registrar'} · Equipo #{contexto.equipo.id_equipo}: {[contexto.equipo.tipo, contexto.equipo.marca, contexto.equipo.modelo].filter(Boolean).join(' ')} · Serie: {contexto.equipo.numero_serie || 'Sin registrar'}</p>}
+      <p className="text-xs">Las fotos de esta sección pertenecen a este servicio{contexto?.diagnostico_id && kind === 'ordenes' ? ` y al diagnóstico #${contexto.diagnostico_id}` : ''}. La etapa identifica cuándo se tomaron.</p>
+    </div>
+    {contexto?.solo_lectura_recepcion && (receptionView || role === 'recepcion') && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Solo consulta: este trabajo ya está asignado o iniciado. Las fotografías existentes se pueden ver y descargar.</p>}
+    {(receptionView || role === 'recepcion') && kind === 'diagnosticos' && contexto?.ordenes?.length > 0 && <div className="space-y-3 rounded-lg border bg-white p-3">
+      <p className="text-xs font-semibold">Fotografías de las órdenes de este diagnóstico</p>
+      <div className="flex flex-wrap gap-2">{contexto.ordenes.map((orden) => <button type="button" key={orden.id_orden} aria-expanded={selectedOrder === orden.id_orden} onClick={() => setSelectedOrder((current) => current === orden.id_orden ? null : orden.id_orden)} className="rounded border px-3 py-2 text-xs text-indigo-700">Orden #{orden.id_orden} · {orden.estado.replaceAll('_', ' ')} · {selectedOrder === orden.id_orden ? 'Cerrar fotos' : 'Ver fotos'}</button>)}</div>
+      {selectedOrder && <FotosServicio key={selectedOrder} kind="ordenes" id={selectedOrder} receptionView readOnly={photoReadOnly} title={`Fotos de reparación · Orden #${selectedOrder}`} />}
+    </div>}
+    {!photoReadOnly && <><label className="block text-xs">Etapa<select aria-label="Tipo de fotografía" value={tipo} disabled={queue.photos.length > 0 || queue.isBusy} onChange={(e) => setTipo(e.target.value)} className="ml-2 rounded border bg-white p-2">{opciones.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <FotosPendientes photos={queue.photos} selectionMessages={queue.selectionMessages} onAdd={queue.addPhotos} onRemove={queue.removePhoto} onClear={queue.clearPendingPhotos} isPreparing={queue.isPreparing} isUploading={queue.isUploading} title="Fotos por guardar" />
       {queue.photos.some((p) => p.status !== 'uploaded') && <button type="button" onClick={upload} disabled={queue.isBusy} className="ml-3 rounded bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">{queue.isUploading ? 'Guardando…' : queue.photos.some((p) => p.status === 'failed') ? 'Reintentar pendientes' : 'Guardar fotos'}</button>}
       {queue.photos.length > 0 && !queue.isBusy && queue.photos.every((p) => p.status === 'uploaded') && <button type="button" onClick={queue.clearPhotos} className="ml-3 text-xs underline">Nueva selección</button>}

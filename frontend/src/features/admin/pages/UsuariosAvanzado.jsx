@@ -245,6 +245,7 @@ export default function UsuariosAvanzado() {
             type="button"
             disabled={isOwnAccount(row)}
             onClick={() => { setSelectedUsuario(row); setEditMessage(''); setPasswordUsuario(null); }}
+            data-keyboard-id={`editar-usuario-${row.id_usuario}`}
             className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-white transition hover:bg-slate-900"
           >
             Editar
@@ -253,6 +254,7 @@ export default function UsuariosAvanzado() {
             <button
               type="button"
               onClick={() => { setPasswordUsuario(row); setPasswordMessage(''); setNewPassword(''); setConfirmPassword(''); setAdminPassword(''); setSelectedUsuario(null); }}
+              data-keyboard-id={`clave-usuario-${row.id_usuario}`}
               className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-amber-700"
             >
               Contraseña
@@ -326,7 +328,7 @@ export default function UsuariosAvanzado() {
               </span>
             </div>
 
-            {formError && <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div>}
+            {formError && <div role="alert" className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div>}
             {successMessage && <div className="mb-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>}
 
             <form onSubmit={handleCreateUsuario} className="grid gap-4 md:grid-cols-2">
@@ -335,6 +337,9 @@ export default function UsuariosAvanzado() {
                 <input
                   type="text"
                   name="nombre_usuario"
+                  required
+                  maxLength={100}
+                  autoComplete="off"
                   value={formData.nombre_usuario}
                   onChange={handleInputChange}
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
@@ -352,6 +357,7 @@ export default function UsuariosAvanzado() {
                 <input
                   type="email"
                   name="correo_electronico"
+                  maxLength={254}
                   value={formData.correo_electronico}
                   onChange={handleInputChange}
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
@@ -364,6 +370,9 @@ export default function UsuariosAvanzado() {
                 <input
                   type="password"
                   name="password"
+                  required
+                  minLength={passwordMinimum}
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={handleInputChange}
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
@@ -487,7 +496,7 @@ export default function UsuariosAvanzado() {
 
       {/* MODAL PARA EDICIÓN DE USUARIO */}
       {selectedUsuario && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+        <div role="dialog" aria-modal="true" aria-label="Editar perfil de usuario" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-xl p-6 shadow-2xl relative transform transition-all scale-100">
             <div className="mb-4">
               <h3 className="text-xl font-bold text-slate-800">Editar perfil de usuario</h3>
@@ -563,7 +572,7 @@ export default function UsuariosAvanzado() {
                   {editLoading ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
-              {editMessage && <div className="text-sm font-semibold text-indigo-600 mt-2 text-center">{editMessage}</div>}
+              {editMessage && <div role={editMessage === 'Usuario actualizado correctamente.' ? 'status' : 'alert'} className="text-sm font-semibold text-indigo-600 mt-2 text-center">{editMessage}</div>}
             </form>
           </div>
         </div>
@@ -571,7 +580,7 @@ export default function UsuariosAvanzado() {
 
       {/* MODAL PARA CAMBIO DE CONTRASEÑA */}
       {canResetPassword && passwordUsuario && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+        <div role="dialog" aria-modal="true" aria-label="Cambiar contraseña" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-md p-6 shadow-2xl relative transform transition-all scale-100">
             <div className="mb-4">
               <h3 className="text-xl font-bold text-slate-800">Cambiar contraseña</h3>

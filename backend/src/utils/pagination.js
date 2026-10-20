@@ -19,5 +19,6 @@ export const buildPaginationMeta = ({ page, pageSize, total }) => ({
   page,
   pageSize,
   total,
+  totalPages: Math.max(1, Math.ceil(total / pageSize)),
   hasMore: page * pageSize < total,
 });

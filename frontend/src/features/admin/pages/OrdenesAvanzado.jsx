@@ -17,6 +17,8 @@ const columns = [
       <button
         type="button"
         onClick={row.onShowDetails}
+        data-keyboard-open="#editar-orden-admin"
+        data-keyboard-id={`editar-orden-admin-${row.id_orden}`}
         className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 shadow-sm"
       >
         Ver / Editar
@@ -226,7 +228,7 @@ export default function OrdenesAvanzado() {
 
       {/* Editor y Gestión de Repuestos Avanzado */}
       {selectedOrden && (
-        <div ref={editSectionRef} className="grid gap-6 lg:grid-cols-3 pt-2 animate-fadeIn">
+        <div ref={editSectionRef} data-keyboard-form id="editar-orden-admin" className="grid gap-6 lg:grid-cols-3 pt-2 animate-fadeIn">
           
           {/* Controles de la Orden */}
           <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 space-y-5 h-fit">
@@ -283,6 +285,7 @@ export default function OrdenesAvanzado() {
               <button
                 type="button"
                 onClick={handleUpdateOrden}
+                data-keyboard-primary
                 disabled={saving}
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition disabled:bg-slate-300 shadow-sm disabled:cursor-not-allowed"
               >
@@ -292,7 +295,7 @@ export default function OrdenesAvanzado() {
             </div>
 
             {message && (
-              <div className="p-3 bg-slate-50 text-xs font-semibold text-slate-600 rounded-xl text-center border border-gray-100">
+              <div role={message === 'Orden actualizada correctamente.' ? 'status' : 'alert'} className="p-3 bg-slate-50 text-xs font-semibold text-slate-600 rounded-xl text-center border border-gray-100">
                 {message}
               </div>
             )}

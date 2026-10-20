@@ -65,6 +65,7 @@ const repuestosSeed = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') throw new Error('Los datos de demostración no se cargan en producción. Inicialice una base nueva con db:init:clean.');
   await prisma.$transaction(async (tx) => {
     const usuarios = new Map();
     for (const user of usuariosSeed) {

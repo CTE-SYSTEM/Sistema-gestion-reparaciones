@@ -33,7 +33,8 @@ export const downloadBackupFile = async (req, res) => {
     const url = await getBackupDownloadUrl(req.params.month, req.params.file);
     if (url) return res.json({ data: { url } });
     const target = await resolveBackupFile(req.params.month, req.params.file);
-    res.download(target, req.params.file, (error) => { if (error && !res.headersSent) backupError(res, error); });
+    const extension = req.params.file.match(/\.(pdf|xlsx)$/i)?.[1]?.toLowerCase();
+    res.download(target, extension ? `respaldo-inventario.${extension}` : req.params.file, (error) => { if (error && !res.headersSent) backupError(res, error); });
   } catch (error) { backupError(res, error); }
 };
 export const verifyBackupFiles = async (req, res) => {

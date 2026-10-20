@@ -4,11 +4,6 @@ const slug = (value) => String(value || '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
-const localDate = (value) => {
-  const date = new Date(value);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
-
 export const reportIdentity = (report = {}) => ({
   area: report.categoria || 'Reportes',
   type: report.categoria === 'Finanzas'
@@ -22,11 +17,12 @@ export const reportPeriod = (filters = {}) => {
   return '';
 };
 
-export const reportFilename = (report, filters = {}, extension, generatedAt = new Date()) => {
-  const { area, type } = reportIdentity(report);
-  const period = filters.fecha_inicio || filters.fecha_fin
-    ? `desde_${filters.fecha_inicio || 'inicio'}_hasta_${filters.fecha_fin || 'fin'}`
-    : filters.year ? `anio_${filters.year}` : '';
-  return [slug(area), slug(type), slug(report?.id || report?.nombre || 'reporte'), period,
-    `generado_${localDate(generatedAt)}`].filter(Boolean).join('_') + `.${extension}`;
+export const reportFilename = (report, _filters = {}, extension) => `${slug(report?.id || 'reporte')}.${extension}`;
+
+// Los identificadores y períodos se imprimen dentro del documento, nunca en la descarga.
+export const documentFilename = (filename, extension) => {
+  const base = String(filename || 'reporte').split(/[\\/]/).pop().replace(/\.(pdf|csv|xls|xlsx)$/i, '')
+    .replace(/\d{4}[-_]\d{2}[-_]\d{2}/g, '').replace(/\d+/g, '')
+    .replace(/(?:generado|desde|hasta|anio)[_-]*/g, '');
+  return `${slug(base) || 'reporte'}.${extension}`;
 };

@@ -2,6 +2,7 @@ import prisma from '../../app/prismaClient.js';
 import { ORDEN_ESTADOS, PRIORIDADES, assertInList, parsePositiveId } from '../../utils/domainValidation.js';
 import { withAuditUser } from '../../utils/auditContext.js';
 import { buildPaginationMeta, parsePagination } from '../../utils/pagination.js';
+import { buildOrdenFilters } from '../../utils/ordenFilters.js';
 
 const ordenInclude = {
   diagnostico: {
@@ -39,14 +40,16 @@ export const listarOrdenes = async (query = {}) => {
   const search = String(query.search || '').trim();
   const numericSearch = /^\d+$/.test(search) && Number(search) <= 2147483647 ? Number(search) : null;
   const textMatch = { contains: search, mode: 'insensitive' };
-  const where = search ? { OR: [
+  const filters = buildOrdenFilters(query);
+  if (search) filters.push({ OR: [
     ...(numericSearch ? [{ id_orden: numericSearch }] : []),
     { diagnostico: { equipo: { cliente: { nombre: textMatch } } } },
     { diagnostico: { equipo: { marca: textMatch } } },
     { diagnostico: { equipo: { modelo: textMatch } } },
     { diagnostico: { equipo: { tipo: textMatch } } },
     { diagnostico: { equipo: { numero_serie: textMatch } } },
-  ] } : {};
+  ] });
+  const where = filters.length ? { AND: filters } : {};
   const [ordenes, total] = await Promise.all([
     prisma.ordenes.findMany({ where, include: ordenInclude, orderBy: { id_orden: 'desc' }, skip: offset, take: pageSize }),
     prisma.ordenes.count({ where }),
@@ -221,6 +224,7 @@ export const crearOrdenDirecta = async ({ cliente_id, equipo_id, falla_reportada
   if (autorizado !== true) throw Object.assign(new Error('Confirme que el cliente autorizó el trabajo y el monto'), { statusCode: 400 });
   const prioridadNormalizada = assertInList(prioridad || 'Normal', PRIORIDADES, 'Prioridad');
   return withAuditUser(user, async (tx) => {
+    await tx.$queryRaw`SELECT id_equipo FROM "Equipos" WHERE id_equipo = ${equipoId} FOR UPDATE`;
     const equipo = await tx.equipos.findUnique({ where: { id_equipo: equipoId }, include: { cliente: true } });
     if (!equipo?.cliente) throw Object.assign(new Error('El equipo debe pertenecer a un cliente'), { statusCode: 400 });
     if (clienteId && equipo.cliente_id !== clienteId) throw Object.assign(new Error('El equipo no pertenece al cliente seleccionado'), { statusCode: 400 });

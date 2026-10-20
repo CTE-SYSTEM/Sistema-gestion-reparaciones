@@ -6,7 +6,8 @@ import { Plus, Search, Edit, Phone, User, HelpCircle, X, ArrowRight } from 'luci
 import { GuidedTour, tourHighlightClass } from '../../shared/components/GuidedTour';
 import { getClientes } from '../services/clientesService';
 import { createEquipo, getEquipos, updateEquipo } from '../services/equiposService';
-import { useInfiniteAreaList } from '../../shared/hooks/useInfiniteAreaList';
+import { usePagedAreaList } from '../../shared/hooks/usePagedAreaList';
+import AreaPagination from '../../shared/components/AreaPagination';
 import { handleFormNavigationKeyDown } from '../../shared/components/formKeyboardNavigation';
 
 const BASE_TIPOS_EQUIPO = ['Laptop', 'Celular', 'Impresora', 'Monitor', 'Tablet', 'Pc Escritorio', 'Consola'];
@@ -182,7 +183,7 @@ const EquipoForm = ({ onSubmit, onCancel, initialData = null, clientes = [], equ
         </div>
       </div>
 
-      {formError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
+      {formError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</div>}
       <p className="text-xs text-gray-500">Enter avanza; ↑/↓ mueve entre campos de texto o sugerencias. Alt+flechas navega desde cualquier campo. En las observaciones, Ctrl+Enter avanza y Enter agrega una línea.</p>
 
       <div
@@ -281,10 +282,12 @@ const Equipos = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const equiposQuery = useInfiniteAreaList({
+  const [page, setPage] = useState(1);
+  const equiposQuery = usePagedAreaList({
     queryKey: ['recepcion', 'equipos'],
     queryFn: getEquipos,
     search: searchTerm,
+    page, onPageChange: setPage, pageSize: 20,
   });
   const equipos = equiposQuery.rows;
   const tiposSugeridos = getTiposSugeridos(equipos);
@@ -378,7 +381,7 @@ const Equipos = () => {
       const equipoGuardado = response?.data?.data || response?.data?.equipo || response?.data;
 
       if (action === 'next' && !editingEquipo) {
-        navigate('/recepcion/diagnostico', {
+        navigate(location.pathname.startsWith('/secretaria/') ? '/secretaria/diagnostico' : '/recepcion/diagnostico', {
           state: {
             clienteId: data.cliente_id,
             equipoId: equipoGuardado?.id_equipo,
@@ -421,7 +424,7 @@ const Equipos = () => {
       accessor: 'acciones',
       render: (row) => (
         <div className="flex gap-2">
-          <button type="button" onClick={() => { setEditingEquipo(row); setShowForm(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Editar" aria-label={`Editar equipo ${row.id_equipo}`}><Edit className="w-4 h-4" /></button>
+          <button type="button" data-keyboard-open onClick={() => { setEditingEquipo(row); setShowForm(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Editar" aria-label={`Editar equipo ${row.id_equipo}`}><Edit className="w-4 h-4" /></button>
         </div>
       ),
     },
@@ -459,6 +462,7 @@ const Equipos = () => {
           <span>Ayuda</span>
         </button>
         <button
+          data-keyboard-open
           onClick={() => { setEditingEquipo(null); setShowForm(true); }}
           className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-xs transition-all"
         >
@@ -469,7 +473,7 @@ const Equipos = () => {
     </div>
 
     {error && (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 text-left">
+      <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 text-left">
         {error}
       </div>
     )}
@@ -506,7 +510,7 @@ const Equipos = () => {
           type="text" 
           placeholder="Buscar cliente, tipo, marca, modelo o serie..."
           value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
+          onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
           className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-all" 
         />
       </div>
@@ -523,12 +527,11 @@ const Equipos = () => {
         <Table
           columns={columnas}
           data={filteredEquipos}
-          onLoadMore={() => equiposQuery.fetchNextPage()}
-          hasMore={equiposQuery.hasNextPage}
-          isLoadingMore={equiposQuery.isFetchingNextPage}
+          pagination={false}
         />
       )}
     </div>
+    <AreaPagination label="Paginación de equipos" page={page} onPageChange={setPage} meta={equiposQuery.meta} loading={equiposQuery.isFetching} />
   </div>
 );
 };

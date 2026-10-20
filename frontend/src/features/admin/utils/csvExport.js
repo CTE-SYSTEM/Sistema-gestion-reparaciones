@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { documentFilename } from './reportIdentity.js';
 
 const excelValue = (value) => {
   if (value == null) return '';
@@ -192,16 +193,37 @@ const drawEmptySection = (doc, y) => {
   return y + 8;
 };
 
-export const downloadJsonExcel = async (rows, columns, filename) => {
+export const downloadJsonExcel = async (rows, columns, filename, options = {}) => {
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Sistema de gestión';
   workbook.created = new Date();
+  if (options.metadata?.length || options.description || options.summary) {
+    const info = workbook.addWorksheet('Información');
+    info.columns = [{ width: 28 }, { width: 100 }];
+    info.addRow(['Reporte', options.title || 'Reporte']);
+    (options.metadata || []).forEach(({ label, value }) => info.addRow([label, value]));
+    if (options.description) info.addRow(['Criterio', options.description]);
+    Object.entries(options.summary || {}).forEach(([key, value]) => info.addRow([key.replaceAll('_', ' '), value]));
+    info.eachRow(row => { row.alignment = { wrapText: true, vertical: 'top' }; row.getCell(1).font = { bold: true }; row.height = row.getCell(1).value === 'Criterio' ? 75 : 30; });
+  }
+  if (options.images?.length) {
+    const charts = workbook.addWorksheet('Gráficos');
+    charts.getColumn(1).width = 93;
+    let top = 0;
+    for (const graphic of options.images) {
+      charts.getCell(top + 1, 1).value = graphic.title;
+      charts.getCell(top + 1, 1).font = { bold: true, size: 14 };
+      const id = workbook.addImage({ base64: graphic.dataUrl, extension: 'png' });
+      charts.addImage(id, { tl: { col: 0, row: top + 2 }, br: { col: 1, row: top + 2 + (650 * graphic.height / graphic.width) / 20 }, editAs: 'oneCell' });
+      top += Math.ceil((650 * graphic.height / graphic.width) / 20) + 5;
+    }
+  }
   const sheet = workbook.addWorksheet('Reporte', {
     views: [{ state: 'frozen', ySplit: 4 }],
     pageSetup: { orientation: columns.length > 6 ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
-  const title = filename.replace(/\.(csv|xls|xlsx)$/i, '').replaceAll('_', ' ');
+  const title = options.title || filename.replace(/\.(csv|xls|xlsx)$/i, '').replaceAll('_', ' ');
   const lastColumn = Math.max(columns.length, 1);
   sheet.mergeCells(1, 1, 1, lastColumn);
   sheet.getCell(1, 1).value = title;
@@ -241,17 +263,17 @@ export const downloadJsonExcel = async (rows, columns, filename) => {
   const link = document.createElement('a');
 
   link.href = url;
-  link.download = filename.replace(/\.(csv|xls|xlsx)$/i, '') + '.xlsx';
+  link.download = documentFilename(filename, 'xlsx');
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-export const downloadJsonPdf = (rows, columns, filename, title = 'Reporte') => {
+export const downloadJsonPdf = (rows, columns, filename, title = 'Reporte', metadata = []) => {
   const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', format: columns.length > 9 ? 'a3' : 'a4' });
   const { headers, body } = buildPdfTableData(rows, columns);
-  const startY = drawHeader(doc, title, rows, columns);
+  const startY = drawMetadata(doc, metadata, drawHeader(doc, title, rows, columns));
 
   autoTable(doc, {
     head: [headers],
@@ -290,7 +312,7 @@ export const downloadJsonPdf = (rows, columns, filename, title = 'Reporte') => {
   });
 
   drawFooter(doc, title);
-  doc.save(filename);
+  doc.save(documentFilename(filename, 'pdf'));
 };
 
 export const downloadSectionedPdf = ({
@@ -299,11 +321,12 @@ export const downloadSectionedPdf = ({
   description = '',
   metadata = [],
   sections = [],
+  recordCount,
 }) => {
   const maxColumns = Math.max(0, ...sections.map((section) => section.columns?.length || 0));
   const doc = new jsPDF({ orientation: 'landscape', format: maxColumns > 9 ? 'a3' : 'a4' });
   const totalRows = sections.reduce((sum, section) => sum + (section.rows?.length || 0), 0);
-  let cursorY = drawHeader(doc, title, [], [], totalRows);
+  let cursorY = drawHeader(doc, title, [], [], recordCount ?? totalRows);
 
   if (description) {
     const lines = doc.splitTextToSize(description, doc.internal.pageSize.getWidth() - 36);
@@ -321,7 +344,20 @@ export const downloadSectionedPdf = ({
   cursorY = drawMetadata(doc, metadata, cursorY);
 
   sections.forEach((section) => {
+    if (section.pageBreakBefore && cursorY > 26) { doc.addPage(); cursorY = 26; }
+    const imageHeight = section.image ? Math.min(95, (doc.internal.pageSize.getWidth() - 36) * section.image.height / section.image.width) : 0;
+    if (cursorY + (section.image ? imageHeight + 22 : 42) > doc.internal.pageSize.getHeight() - 25) { doc.addPage(); cursorY = 26; }
     cursorY = drawSectionTitle(doc, section.title, cursorY);
+
+    if (section.image) {
+      const width = doc.internal.pageSize.getWidth() - 36;
+      const height = Math.min(95, width * section.image.height / section.image.width);
+      const imageWidth = height * section.image.width / section.image.height;
+      if (cursorY + height > doc.internal.pageSize.getHeight() - 25) { doc.addPage(); cursorY = 26; }
+      doc.addImage(section.image.dataUrl, 'PNG', 18, cursorY, imageWidth, height, undefined, 'FAST');
+      cursorY += height + 8;
+      if (!section.rows?.length) return;
+    }
 
     if (!section.rows?.length) {
       cursorY = drawEmptySection(doc, cursorY);
@@ -370,5 +406,5 @@ export const downloadSectionedPdf = ({
   });
 
   drawFooter(doc, title);
-  doc.save(filename);
+  doc.save(documentFilename(filename, 'pdf'));
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
   ClipboardList,
@@ -14,7 +14,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { getFlujoAtencion } from '../services/flujoAtencionService';
-import { useInfiniteAreaList } from '../../shared/hooks/useInfiniteAreaList';
+import { usePagedAreaList } from '../../shared/hooks/usePagedAreaList';
+import AreaPagination from '../../shared/components/AreaPagination';
+import { flowStepStatus } from '../utils/flowStepStatus';
 import PageHelp from '../../../components/PageHelp';
 
 const filtros = [
@@ -23,6 +25,8 @@ const filtros = [
   { id: 'en-revision', label: 'En revisión' },
   { id: 'listos-orden', label: 'Listos para orden' },
   { id: 'en-reparacion', label: 'En reparación' },
+  { id: 'en-calidad', label: 'Pendientes de calidad' },
+  { id: 'cancelados', label: 'Canceladas' },
   { id: 'listos-facturar', label: 'Listos para facturar' },
   { id: 'listos-entrega', label: 'Listos para entrega' },
   { id: 'entregados', label: 'Entregados' },
@@ -35,8 +39,10 @@ const pasos = [
   { key: 'diagnostico', label: 'Diagnóstico', icon: ClipboardList },
   { key: 'orden', label: 'Orden', icon: Wrench },
   { key: 'repuestos', label: 'Repuestos', icon: PackageCheck },
+  { key: 'calidad', label: 'Calidad', icon: ShieldCheck },
   { key: 'factura', label: 'Factura', icon: Receipt },
   { key: 'garantia', label: 'Garantía', icon: ShieldCheck },
+  { key: 'entrega', label: 'Entrega', icon: BadgeCheck },
 ];
 
 const estadoColor = {
@@ -44,21 +50,12 @@ const estadoColor = {
   'en-revision': 'bg-sky-50 text-sky-700 border-sky-200',
   'listos-orden': 'bg-violet-50 text-violet-700 border-violet-200',
   'en-reparacion': 'bg-blue-50 text-blue-700 border-blue-200',
+  'en-calidad': 'bg-amber-50 text-amber-700 border-amber-200',
+  cancelados: 'bg-slate-50 text-slate-700 border-slate-200',
   'listos-facturar': 'bg-rose-50 text-rose-700 border-rose-200',
   'listos-entrega': 'bg-orange-50 text-orange-700 border-orange-200',
   entregados: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'con-garantia': 'bg-teal-50 text-teal-700 border-teal-200',
-};
-
-const hasStep = (item, key) => {
-  if (key === 'cliente') return Boolean(item.cliente);
-  if (key === 'equipo') return Boolean(item.equipo);
-  if (key === 'diagnostico') return Boolean(item.diagnostico);
-  if (key === 'orden') return Boolean(item.orden);
-  if (key === 'repuestos') return Number(item.repuestos?.total || 0) > 0;
-  if (key === 'factura') return Boolean(item.factura);
-  if (key === 'garantia') return Boolean(item.garantia);
-  return false;
 };
 
 const formatEquipo = (equipo) =>
@@ -78,37 +75,28 @@ const FlujoAtencion = () => {
   const [filtro, setFiltro] = useState('todos');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const loadMoreRef = useRef(null);
+  const [page, setPage] = useState(1);
   
   // NUEVO: Estado para abrir/cerrar el desplegable de filtros
   const [isOpenFiltro, setIsOpenFiltro] = useState(false);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setSearch(searchInput), 150);
+    const timeout = window.setTimeout(() => { setSearch(searchInput); setPage(1); }, 150);
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
-  const flujoQuery = useInfiniteAreaList({
+  const flujoQuery = usePagedAreaList({
     queryKey: ['recepcion', 'flujo-atencion'],
     queryFn: getFlujoAtencion,
     search,
     extraParams: { filtro },
     pageSize: 20,
+    page, onPageChange: setPage,
   });
   const items = flujoQuery.rows;
-  const meta = flujoQuery.data?.pages?.[0]?.meta || {};
+  const meta = flujoQuery.meta;
   const resumen = meta.resumen || {};
   const loading = flujoQuery.isPending;
   const error = flujoQuery.error?.response?.data?.error || (flujoQuery.error ? 'No se pudo cargar el flujo de atención.' : '');
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = flujoQuery;
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || !hasNextPage || isFetchingNextPage) return undefined;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) fetchNextPage();
-    }, { rootMargin: '400px' });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Obtener la etiqueta del filtro seleccionado actualmente
   const filtroActivoLabel = useMemo(() => {
@@ -179,6 +167,7 @@ const FlujoAtencion = () => {
                       type="button"
                       onClick={() => {
                         setFiltro(item.id);
+                        setPage(1);
                         setIsOpenFiltro(false); // Se pliega automáticamente al seleccionar
                       }}
                       className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors ${
@@ -259,10 +248,11 @@ const FlujoAtencion = () => {
                 </div>
 
                 {/* Línea de pasos del Flujo */}
-                <div className="mt-4 grid gap-1.5 grid-cols-2 sm:grid-cols-4 md:grid-cols-7">
-                  {pasos.map((paso, index) => {
+                <div className="mt-4 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-9">
+                  {pasos.map((paso) => {
                     const Icon = paso.icon;
-                    const active = hasStep(item, paso.key);
+                    const status = flowStepStatus(item, paso.key);
+                    const active = status.complete;
                     return (
                       <div key={paso.key} className="flex min-h-12 items-center gap-2 rounded-xl border border-slate-200/60 bg-slate-50/50 px-2 py-1 md:flex-col md:justify-center md:text-center">
                         <div className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 ${active ? 'bg-cyan-600 text-white' : 'bg-white text-slate-300 border border-slate-200'}`}>
@@ -270,7 +260,7 @@ const FlujoAtencion = () => {
                         </div>
                         <div className="min-w-0">
                           <div className="text-[10px] font-bold text-slate-700 truncate">{paso.label}</div>
-                          <div className="text-[9px] font-bold text-slate-400">{active ? 'Listo' : index < 2 ? 'Registrado' : 'Pendiente'}</div>
+                          <div className="text-[9px] font-bold text-slate-500">{status.label}</div>
                         </div>
                       </div>
                     );
@@ -286,11 +276,7 @@ const FlujoAtencion = () => {
               </article>
             ))
           )}
-          {(flujoQuery.hasNextPage || flujoQuery.isFetchingNextPage) && (
-            <div ref={loadMoreRef} className="py-3 text-center text-xs text-slate-500">
-              {flujoQuery.isFetchingNextPage ? 'Cargando más atenciones…' : `Mostrando ${items.length} de ${meta.total ?? resumen.todos ?? items.length} atenciones. Desplázate para ver más.`}
-            </div>
-          )}
+          <AreaPagination label="Paginación del flujo de atención" page={page} onPageChange={setPage} meta={meta} loading={flujoQuery.isFetching} />
         </section>
       )}
     </div>

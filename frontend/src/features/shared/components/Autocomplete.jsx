@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { focusAdjacentFormField } from './formKeyboardNavigation';
 
@@ -29,7 +29,9 @@ const Autocomplete = ({
   maxLength,
 }) => {
   const containerRef = useRef(null);
-  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef(null);
+  const listId = useId();
+  const [draft, setDraft] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -39,21 +41,8 @@ const Autocomplete = ({
     [getOptionValue, options, value]
   );
 
-  useEffect(() => {
-    if (allowCustom) {
-      setInputValue(value || '');
-      return;
-    }
-
-    if (selectedOption) {
-      setInputValue(getOptionLabel(selectedOption));
-      return;
-    }
-
-    if (!value && !isOpen) {
-      setInputValue('');
-    }
-  }, [allowCustom, getOptionLabel, isOpen, selectedOption, value]);
+  const inputValue = draft && Object.is(draft.sourceValue, value) ? draft.text
+    : allowCustom ? String(value ?? '') : selectedOption ? getOptionLabel(selectedOption) : '';
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -92,7 +81,8 @@ const Autocomplete = ({
 
   const handleInputChange = (event) => {
     const nextValue = event.target.value;
-    setInputValue(nextValue);
+    const nextSource = allowCustom ? nextValue : !nextValue || selectedOption && nextValue !== getOptionLabel(selectedOption) ? '' : value;
+    setDraft({ text: nextValue, sourceValue: nextSource });
     setSearchQuery(nextValue);
     onQueryChange?.(nextValue);
     setIsOpen(true);
@@ -113,22 +103,28 @@ const Autocomplete = ({
     }
   };
 
-  const selectOption = (option) => {
+  const selectOption = (option, advance = false) => {
     const nextValue = getOptionValue(option);
-    setInputValue(getOptionLabel(option));
+    setDraft(null);
     emitChange(nextValue);
     setIsOpen(false);
     setSearchQuery('');
     setActiveIndex(-1);
+    if (advance && inputRef.current?.closest('form,[data-keyboard-form]')) focusAdjacentFormField(inputRef.current);
+    else inputRef.current?.focus();
   };
 
   const handleKeyDown = (event) => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Tab') { setIsOpen(false); setSearchQuery(''); return; }
     if (event.altKey && ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) {
       event.preventDefault();
-      focusAdjacentFormField(event.currentTarget, ['ArrowDown', 'ArrowRight'].includes(event.key) ? 1 : -1);
+      setIsOpen(false); setSearchQuery(''); setActiveIndex(-1);
+      focusAdjacentFormField(event.currentTarget, ['ArrowDown', 'ArrowRight'].includes(event.key) ? 1 : -1, true);
       return;
     }
     if (event.key === 'Escape') {
+      if (isOpen) { event.preventDefault(); event.stopPropagation(); }
       setIsOpen(false);
       setSearchQuery('');
       setActiveIndex(-1);
@@ -146,19 +142,33 @@ const Autocomplete = ({
     }
     if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
+    if (event.shiftKey) { setIsOpen(false); setSearchQuery(''); setActiveIndex(-1); focusAdjacentFormField(event.currentTarget, -1); return; }
     const exact = filteredOptions.find((option) => normalizeText(getOptionLabel(option)) === normalizeText(inputValue.trim()));
     const chosen = activeIndex >= 0 ? filteredOptions[activeIndex] : exact || (filteredOptions.length === 1 ? filteredOptions[0] : null);
     if (chosen) selectOption(chosen);
     if (chosen || (allowCustom && inputValue.trim()) || (selectedOption && normalizeText(inputValue) === normalizeText(getOptionLabel(selectedOption)))) {
+      setIsOpen(false); setSearchQuery(''); setActiveIndex(-1);
       focusAdjacentFormField(event.currentTarget);
     }
   };
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative ${className}`} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        setIsOpen(false); setSearchQuery(''); setActiveIndex(-1);
+      }
+    }}>
       {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
       <div className="relative">
         <input
+          ref={inputRef}
+          id={`${listId}-input`}
+          role="combobox"
+          aria-label={label || name || placeholder}
+          aria-autocomplete="list"
+          aria-expanded={isOpen && !disabled}
+          aria-controls={isOpen && !disabled ? listId : undefined}
+          aria-activedescendant={isOpen && activeIndex >= 0 && filteredOptions[activeIndex] ? `${listId}-${activeIndex}` : undefined}
           type="text"
           name={`${name}_search`}
           value={inputValue}
@@ -182,6 +192,8 @@ const Autocomplete = ({
         />
         <button
           type="button"
+          data-keyboard-skip
+          aria-label={`Mostrar opciones de ${label || name || 'búsqueda'}`}
           onClick={() => {
             if (disabled) return;
             setSearchQuery('');
@@ -199,7 +211,7 @@ const Autocomplete = ({
       {helpText && <p id={`${name}-help`} className="mt-1 text-xs text-slate-500 text-left">{helpText}</p>}
 
       {isOpen && !disabled && (
-        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div id={listId} role="listbox" aria-label={label || name || 'Opciones'} className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, index) => {
               const optionValue = getOptionValue(option);
@@ -208,8 +220,13 @@ const Autocomplete = ({
               return (
                 <button
                   key={optionValue}
+                  id={`${listId}-${index}`}
+                  role="option"
+                  aria-selected={activeIndex === index}
+                  tabIndex={-1}
+                  data-keyboard-skip
                   type="button"
-                  onClick={() => selectOption(option)}
+                  onClick={() => selectOption(option, true)}
                   onMouseEnter={() => setActiveIndex(index)}
                   className={`flex w-full flex-col px-3 py-2 text-left hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none ${activeIndex === index ? 'bg-indigo-50' : ''}`}
                 >

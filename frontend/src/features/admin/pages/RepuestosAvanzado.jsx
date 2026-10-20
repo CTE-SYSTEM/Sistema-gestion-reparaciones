@@ -20,6 +20,8 @@ export default function RepuestosAvanzado() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState({from:'',to:''});
+  const exportMetadata = [{label:'Desde',value:exportPeriod.from || 'Sin límite inicial'},{label:'Hasta',value:exportPeriod.to || 'Sin límite final'}];
 
   const fetchReport = async () => {
     setLoading(true);
@@ -32,6 +34,7 @@ export default function RepuestosAvanzado() {
       const queryString = params.toString();
       const res = await reportesAdminService.getRepuestosUsados(queryString);
       const data = res.data?.data || [];
+      setExportPeriod({from:fromDate,to:toDate});
       
       setReport(
         data.map((item) => ({
@@ -56,7 +59,7 @@ export default function RepuestosAvanzado() {
   const downloadReportCsv = async () => {
     setDownloading(true);
     try {
-      await downloadJsonExcel(report, columns, `repuestos_usados_${fromDate || 'desde'}_${toDate || 'hasta'}.xlsx`);
+      await downloadJsonExcel(report, columns, 'repuestos_usados.xlsx', {title:'Repuestos usados',metadata:exportMetadata});
     } catch (err) {
       setError('No se pudo descargar el reporte.');
     } finally {
@@ -67,7 +70,7 @@ export default function RepuestosAvanzado() {
   const downloadReportPdf = async () => {
     setDownloading(true);
     try {
-      downloadJsonPdf(report, columns, `repuestos_usados_${fromDate || 'desde'}_${toDate || 'hasta'}.pdf`, 'Repuestos usados');
+      downloadJsonPdf(report, columns, 'repuestos_usados.pdf', 'Repuestos usados', exportMetadata);
     } catch (err) {
       setError('No se pudo descargar el reporte en PDF.');
     } finally {

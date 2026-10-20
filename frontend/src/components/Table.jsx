@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import AreaPagination from '../features/shared/components/AreaPagination';
 
 const defaultContentClassName = 'max-w-[220px] whitespace-normal break-words leading-relaxed';
 
@@ -9,9 +10,16 @@ const Table = ({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  pageSize = 20,
+  pagination = true,
 }) => {
+  const [page, setPage] = useState(1);
+  const paginated = pagination && !onLoadMore;
+  const pages = Math.max(1, Math.ceil(data.length / pageSize));
+  const currentPage = Math.min(page, pages);
   // Estado para controlar qué columna ordena y en qué sentido ('asc' o 'desc')
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  useEffect(() => { setPage(1); }, [data, sortConfig.key, sortConfig.direction]);
 
   // Manejador del clic en las cabeceras (solo se ejecuta si sortable es true)
   const handleSort = (accessor) => {
@@ -123,7 +131,7 @@ const Table = ({
               </td>
             </tr>
           ) : (
-            processedData.map((row, i) => (
+            (paginated ? processedData.slice((currentPage - 1) * pageSize, currentPage * pageSize) : processedData).map((row, i) => (
               <tr key={i} className="hover:bg-gray-50/30 transition-all duration-200">
                 {columns.map((c, colIndex) => (
                   <td 
@@ -140,6 +148,7 @@ const Table = ({
           )}
         </tbody>
       </table>
+      {paginated && <AreaPagination label="Paginación de tabla" page={currentPage} onPageChange={setPage} meta={{ total: data.length, pageSize }} />}
       {onLoadMore && (isLoadingMore || hasMore) && (
         <div className="border-t border-gray-100 px-4 py-2 text-center text-xs font-medium text-gray-400">
           {isLoadingMore ? 'Cargando más registros...' : 'Desplázate para cargar más registros'}

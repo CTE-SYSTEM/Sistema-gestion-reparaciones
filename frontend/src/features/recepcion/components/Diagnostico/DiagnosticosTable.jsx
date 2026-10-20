@@ -30,6 +30,7 @@ const TableRow = ({ diagnostico, onEdit, onPhotos, onHistory, onDetails }) => {
         ) : (
           <button
             type="button"
+            data-keyboard-open
             onClick={() => onEdit(diagnostico)}
             className="p-2 text-indigo-600 hover:bg-white rounded-lg border border-transparent hover:border-indigo-200 transition-all shadow-sm hover:shadow"
             title="Editar Registro"

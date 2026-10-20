@@ -1,57 +1,53 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowDownToLine, ArrowDownRight, ArrowUpRight, WalletCards } from 'lucide-react';
+import { useContext, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowDownRight, ArrowUpRight, WalletCards, FileDown, RefreshCw } from 'lucide-react';
 import api from '../../../services/api';
-import { reportFilename } from '../../admin/utils/reportIdentity';
+import { AuthContext } from '../../../context/AuthContext';
+import { MonthlyChart, AccumulatedChart, ExpenseChart, MoneyFlow } from '../components/AccountingCharts';
+import { exportAccountingSummary, money, monthName, monthColumns } from '../utils/accountingExport';
 
-const money = (value) => `C$ ${Number(value || 0).toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const monthName = (value) => new Intl.DateTimeFormat('es-NI', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, value - 1, 1)));
-const annualReport = { id: 'resumen_contable', categoria: 'Finanzas', nombre: 'Resumen contable anual' };
+const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'America/Managua', year: 'numeric' }).format(new Date()));
+const dates = (year, month = '') => ({ fecha_inicio: `${year}-${month ? String(month).padStart(2,'0') : '01'}-01`, fecha_fin: month ? `${year}-${String(month).padStart(2,'0')}-${new Date(Date.UTC(year,Number(month),0)).getUTCDate()}` : `${year}-12-31` });
+const inputClass = 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700';
+function ChartCard({ title, hint, children }) { return <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="text-base font-bold text-slate-800">{title}</h2><p className="mt-1 text-xs text-slate-500">{hint}</p><div className="accounting-chart-scroll">{children}</div><p className="mt-1 text-xs text-slate-500 sm:hidden">Deslice el gráfico para ver todos los valores.</p></section>; }
+
 export default function ContabilidadDashboard() {
-  const [year, setYear] = useState(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Managua', year: 'numeric' }).format(new Date()));
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { let active = true; api.get('/contabilidad/resumen', { params: { anio: year } }).then(({ data: result }) => { if (active) setData(result.data); }).catch(() => { if (active) setError('No se pudo cargar el resumen contable.'); }); return () => { active = false; }; }, [year]);
-  const download = async () => {
-    setBusy(true); setError('');
-    try { const response = await api.get('/contabilidad/resumen/excel', { params: { anio: year }, responseType: 'blob' }); const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = reportFilename(annualReport, { year }, 'xlsx'); link.click(); setTimeout(() => URL.revokeObjectURL(url), 30000); }
-    catch { setError('No se pudo descargar el informe.'); }
-    finally { setBusy(false); }
-  };
-  const downloadPdf = async () => {
-    setBusy(true); setError('');
-    try {
-      const { downloadSectionedPdf } = await import('../../admin/utils/csvExport');
-      const active = data.months.filter((row) => row.ingresos || row.egresos || row.compras);
-      downloadSectionedPdf({ title: `Contabilidad ${year}`, filename: reportFilename(annualReport, { year }, 'pdf'), description: data.method,
-        metadata: [{ label: 'Área', value: 'Finanzas' }, { label: 'Tipo', value: 'General' }, { label: 'Año', value: year },
-          { label: 'Generado', value: new Date().toLocaleString('es-NI') }],
-        sections: [{ title: 'Resumen anual', rows: [data.totals], columns: [
-          { accessor: 'facturado', header: 'Facturado' }, { accessor: 'por_cobrar', header: 'Por cobrar' },
-          { accessor: 'ingresos', header: 'Ingresos registrados' }, { accessor: 'egresos', header: 'Egresos registrados' },
-          { accessor: 'compras_registradas', header: 'Compras registradas' }, { accessor: 'compras_pagadas', header: 'Compras pagadas' }, { accessor: 'neto', header: 'Flujo neto' },
-        ] }, { title: 'Meses con actividad', rows: active, columns: [
-          { accessor: 'mes', header: 'Mes' }, { accessor: 'cobros', header: 'Cobros' },
-          { accessor: 'otros_ingresos', header: 'Otros ingresos' }, { accessor: 'compras', header: 'Compras registradas' }, { accessor: 'compras_pagadas', header: 'Compras pagadas' },
-          { accessor: 'devoluciones', header: 'Devoluciones' }, { accessor: 'reclamos', header: 'Reclamos' },
-          { accessor: 'gastos_operativos', header: 'Gastos' }, { accessor: 'neto', header: 'Flujo neto' },
-        ] }] });
-    } catch { setError('No se pudo generar el PDF.'); }
-    finally { setBusy(false); }
-  };
-  return <section className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
-    <header className="sgr-summary-header flex flex-wrap items-end justify-between gap-4 rounded-3xl bg-gradient-to-br from-slate-900 to-indigo-900 p-6 text-white"><div><p className="text-xs font-bold uppercase tracking-widest text-indigo-200">Contabilidad</p><h1 className="mt-1 text-3xl font-black">Inicio financiero</h1><p className="mt-2 text-sm text-slate-200">Ingresos y salidas registrados por mes para revisar el movimiento de dinero.</p></div><label className="text-sm">Año<select value={year} onChange={(event) => setYear(event.target.value)} className="mt-1 block rounded-lg bg-white px-3 py-2 text-slate-900">{Array.from({ length: 5 }, (_, index) => Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Managua', year: 'numeric' }).format(new Date())) - index).map((value) => <option key={value} value={value}>{value}</option>)}</select></label></header>
-    {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-    {!data ? <p>Cargando resumen…</p> : <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{[
-        ['Facturado en el año', data.totals.facturado, ArrowUpRight], ['Saldo actual por cobrar de esas facturas', data.totals.por_cobrar, WalletCards],
-        ['Ingresos registrados', data.totals.ingresos, ArrowUpRight], ['Egresos registrados', data.totals.egresos, ArrowDownRight],
-        ['Compras registradas', data.totals.compras_registradas, ArrowDownRight], ['Compras pagadas', data.totals.compras_pagadas, ArrowDownRight],
-        ['Flujo neto registrado', data.totals.neto, WalletCards],
-      ].map(([label, value, Icon]) => <div key={label} className="rounded-2xl border bg-white p-5"><Icon className="text-indigo-600" /><p className="mt-2 text-2xl font-black">{money(value)}</p><p className="text-sm text-slate-600">{label}</p></div>)}</div>
-      <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-3xl text-sm text-slate-600">{data.method}</p><div className="flex flex-wrap gap-2"><Link to="/contabilidad/movimientos" className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-indigo-700">Ver y crear movimientos</Link><button type="button" disabled={busy} onClick={download} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><ArrowDownToLine size={16} /> Excel</button><button type="button" disabled={busy} onClick={downloadPdf} className="rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50">PDF</button></div></div>
-      {data.months.some((row) => row.ingresos || row.egresos || row.compras) ? <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-slate-900 text-white"><tr>{['Mes', 'Cobros', 'Otros ingresos', 'Compras registradas', 'Compras pagadas', 'Devoluciones', 'Reclamos', 'Gastos', 'Ingresos', 'Egresos', 'Flujo neto'].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead><tbody>{data.months.filter((row) => row.ingresos || row.egresos || row.compras).map((row) => <tr key={row.mes} className="border-t even:bg-slate-50"><th className="p-3 capitalize">{monthName(row.mes)}</th>{['cobros', 'otros_ingresos', 'compras', 'compras_pagadas', 'devoluciones', 'reclamos', 'gastos_operativos', 'ingresos', 'egresos', 'neto'].map((key) => <td key={key} className="p-3 whitespace-nowrap">{money(row[key])}</td>)}</tr>)}</tbody></table></div> : <p className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No hay movimientos ni compras registrados en {year}.</p>}
+  const { user } = useContext(AuthContext), navigate = useNavigate(), charts = useRef(null);
+  const [year,setYear] = useState(currentYear), [month,setMonth] = useState('');
+  const [filters,setFilters] = useState(dates(currentYear)), [draft,setDraft] = useState(dates(currentYear));
+  const [exporting,setExporting] = useState(''), [error,setError] = useState('');
+  const query = useQuery({ queryKey:['contabilidad','resumen',filters], queryFn:async({signal})=>(await api.get('/contabilidad/resumen',{params:filters,signal,cache:false})).data.data });
+  const data=query.data;
+  const changePeriod=(nextYear,nextMonth)=>{const next=dates(nextYear,nextMonth);setYear(nextYear);setMonth(nextMonth);setDraft(next);setFilters(next);setError('');};
+  const openRecords=(type='',period=filters)=>{if(!exporting)navigate(`/contabilidad/movimientos?${new URLSearchParams({...period,...(type?{tipo:type}:{})})}`);};
+  const openMonth=selected=>{const range=dates(selected.anio,selected.mes);openRecords('',{fecha_inicio:range.fecha_inicio>filters.fecha_inicio?range.fecha_inicio:filters.fecha_inicio,fecha_fin:range.fecha_fin<filters.fecha_fin?range.fecha_fin:filters.fecha_fin});};
+  const download=async format=>{if(!data || query.isFetching)return;setExporting(format);setError('');try{await exportAccountingSummary(data,format,charts.current,user?.personName || user?.username);}catch{setError('No se pudo generar el reporte. Intente de nuevo.');}finally{setExporting('');}};
+  const reportQuery = new URLSearchParams({...filters,reporte:'margen_orden'}).toString();
+  return <section className="mx-auto max-w-7xl space-y-5 p-4">
+    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4"><div><p className="text-xs font-bold uppercase tracking-wide text-indigo-600">Contabilidad</p><h1 className="m-0 mt-1 text-2xl font-bold text-slate-900">Movimiento del dinero</h1><p className="mt-1 text-sm text-slate-500">Consulte ingresos, salidas y cartera pendiente; abra los registros desde cada gráfico.</p></div><Link to={`/contabilidad/reportes?${reportQuery}`} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700">Márgenes y reportes</Link></header>
+    <fieldset disabled={Boolean(exporting)} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+      <label className="text-xs font-semibold text-slate-600">Año<select value={year} onChange={e=>changePeriod(Number(e.target.value),month)} className={`mt-1 block ${inputClass}`}>{Array.from({length:6},(_,i)=>currentYear-i).map(value=><option key={value}>{value}</option>)}</select></label>
+      <label className="text-xs font-semibold text-slate-600">Mes<select value={month} onChange={e=>changePeriod(year,e.target.value)} className={`mt-1 block ${inputClass}`}><option value="">Todo el año</option>{Array.from({length:12},(_,i)=><option key={i} value={i+1}>{new Intl.DateTimeFormat('es-NI',{month:'long',timeZone:'UTC'}).format(new Date(Date.UTC(2026,i,1)))}</option>)}</select></label>
+      <form onSubmit={e=>{e.preventDefault();setFilters({...draft});setError('');}} className="flex flex-wrap items-end gap-3"><label className="text-xs font-semibold text-slate-600">Desde<input type="date" required value={draft.fecha_inicio} max={draft.fecha_fin} onChange={e=>setDraft(old=>({...old,fecha_inicio:e.target.value}))} className={`mt-1 block ${inputClass}`}/></label><label className="text-xs font-semibold text-slate-600">Hasta<input type="date" required value={draft.fecha_fin} min={draft.fecha_inicio} onChange={e=>setDraft(old=>({...old,fecha_fin:e.target.value}))} className={`mt-1 block ${inputClass}`}/></label><button type="submit" className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white">Aplicar período</button></form>
+      <button type="button" aria-label="Actualizar resumen" disabled={query.isFetching} onClick={()=>query.refetch()} className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-40"><RefreshCw size={17}/></button>
+    </fieldset>
+    {(error || query.isError) && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error || query.error?.response?.data?.error || 'No se pudo cargar el resumen contable.'}</p>}
+    {query.isPending && <p role="status" className="p-6 text-sm text-slate-500">Cargando cifras del período…</p>}
+    {data && !query.isError && <>
+      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Período: {data.filtros.fecha_inicio} al {data.filtros.fecha_fin} · Corte: {new Date(data.generado_en).toLocaleString('es-NI',{timeZone:'America/Managua'})}{query.isFetching?' · Actualizando…':''}</p><div className="flex gap-2">{['pdf','xlsx'].map(format=><button type="button" key={format} disabled={Boolean(exporting)||query.isFetching} onClick={()=>download(format)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 disabled:opacity-40"><FileDown size={15}/>{exporting===format?'Generando…':format==='xlsx'?'Excel':'PDF'}</button>)}</div></div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Ingresos registrados',data.totals.ingresos,ArrowUpRight],['Egresos registrados',data.totals.egresos,ArrowDownRight],['Flujo neto del período',data.totals.neto,WalletCards],['Cartera pendiente · todos los años',data.totals.cartera_total,WalletCards]].map(([label,value,Icon])=><article key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Icon size={20} className="text-indigo-600"/><p className={`mt-3 text-2xl font-bold ${value<0?'text-rose-700':'text-slate-900'}`}>{money(value)}</p><p className="mt-1 text-xs text-slate-500">{label}</p></article>)}</div>
+      <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-xl bg-indigo-50 p-3 text-xs text-indigo-900"><span>Facturado: <strong>{money(data.totals.facturado)}</strong></span><span>Cobrado: <strong>{money(data.totals.cobros)}</strong></span><span>Otros ingresos: <strong>{money(data.totals.ingresos-data.totals.cobros)}</strong></span><span>Por cobrar de facturas del período: <strong>{money(data.totals.por_cobrar)}</strong></span></div>
+      {(data.totals.facturas_pendientes>0 || data.totals.compras_sin_pago>0) && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">{data.totals.facturas_pendientes>0 && <Link to="/contabilidad/facturacion" className="font-semibold underline">{data.totals.facturas_pendientes} facturas con saldo pendiente</Link>}{data.totals.compras_sin_pago>0 && <span>Compras sin pago documentado en el período: <strong>{money(data.totals.compras_sin_pago)}</strong></span>}</div>}
+      <div ref={charts} className="grid gap-4 xl:grid-cols-2">
+        <ChartCard title="Ingresos y egresos mensuales" hint="Seleccione un mes para consultar sus registros."><MonthlyChart months={data.months} onMonth={openMonth}/></ChartCard>
+        <ChartCard title="Flujo acumulado" hint="Suma del flujo neto del período. No representa saldo bancario ni utilidad."><AccumulatedChart months={data.months} onMonth={openMonth}/></ChartCard>
+        <ChartCard title="En qué se registra el dinero de salida" hint="Seleccione una categoría para abrir el detalle."><ExpenseChart months={data.months} onCategory={openRecords}/></ChartCard>
+        <ChartCard title="Recorrido del dinero" hint="Cobros y otros ingresos, menos egresos, forman el flujo neto. La cartera se consulta aparte."><MoneyFlow totals={data.totals} onCategory={openRecords}/></ChartCard>
+      </div>
+      <p className="text-xs leading-relaxed text-slate-500">{data.method}</p>
+      <div className="flex flex-wrap gap-2"><button type="button" onClick={()=>openRecords()} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">Ver todos los registros del período</button><Link to={`/contabilidad/reportes?${reportQuery}`} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700">Consultar margen por orden</Link></div>
+      <details className="rounded-xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">Detalle mensual</summary><div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr>{monthColumns.map(column=><th key={column.accessor} className="whitespace-nowrap p-2">{column.header}</th>)}</tr></thead><tbody>{data.months.map(row=><tr key={`${row.anio}-${row.mes}`} className="border-t border-slate-100">{monthColumns.map(column=><td key={column.accessor} className="whitespace-nowrap p-2">{column.accessor==='periodo'?monthName(row):money(row[column.accessor])}</td>)}</tr>)}</tbody></table></div></details>
     </>}
   </section>;
 }

@@ -10,6 +10,7 @@ import { getHistorialOrden, registrarEntregaOrden } from '../../servicioCliente/
 import FotosServicio from '../../shared/components/FotosServicio';
 import HistorialEstados from '../../shared/components/HistorialEstados';
 import PageHelp from '../../../components/PageHelp';
+import { facturacionAccess } from '../utils/facturacionAccess.js';
 
 const money = (value) => `C$ ${Number(value || 0).toFixed(2)}`;
 const IVA_RATE = 0.15;
@@ -157,8 +158,7 @@ const buildTicketHtml = (factura, { autoPrint = false } = {}) => {
 
 const FacturacionPage = () => {
   const { user } = useContext(AuthContext);
-  const canDeliver = user?.rol === 'Secretaria';
-  const canInvoice = user?.rol !== 'Contabilidad';
+  const { canDeliver, canInvoice } = facturacionAccess(user?.rol);
   const [ordenes, setOrdenes] = useState([]);
   const [diagnosticos, setDiagnosticos] = useState([]);
   const [tarifas, setTarifas] = useState({ diagnostico: [], mano_obra: [] });
@@ -174,6 +174,8 @@ const FacturacionPage = () => {
   const [ticketReciente, setTicketReciente] = useState(null);
   const [autoIva, setAutoIva] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [entregarDespues, setEntregarDespues] = useState(false);
+  const [personaFacturacion, setPersonaFacturacion] = useState('');
   const [form, setForm] = useState({
     orden_id: '',
     diagnostico_id: '',
@@ -209,6 +211,7 @@ const FacturacionPage = () => {
     ordenes.find((orden) => String(orden.id_orden) === String(form.orden_id))
   ), [ordenes, form.orden_id]);
   const isDirectOrder = tipoCobro === 'orden' && selectedOrden?.diagnostico?.origen_directo;
+  const entregarAhora = tipoCobro === 'orden' && !entregarDespues && form.metodo_pago !== 'Pendiente';
 
   const ticketFactura = useMemo(() => {
     if (!selectedTicketId) return null;
@@ -256,18 +259,25 @@ const FacturacionPage = () => {
       setError('Indique un cargo mayor que cero para facturar solo el diagnóstico.');
       return;
     }
+    if (entregarAhora && !personaFacturacion.trim()) {
+      setError('Indique quién recibe el equipo antes de facturar y entregar.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
     try {
       const response = await (tipoCobro === 'orden' ? createFactura : createFacturaDiagnostico)({
         ...form,
+        ...(tipoCobro === 'orden' ? { entregar_ahora: entregarAhora, persona_recibe: personaFacturacion.trim() } : {}),
         subtotal: subtotal.toFixed(2),
         total: total.toFixed(2),
       });
       const facturaCreada = response.data?.data;
       setForm({ orden_id: '', diagnostico_id: '', monto_diagnostico: '', monto_repuestos: '', mano_obra: '', impuestos: '', metodo_pago: '' });
       setAutoIva(true);
+      setEntregarDespues(false);
+      setPersonaFacturacion('');
       setShowForm(false);
       if (facturaCreada?.id_factura) {
         setTicketReciente(facturaCreada);
@@ -289,6 +299,7 @@ const FacturacionPage = () => {
   const handleOrdenChange = (ordenId) => {
     const orden = ordenes.find((item) => String(item.id_orden) === String(ordenId));
     const montoCalculado = Number(orden?.monto_repuestos_calculado || 0).toFixed(2);
+    setPersonaFacturacion(orden?.diagnostico?.equipo?.cliente?.nombre || '');
 
     setForm({
       ...form,
@@ -419,16 +430,16 @@ const FacturacionPage = () => {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
         <div><h1 className="text-2xl font-bold mb-1">{canInvoice ? 'Facturación' : 'Facturas'}</h1>
-        <p className="text-gray-500">{canInvoice ? 'Emite la factura al terminar el trabajo o el diagnóstico y antes de entregar el equipo.' : 'Consulta las facturas emitidas y revisa sus cobros en Movimientos.'}</p></div>
+        <p className="text-gray-500">{canInvoice ? 'Factura y entrega el equipo en una sola acción, o elige entregarlo después.' : 'Consulta las facturas emitidas y revisa sus cobros en Movimientos.'}</p></div>
         <PageHelp compact />
       </div>
 
-      {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
+      {error && <div role="alert" className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
 
       {entregaFactura && (
-        <section className="mb-5 rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+        <section data-keyboard-form className="mb-5 rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
           <h2 className="font-semibold text-emerald-900">Entrega de la orden #{entregaFactura.orden_id}</h2>
-          <p className="mt-1 text-sm text-gray-600">Registre la foto de salida antes de confirmar la entrega. La garantía comenzará en la fecha de entrega.</p>
+          <p className="mt-1 text-sm text-gray-600">Indique quién recibió el equipo y confirme la entrega. La foto es opcional. La garantía comenzará en la fecha de entrega.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="text-sm">Persona que recibió el equipo
               <input value={personaRecibe} onChange={(event) => setPersonaRecibe(event.target.value)} className="mt-1 w-full rounded border p-2" required />
@@ -437,9 +448,9 @@ const FacturacionPage = () => {
               <input value={observacionEntrega} onChange={(event) => setObservacionEntrega(event.target.value)} className="mt-1 w-full rounded border p-2" />
             </label>
           </div>
-          <FotosServicio kind="ordenes" id={entregaFactura.orden_id} tipoInicial="FOTO_ENTREGA" />
+          <details className="mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-semibold text-slate-700">Agregar fotos de entrega (opcional)</summary><FotosServicio kind="ordenes" id={entregaFactura.orden_id} tipoInicial="FOTO_ENTREGA" allowedTypes={['FOTO_ENTREGA']} /></details>
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={guardarEntrega} className="rounded bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Confirmar entrega</button>
+            <button type="button" data-keyboard-primary onClick={guardarEntrega} className="rounded bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Confirmar entrega</button>
             <button type="button" onClick={() => setEntregaFactura(null)} className="rounded border px-3 py-2 text-sm">Cerrar</button>
           </div>
         </section>
@@ -502,8 +513,12 @@ const FacturacionPage = () => {
             Aplicar IVA 15%
           </button>
           <span>{autoIva ? 'IVA automatico activo' : 'IVA editado manualmente'}</span>
-          <span>Facturar no marca el equipo como entregado; registre su entrega por separado.</span>
+          <span>{tipoCobro === 'diagnostico' ? 'La factura de diagnóstico no registra la entrega de una orden.' : entregarAhora ? 'Al guardar se registrará la entrega y comenzará la garantía, si corresponde.' : 'La factura quedará pendiente de entrega.'}</span>
         </div>
+        {tipoCobro === 'orden' && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={entregarDespues || form.metodo_pago === 'Pendiente'} disabled={loading || form.metodo_pago === 'Pendiente'} onChange={(e) => setEntregarDespues(e.target.checked)} />Entregar después</label>
+          {form.metodo_pago === 'Pendiente' ? <p className="mt-2 text-slate-600">El equipo se entregará después de registrar el pago completo.</p> : entregarAhora ? <label className="mt-3 block">Persona que recibe el equipo<input required maxLength={300} disabled={loading} value={personaFacturacion} onChange={(e) => setPersonaFacturacion(e.target.value)} className="mt-1 w-full rounded border bg-white p-2" /><span className="mt-1 block text-xs text-slate-600">Se precarga el cliente. Cámbielo si recibe otra persona.</span></label> : <p className="mt-2 text-slate-600">Podrá registrar la entrega desde el historial cuando el cliente retire el equipo.</p>}
+        </div>}
         {selectedOrden?.estado === 'IRREPARABLE' && <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Orden irreparable: las piezas no se cobran. Registre la mano de obra efectivamente realizada y el diagnóstico si corresponde.</p>}
         {selectedOrden && (
           <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-950">
@@ -585,7 +600,7 @@ const FacturacionPage = () => {
           </div>
         )}
         <button type="submit" disabled={loading || !form.metodo_pago} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg disabled:opacity-60">
-          Crear Factura
+          {loading ? 'Guardando…' : entregarAhora ? 'Facturar y entregar' : 'Crear factura'}
         </button>
       </form>
       )}

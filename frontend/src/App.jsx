@@ -7,6 +7,8 @@ import useResponsiveLayout from './features/responsive/useResponsiveLayout';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import PageHelp from './components/PageHelp';
+import KeyboardWorkspace from './features/shared/components/KeyboardWorkspace';
+import { isKeyboardPath } from './features/shared/components/keyboardWorkflow';
 
 // Contexto de Autenticación
 import { AuthProvider, AuthContext } from './context/AuthContext';
@@ -50,6 +52,7 @@ const ComprasBodega = lazy(() => import('./features/bodega/pages/Compras'));
 const FacturacionContabilidad = lazy(() => import('./features/contabilidad/pages/Facturacion'));
 const Diagnostico = lazy(() => import('./features/recepcion/pages/Diagnostico'));
 const NuevaOrden = lazy(() => import('./features/servicioCliente/pages/NuevaOrden'));
+const OrdenDirectaRecepcion = lazy(() => import('./features/recepcion/pages/OrdenDirectaRecepcion'));
 const ServicioClienteDashboard = lazy(() => import('./features/servicioCliente/pages/ServicioClienteDashboard'));
 
 const TecnicoDashboard = lazy(() => import('./features/tecnico/pages/TecnicoDashboard'));
@@ -143,10 +146,11 @@ function RouteFallback() {
 
 function Page({ children, fullWidth = false }) {
   const responsive = useResponsiveLayout();
+  const { pathname } = useLocation();
 
   return (
     <Suspense fallback={<RouteFallback />}>
-      <div className={`${fullWidth ? 'w-full' : responsive.pageClassName} app-page`}>{children}</div>
+      <KeyboardWorkspace key={pathname} enabled={isKeyboardPath(pathname)} className={`${fullWidth ? 'w-full' : responsive.pageClassName} app-page`}>{children}</KeyboardWorkspace>
     </Suspense>
   );
 }
@@ -209,6 +213,7 @@ const router = createBrowserRouter(
             { path: 'secretaria/fotos', element: <RequireAuth><Navigate to="/secretaria/compras" replace /></RequireAuth> },
             { path: 'secretaria/facturacion', element: <RequireAuth><Page><FacturacionContabilidad /></Page></RequireAuth> },
             { path: 'secretaria/nueva-orden', element: <RequireAuth><Page><NuevaOrden /></Page></RequireAuth> },
+            { path: 'secretaria/orden-directa', element: <RequireAuth><Page><OrdenDirectaRecepcion /></Page></RequireAuth> },
             { path: 'secretaria/entregas', element: <Navigate to="/secretaria/facturacion" replace /> },
             { path: 'secretaria/diagnostico', element: <RequireAuth><Page><Diagnostico /></Page></RequireAuth> },
             { path: 'secretaria/flujo-atencion', element: <RequireAuth><Page><FlujoAtencion /></Page></RequireAuth> },
@@ -217,7 +222,7 @@ const router = createBrowserRouter(
             { path: 'recepcion/clientes', element: <RequireAuth><Page><ClientesRecepcion /></Page></RequireAuth> },
             { path: 'recepcion/equipos', element: <RequireAuth><Page><EquiposRecepcion /></Page></RequireAuth> },
             { path: 'recepcion/diagnostico', element: <RequireAuth><Page><Diagnostico /></Page></RequireAuth> },
-            { path: 'recepcion/nueva-orden', element: <Navigate to="/servicio-cliente/nueva-orden" replace /> },
+            { path: 'recepcion/nueva-orden', element: <RequireAuth><Page><OrdenDirectaRecepcion /></Page></RequireAuth> },
             { path: 'recepcion/entregas', element: <Navigate to="/servicio-cliente/entregas" replace /> },
             { path: 'recepcion/flujo-atencion', element: <RequireAuth><Page><FlujoAtencion /></Page></RequireAuth> },
             { path: 'recepcion/reclamos', element: <Navigate to="/servicio-cliente/reclamos" replace /> },
@@ -236,7 +241,7 @@ const router = createBrowserRouter(
             { path: 'bodega/entregas', element: <RequireAuth><Page><TrazabilidadPage /></Page></RequireAuth> },
             { path: 'contabilidad', element: <RequireAuth><Page><ContabilidadDashboard /></Page></RequireAuth> },
             { path: 'contabilidad/reportes', element: <RequireAuth><Page><ReportesFinancieros /></Page></RequireAuth> },
-            { path: 'secretaria/reportes', element: <RequireAuth><Page><ReportesFinancieros integral /></Page></RequireAuth> },
+            { path: 'secretaria/reportes', element: <Navigate to="/secretaria" replace /> },
             { path: 'contabilidad/facturacion', element: <RequireAuth><Page><FacturacionContabilidad /></Page></RequireAuth> },
             { path: 'contabilidad/movimientos', element: <RequireAuth><Page><MovimientosPage /></Page></RequireAuth> },
             { path: 'calidad', element: <RequireAuth><Page><CalidadPage /></Page></RequireAuth> },

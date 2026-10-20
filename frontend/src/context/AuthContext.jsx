@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { clearApiCache } from '../services/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -33,6 +33,26 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
+  const syncUser = useCallback((account) => {
+    setUser((current) => {
+      if (!current) return current;
+      const updated = { ...current, id: account.id_usuario, username: account.nombre_usuario,
+        personName: account.nombre_mostrado || account.nombre_persona || '', rol: account.rol,
+        email: account.correo_electronico || '', tecnico: account.tecnico || null };
+      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+  const sessionToken = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  useEffect(() => {
+    if (!sessionToken) return;
+    let active = true;
+    api.get('/auth/mi-cuenta', { cache: false }).then(({ data }) => {
+      if (active && sessionStorage.getItem(AUTH_TOKEN_KEY) === sessionToken && data.data?.id_usuario) syncUser(data.data);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [sessionToken, syncUser]);
+
   useEffect(() => {
     const handleUnauthorized = () => {
       queryClient.cancelQueries(); queryClient.clear(); clearApiCache();
@@ -54,7 +74,7 @@ export const AuthProvider = ({ children }) => {
     const userData = {
       id: usuario?.id,
       username: usuario?.nombre || username,
-      personName: usuario?.nombre_persona || '',
+      personName: usuario?.nombre_mostrado || usuario?.nombre_persona || '',
       rol: usuario?.rol,
     };
     setUser(userData);
@@ -63,11 +83,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (account) => {
-    setUser((current) => {
-      const updated = { ...current, id: account.id_usuario, username: account.nombre_usuario, personName: account.nombre_persona || '', rol: account.rol };
-      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(updated));
-      return updated;
-    });
+    syncUser(account);
     clearSessionData();
   };
 
@@ -80,7 +96,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, syncUser }}>
       {children}
     </AuthContext.Provider>
   );

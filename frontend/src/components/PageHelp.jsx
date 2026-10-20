@@ -1,6 +1,6 @@
 // Frontend/src/components/shared/PageHelp.jsx
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HelpCircle, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { helpByPath, defaultHelp } from './DataHelpSecretaria';
@@ -154,21 +154,42 @@ export const GuidedTour = ({
  *
  * <PageHelp />
  */
-const PageHelp = ({ compact = false }) => {
+const PageHelp = ({ compact = false, help: contextualHelp }) => {
   const { pathname } = useLocation();
 
   const [open, setOpen] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const helpRoot = useRef(null);
 
   const help = useMemo(
-    () => resolveHelp(pathname),
-    [pathname]
+    () => contextualHelp || resolveHelp(pathname),
+    [pathname, contextualHelp]
   );
 
   useEffect(() => {
     setOpen(false);
     setStepIndex(0);
-  }, [pathname]);
+  }, [pathname, contextualHelp]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const scope = helpRoot.current?.closest('main') || document.querySelector('.app-page');
+    const selector = help?.steps[stepIndex]?.[2];
+    const target = selector ? Array.from(scope?.querySelectorAll(selector) || []).find((element) => element.getClientRects().length > 0) : null;
+    target?.classList.add('page-help-target');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const keyboard = (event) => {
+      if (event.key === 'Escape') { setOpen(false); setStepIndex(0); }
+      if (event.target.matches?.('input, select, textarea') || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key === 'ArrowRight') { event.preventDefault(); setStepIndex((value) => Math.min(value + 1, help.steps.length - 1)); }
+      if (event.key === 'ArrowLeft') { event.preventDefault(); setStepIndex((value) => Math.max(value - 1, 0)); }
+    };
+    window.addEventListener('keydown', keyboard);
+    return () => {
+      target?.classList.remove('page-help-target');
+      window.removeEventListener('keydown', keyboard);
+    };
+  }, [open, stepIndex, help]);
 
   if (!help) return null;
 
@@ -196,7 +217,7 @@ const PageHelp = ({ compact = false }) => {
   };
 
   return (
-    <section className={compact ? '' : 'mb-6'}>
+    <section ref={helpRoot} className={compact ? '' : 'mb-6'}>
       <div
         className={
           compact
@@ -224,7 +245,7 @@ const PageHelp = ({ compact = false }) => {
           />
 
           {/* Tarjeta de ayuda */}
-          <div className="fixed right-6 top-20 z-50 w-[min(380px,calc(100vw-32px))] rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-2xl transition-all">
+          <div role="dialog" aria-label={help.title} className="fixed right-6 top-20 z-50 w-[min(380px,calc(100vw-32px))] rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-2xl transition-all">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">
@@ -247,7 +268,7 @@ const PageHelp = ({ compact = false }) => {
             </div>
 
             <p className="mb-3 text-xs font-medium text-slate-500">
-              {help.description}
+              {help.description} Use ← y → para recorrer los pasos y Escape para cerrar.
             </p>
 
             <p className="rounded-xl border border-indigo-100 bg-indigo-50 p-3.5 text-xs font-medium leading-relaxed text-slate-700">
@@ -268,7 +289,7 @@ const PageHelp = ({ compact = false }) => {
 
               <div className="flex gap-1.5">
                 {help.steps.map((step, index) => (
-                  <span
+                  <button type="button" aria-label={`Ir al paso ${index + 1}`} aria-current={index === stepIndex ? 'step' : undefined} onClick={() => setStepIndex(index)}
                     key={step[0]}
                     className={`h-2 rounded-full transition-all ${
                       index === stepIndex

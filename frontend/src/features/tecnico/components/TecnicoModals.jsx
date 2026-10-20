@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import { EstadoBadge } from './TecnicoBadges';
 import FotosServicio from '../../shared/components/FotosServicio';
 import { pruebasSalidaPorTipo } from '../utils/pruebasSalida';
+import AreaPagination from '../../shared/components/AreaPagination';
 
 const cleanCurrencyInput = (value = '') => String(value).replace(/[^\d.]/g, '');
 
@@ -69,7 +70,7 @@ export const SolicitarRepuestoModal = ({ orden, onClose, onSubmit }) => {
           {catalogo.error && <p role="alert" className="text-sm text-red-700">No se pudo cargar el catálogo. <button type="button" onClick={() => catalogo.refetch()}>Reintentar</button></p>}
           <div className="max-h-52 space-y-2 overflow-y-auto">{(catalogo.data?.data || []).map((p) => <button key={p.id_repuesto} type="button" disabled={!p.disponible} onClick={() => setSelected(p)} className={'w-full rounded border p-3 text-left text-sm disabled:opacity-50 ' + (selected?.id_repuesto === p.id_repuesto ? 'border-indigo-500 bg-indigo-50' : '')}><strong>{p.nombre}</strong><span className="block text-xs">{p.descripcion}</span><span className="block text-xs">{p.disponible ? 'Disponible para la cantidad indicada' : 'Cantidad no disponible'}</span></button>)}</div>
           {!catalogo.isFetching && !catalogo.error && catalogo.data?.data.length === 0 && <p className="text-sm">No hay coincidencias en el catálogo. Puede describir una pieza por registrar.</p>}
-          <div className="flex items-center justify-between gap-2 text-sm"><button type="button" disabled={page === 1 || catalogo.isFetching} onClick={() => setPage(page - 1)}>Anterior</button><span>Página {page} · {catalogo.data?.meta.total || 0} piezas</span><button type="button" disabled={!catalogo.data?.meta.hasMore || catalogo.isFetching} onClick={() => setPage(page + 1)}>Siguiente</button></div>
+          <AreaPagination label="Paginación del catálogo de piezas" page={page} onPageChange={setPage} meta={{ ...catalogo.data?.meta, pageSize: catalogo.data?.meta?.pageSize || 20 }} loading={catalogo.isFetching} />
         </>}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         <div className="flex justify-end gap-3"><button type="button" onClick={onClose}>Cancelar</button><button disabled={loading || (!manual && !selected)} className="rounded bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{loading ? 'Enviando…' : 'Enviar solicitud'}</button></div>
@@ -121,7 +122,7 @@ export const DiagnosticoModal = ({ orden, readOnly = false, onClose, onSubmit, o
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm tecnico-dialog">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 text-slate-900">
+      <div role="dialog" aria-modal="true" aria-label={readOnly ? 'Detalle del diagnóstico' : 'Completar diagnóstico'} className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 text-slate-900">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-lg font-bold text-slate-900 uppercase tracking-tight">
@@ -129,7 +130,7 @@ export const DiagnosticoModal = ({ orden, readOnly = false, onClose, onSubmit, o
             </h3>
             <EstadoBadge estado={orden.estado} />
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
+          <button type="button" aria-label="Cerrar diagnóstico" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <InfoBlock label="Equipo">#{orden.id} - {orden.equipo}</InfoBlock>
@@ -211,7 +212,7 @@ export const CierreOrdenModal = ({ orden, estado, onClose, onSubmit }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm tecnico-dialog">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 text-slate-900">
+      <div role="dialog" aria-modal="true" aria-label={esIrreparable ? 'Marcar irreparable' : 'Finalizar orden'} className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 text-slate-900">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h3 className="text-lg font-bold text-slate-900 uppercase tracking-tight">
@@ -219,7 +220,7 @@ export const CierreOrdenModal = ({ orden, estado, onClose, onSubmit }) => {
             </h3>
             <p className="text-xs font-semibold text-slate-500">Orden #{orden.id} - {orden.equipo}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
+          <button type="button" aria-label="Cerrar finalización" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
